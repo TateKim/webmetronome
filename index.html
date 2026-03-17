@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>음악 메트로놈</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            touch-action: manipulation;
+            user-select: none;
+        }
+
+        /* 커스텀 슬라이더 스타일 (Main BPM) */
+        input[type=range].main-slider {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        
+        input[type=range].main-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 28px;
+            width: 28px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: grab;
+            margin-top: -12px; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        input[type=range].main-slider:active::-webkit-slider-thumb {
+            cursor: grabbing;
+            transform: scale(1.1);
+        }
+
+        input[type=range].main-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: #e2e8f0;
+            border-radius: 3px;
+        }
+
+        /* 볼륨 슬라이더 스타일 (Mini) */
+        input[type=range].vol-slider {
+            -webkit-appearance: none;
+            background: transparent;
+            height: 24px; /* 터치 영역 확보 */
+        }
+        input[type=range].vol-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: #6366f1; /* Indigo-500 */
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        input[type=range].vol-slider:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
+        input[type=range].vol-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+
+        /* 버튼 스타일 */
+        .control-btn {
+            transition: all 0.1s ease;
+        }
+        .control-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 비트 인디케이터 스타일 */
+        .beat-grid {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            max-width: 100%;
+        }
+
+        .beat-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 2px solid transparent; /* For active states */
+        }
+
+        /* --- Beat States (Colors) --- */
+        .beat-circle.state-0 { background-color: #818cf8; } /* Indigo */
+        .beat-circle.state-1 { background-color: #34d399; } /* Emerald */
+        .beat-circle.state-2 { background-color: #fb7185; } /* Rose */
+        .beat-circle.state-3 {
+            background-color: #f1f5f9; /* Slate-100 */
+            border-color: #cbd5e1;
+            box-shadow: none;
+        }
+        .beat-circle.state-3::after {
+            content: '';
+            width: 40%;
+            height: 2px;
+            background-color: #94a3b8;
+            position: absolute;
+            transform: rotate(45deg);
+        }
+        .beat-circle.state-3::before {
+            content: '';
+            width: 40%;
+            height: 2px;
+            background-color: #94a3b8;
+            position: absolute;
+            transform: rotate(-45deg);
+        }
+
+        /* --- Animation Active States (Flash) --- */
+        .beat-circle.active {
+            transform: scale(1.15);
+            filter: brightness(1.1); 
+            box-shadow: 0 0 15px currentColor; 
+        }
+        .beat-circle.state-0.active { box-shadow: 0 0 15px rgba(99, 102, 241, 0.6); background-color: #6366f1; }
+        .beat-circle.state-1.active { box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); background-color: #10b981; }
+        .beat-circle.state-2.active { box-shadow: 0 0 15px rgba(244, 63, 94, 0.6); background-color: #f43f5e; }
+        
+        .move-left { transform: translateX(-4px); }
+        .move-right { transform: translateX(4px); }
+
+        /* Visualizer Animation */
+        @keyframes light-move {
+            0% { left: 0; transform: translate(0, -50%); }
+            100% { left: 100%; transform: translate(-100%, -50%); }
+        }
+
+        .visual-track {
+            position: relative;
+            width: 100%;
+            height: 8px; /* 트랙 높이 약간 증가 */
+            background-color: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        .visual-light {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 36px; /* 직사각형 너비 */
+            height: 20px; /* 직사각형 높이 */
+            background-color: #6366f1;
+            border-radius: 6px; /* 모서리가 둥근 사각형 */
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+            transition: left 0.3s ease, transform 0.3s ease; 
+        }
+
+        .visual-light.swinging {
+            transition: none;
+            animation-name: light-move;
+            animation-timing-function: ease-in-out;
+            animation-iteration-count: infinite;
+            animation-direction: alternate;
+        }
+
+        /* 커스텀 드롭다운 스타일 */
+        .dropdown-menu {
+            animation: fadeIn 0.1s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .dropdown-item:hover {
+            background-color: #eff6ff; 
+            color: #6366f1; 
+        }
+        .dropdown-item.selected {
+            color: #6366f1;
+            background-color: #e0e7ff; 
+        }
+        .dropdown-item svg { transition: all 0.2s; }
+        .dropdown-item:hover svg, .dropdown-item.selected svg { fill: #6366f1; stroke: #6366f1; }
+        .dropdown-item:hover svg text, .dropdown-item.selected svg text { fill: #6366f1; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative">
+        
+        <!-- 헤더: 좌우 정렬 -->
+        <div class="flex justify-between items-end mb-6 px-2 pt-2">
+            
+            <!-- 왼쪽 그룹: 타이머 + 볼륨 -->
+            <div class="flex items-end gap-2">
+                
+                <!-- 타이머 -->
+                <div class="flex flex-col items-center relative">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Timer</span>
+                    <button id="timerTrigger" class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-center shadow-sm border border-transparent focus:border-indigo-300 group relative">
+                        <svg class="w-6 h-6 fill-none stroke-current" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                        <div id="timerActiveDot" class="hidden absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border border-white"></div>
+                    </button>
+                    
+                    <div id="timerMenu" class="dropdown-menu hidden absolute top-full mt-2 left-0 w-24 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 flex flex-col p-1">
+                        <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="1">1 min</button>
+                        <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="5">5 min</button>
+                        <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="10">10 min</button>
+                        <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="30">30 min</button>
+                        <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="60">60 min</button>
+                        <div class="h-px bg-slate-100 my-1"></div>
+                        <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-rose-500 rounded-lg" data-time="off">OFF</button>
+                    </div>
+                </div>
+
+                <!-- 볼륨 (New Location & UI) -->
+                <div class="flex flex-col items-center relative">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Vol</span>
+                    <button id="volumeTrigger" class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-center shadow-sm border border-transparent focus:border-indigo-300 group">
+                        <!-- Volume High -->
+                        <svg id="volIconTriggerHigh" class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                        <!-- Volume Mute -->
+                        <svg id="volIconTriggerMute" class="w-6 h-6 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                    </button>
+
+                    <!-- 볼륨 팝업 메뉴 -->
+                    <div id="volumeMenu" class="dropdown-menu hidden absolute top-full mt-2 left-0 w-40 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 flex items-center gap-3 p-3">
+                        <!-- Mute Button inside Menu -->
+                        <button id="muteBtn" class="text-slate-400 hover:text-indigo-500 transition-colors w-6 h-6 flex-shrink-0 flex items-center justify-center" title="Mute">
+                            <svg id="volIconMenuHigh" class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                            <svg id="volIconMenuMute" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+                        </button>
+                        <!-- Slider -->
+                        <input type="range" id="volumeSlider" min="0" max="100" value="80" class="vol-slider flex-1 cursor-pointer w-full">
+                    </div>
+                </div>
+
+            </div>
+            
+            <!-- 오른쪽 그룹: 리듬 패턴 + 비트 수 -->
+            <div class="flex items-end gap-2">
+                <!-- 리듬 패턴 선택 -->
+                <div class="flex flex-col items-center relative">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Rhythm</span>
+                    <button id="rhythmTrigger" class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-center shadow-sm border border-transparent focus:border-indigo-300 group">
+                        <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                             <ellipse cx="12" cy="17" rx="3.5" ry="2.5" transform="rotate(-20 12 17)" />
+                             <path d="M15 17V6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                    
+                    <!-- 리듬 메뉴 -->
+                    <div id="rhythmMenu" class="dropdown-menu hidden absolute top-full mt-2 right-0 w-16 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 flex flex-col p-1">
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="1" title="Quarter">
+                            <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24">
+                                <ellipse cx="12" cy="17" rx="3.5" ry="2.5" transform="rotate(-20 12 17)" />
+                                <path d="M15 17V6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="2" title="Eighth">
+                            <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24">
+                                <ellipse cx="7" cy="17" rx="3" ry="2.2" transform="rotate(-20 7 17)" />
+                                <ellipse cx="17" cy="17" rx="3" ry="2.2" transform="rotate(-20 17 17)" />
+                                <path d="M9.5 17V7 M19.5 17V7" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                                <path d="M9.5 7L19.5 7" stroke="currentColor" stroke-width="3" stroke-linecap="butt"/>
+                            </svg>
+                        </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="3" title="Triplet">
+                             <svg class="w-8 h-8" viewBox="0 0 24 24" fill="current">
+                                <path d="M6 6.5 V 3.5 H 10.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M17.5 3.5 H 22 V 6.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <ellipse cx="4" cy="17" rx="2.5" ry="1.8" transform="rotate(-20 4 17)" />
+                                <ellipse cx="12" cy="17" rx="2.5" ry="1.8" transform="rotate(-20 12 17)" />
+                                <ellipse cx="20" cy="17" rx="2.5" ry="1.8" transform="rotate(-20 20 17)" />
+                                <path d="M6 17V7 M14 17V7 M22 17V7" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                <path d="M6 7H22" stroke="currentColor" stroke-width="2.5" stroke-linecap="butt"/>
+                                <text x="14" y="5.5" font-size="6" font-weight="bold" text-anchor="middle" fill="currentColor" stroke="none">3</text>
+                             </svg>
+                        </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="shuffle" title="Shuffle">
+                             <svg class="w-8 h-8" viewBox="0 0 24 24" fill="current">
+                                 <path d="M7 6V4H19V6" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                 <text x="13" y="4" font-size="6" font-weight="bold" text-anchor="middle" fill="currentColor" stroke="none" dy="0.5">3</text>
+                                 <ellipse cx="7" cy="17" rx="3" ry="2.2" transform="rotate(-20 7 17)" />
+                                 <path d="M9.5 17V7" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                 <ellipse cx="19" cy="17" rx="3" ry="2.2" transform="rotate(-20 19 17)" />
+                                 <path d="M21.5 17V7" stroke="currentColor" stroke-width="1.2" fill="none"/>
+                                 <path d="M21.5 7C21.5 7 24 9 24 12" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                             </svg>
+                        </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="4" title="16th">
+                            <svg class="w-8 h-8" viewBox="0 0 24 24" fill="current">
+                                <ellipse cx="3" cy="17" rx="2" ry="1.5" transform="rotate(-20 3 17)" />
+                                <ellipse cx="9" cy="17" rx="2" ry="1.5" transform="rotate(-20 9 17)" />
+                                <ellipse cx="15" cy="17" rx="2" ry="1.5" transform="rotate(-20 15 17)" />
+                                <ellipse cx="21" cy="17" rx="2" ry="1.5" transform="rotate(-20 21 17)" />
+                                <path d="M4.5 17V7 M10.5 17V7 M16.5 17V7 M22.5 17V7" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M4.5 7H22.5" stroke="currentColor" stroke-width="2" stroke-linecap="butt"/>
+                                <path d="M4.5 10H22.5" stroke="currentColor" stroke-width="2" stroke-linecap="butt"/>
+                            </svg>
+                        </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="5" title="Quintuplet">
+                            <svg class="w-8 h-8" viewBox="0 0 32 32" fill="current">
+                                <path d="M5.5 8.5 V 5.5 H 14.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M20.5 5.5 H 29.5 V 8.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <ellipse cx="4" cy="22" rx="2" ry="1.5" transform="rotate(-20 4 22)" />
+                                <ellipse cx="10" cy="22" rx="2" ry="1.5" transform="rotate(-20 10 22)" />
+                                <ellipse cx="16" cy="22" rx="2" ry="1.5" transform="rotate(-20 16 22)" />
+                                <ellipse cx="22" cy="22" rx="2" ry="1.5" transform="rotate(-20 22 22)" />
+                                <ellipse cx="28" cy="22" rx="2" ry="1.5" transform="rotate(-20 28 22)" />
+                                <path d="M5.5 22V10 M11.5 22V10 M17.5 22V10 M23.5 22V10 M29.5 22V10" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M5.5 10H29.5" stroke="currentColor" stroke-width="2.5" stroke-linecap="butt"/>
+                                <text x="17.5" y="7.5" font-size="8" font-weight="bold" text-anchor="middle" fill="currentColor">5</text>
+                            </svg>
+                        </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="6" title="Sextuplet">
+                            <svg class="w-8 h-8" viewBox="0 0 32 32" fill="current">
+                                <path d="M4.2 8.5 V 5.5 H 14" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M20.4 5.5 H 30.2 V 8.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <ellipse cx="3" cy="22" rx="1.8" ry="1.3" transform="rotate(-20 3 22)" />
+                                <ellipse cx="8.2" cy="22" rx="1.8" ry="1.3" transform="rotate(-20 8.2 22)" />
+                                <ellipse cx="13.4" cy="22" rx="1.8" ry="1.3" transform="rotate(-20 13.4 22)" />
+                                <ellipse cx="18.6" cy="22" rx="1.8" ry="1.3" transform="rotate(-20 18.6 22)" />
+                                <ellipse cx="23.8" cy="22" rx="1.8" ry="1.3" transform="rotate(-20 23.8 22)" />
+                                <ellipse cx="29" cy="22" rx="1.8" ry="1.3" transform="rotate(-20 29 22)" />
+                                <path d="M4.2 22V10 M9.4 22V10 M14.6 22V10 M19.8 22V10 M25 22V10 M30.2 22V10" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M4.2 10H30.2" stroke="currentColor" stroke-width="2.5" stroke-linecap="butt"/>
+                                <text x="17.2" y="7.5" font-size="8" font-weight="bold" text-anchor="middle" fill="currentColor">6</text>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 박자 수 조절 -->
+                <div class="flex flex-col items-center">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Beats</span>
+                    <div class="flex items-center bg-slate-100 rounded-full p-1 h-12">
+                        <button id="decreaseBeats" class="control-btn w-10 h-10 rounded-full bg-white text-slate-600 shadow-sm flex items-center justify-center hover:text-indigo-600 font-bold text-lg">-</button>
+                        <span id="beatCountDisplay" class="w-10 text-center font-bold text-slate-700 text-lg">4</span>
+                        <button id="increaseBeats" class="control-btn w-10 h-10 rounded-full bg-white text-slate-600 shadow-sm flex items-center justify-center hover:text-indigo-600 font-bold text-lg">+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BPM 디스플레이 & 슬라이더 -->
+        <div class="flex flex-col items-center mb-4">
+            <div class="relative flex items-baseline justify-center w-full mb-4">
+                <span id="bpmDisplay" class="text-8xl font-bold text-slate-800 tabular-nums tracking-tighter leading-none">120</span>
+                <span class="text-xl text-slate-400 font-bold ml-2">BPM</span>
+            </div>
+            
+            <!-- BPM 컨트롤 버튼 -->
+            <div class="w-full px-0 flex items-center justify-between gap-2 mb-6">
+                <button id="decreaseBpm5" class="control-btn w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold text-sm" title="-5 BPM">-5</button>
+                <button id="decreaseBpm" class="control-btn w-10 h-10 rounded-xl border-2 border-slate-100 text-slate-500 hover:border-slate-300 hover:bg-slate-50 flex items-center justify-center font-bold text-xl" title="-1 BPM">-</button>
+                
+                <div class="flex-1 relative h-6 flex items-center mx-1">
+                    <input type="range" id="bpmSlider" min="30" max="250" value="120" class="main-slider w-full z-10">
+                </div>
+                
+                <button id="increaseBpm" class="control-btn w-10 h-10 rounded-xl border-2 border-slate-100 text-slate-500 hover:border-slate-300 hover:bg-slate-50 flex items-center justify-center font-bold text-xl" title="+1 BPM">+</button>
+                <button id="increaseBpm5" class="control-btn w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold text-sm" title="+5 BPM">+5</button>
+            </div>
+
+            <!-- Light Visualizer -->
+            <div class="w-full px-4 mb-8 mt-4">
+                <div class="visual-track">
+                    <div id="visualLight" class="visual-light"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 비트 인디케이터 -->
+        <div class="mb-8 text-center">
+            <p class="text-xs text-slate-400 font-medium mb-3">Tap circles to cycle tones (Default > Low > High > Mute)</p>
+            <div id="beatContainer" class="beat-grid">
+                <!-- Javascript generated -->
+            </div>
+        </div>
+
+        <!-- 메인 컨트롤 (타이머 디스플레이 포함) -->
+        <div class="flex flex-col gap-2 w-full">
+            <!-- Timer Display Overlay (Visible when timer active) -->
+            <div id="timerDisplayContainer" class="hidden w-full flex justify-center mb-2">
+                <span id="timerCountdown" class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full shadow-sm border border-rose-100 tabular-nums">
+                    ⏱ 05:00
+                </span>
+            </div>
+
+            <div class="flex gap-3">
+                <button id="tapBtn" class="flex-1 bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl text-sm hover:bg-slate-200 transition-colors active:scale-95">
+                    TAP TEMPO
+                </button>
+                <button id="playBtn" class="flex-[2] bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 rounded-2xl text-xl transition-all active:scale-95 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2">
+                    <span id="playText">START</span>
+                    <svg id="playIcon" class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="pauseIcon" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    // --- Audio & Timing Variables ---
+    let audioCtx = null;
+    let masterGainNode = null; 
+    let isPlaying = false;
+    let lookahead = 25.0; 
+    let scheduleAheadTime = 0.1; 
+    let nextNoteTime = 0.0; 
+    let timerID = null;
+    
+    // --- State Variables ---
+    let bpm = 120;
+    let subdivision = '1'; 
+    let beatsPerMeasure = 4;
+    let currentBeatIndex = 0; 
+    let tapTimes = [];
+    let beatStates = []; 
+    
+    // Volume State
+    let masterVolume = 0.8; 
+    let isMuted = false;
+    let previousVolume = 0.8;
+
+    // --- Timer Variables ---
+    let targetDuration = 0; 
+    let timerInterval = null;
+    let secondsRemaining = 0;
+    let isTimerActive = false;
+
+    // --- DOM Elements ---
+    const playBtn = document.getElementById('playBtn');
+    const playText = document.getElementById('playText');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const bpmDisplay = document.getElementById('bpmDisplay');
+    const bpmSlider = document.getElementById('bpmSlider');
+    const decreaseBpmBtn = document.getElementById('decreaseBpm');
+    const increaseBpmBtn = document.getElementById('increaseBpm');
+    const decreaseBpm5Btn = document.getElementById('decreaseBpm5');
+    const increaseBpm5Btn = document.getElementById('increaseBpm5');
+    const tapBtn = document.getElementById('tapBtn');
+    const beatContainer = document.getElementById('beatContainer');
+    const beatCountDisplay = document.getElementById('beatCountDisplay');
+    const decreaseBeatsBtn = document.getElementById('decreaseBeats');
+    const increaseBeatsBtn = document.getElementById('increaseBeats');
+    const visualLight = document.getElementById('visualLight');
+    
+    // Dropdown Elements
+    const rhythmTrigger = document.getElementById('rhythmTrigger');
+    const rhythmMenu = document.getElementById('rhythmMenu');
+    const rhythmItems = document.querySelectorAll('#rhythmMenu .dropdown-item');
+
+    // Timer Elements
+    const timerTrigger = document.getElementById('timerTrigger');
+    const timerMenu = document.getElementById('timerMenu');
+    const timerItems = document.querySelectorAll('#timerMenu .dropdown-item');
+    const timerActiveDot = document.getElementById('timerActiveDot');
+    const timerDisplayContainer = document.getElementById('timerDisplayContainer');
+    const timerCountdown = document.getElementById('timerCountdown');
+
+    // Volume Elements
+    const volumeTrigger = document.getElementById('volumeTrigger');
+    const volumeMenu = document.getElementById('volumeMenu');
+    const volumeSlider = document.getElementById('volumeSlider');
+    const muteBtn = document.getElementById('muteBtn');
+    const volIconTriggerHigh = document.getElementById('volIconTriggerHigh');
+    const volIconTriggerMute = document.getElementById('volIconTriggerMute');
+    const volIconMenuHigh = document.getElementById('volIconMenuHigh');
+    const volIconMenuMute = document.getElementById('volIconMenuMute');
+
+    // --- Initialization ---
+    
+    function initBeats() {
+        if (beatStates.length !== beatsPerMeasure) {
+            const newArr = new Array(beatsPerMeasure).fill(0); 
+            for(let i=0; i<Math.min(beatStates.length, beatsPerMeasure); i++) {
+                newArr[i] = beatStates[i];
+            }
+            if (beatStates.length === 0 && beatsPerMeasure > 0) {
+                newArr[0] = 2; 
+            }
+            beatStates = newArr;
+        }
+        renderBeatIndicators();
+    }
+
+    function renderBeatIndicators() {
+        beatContainer.innerHTML = '';
+        for (let i = 0; i < beatsPerMeasure; i++) {
+            const circle = document.createElement('div');
+            circle.className = `beat-circle state-${beatStates[i]}`;
+            circle.dataset.index = i;
+            
+            circle.addEventListener('click', () => {
+                beatStates[i] = (beatStates[i] + 1) % 4;
+                renderBeatIndicators(); 
+            });
+
+            beatContainer.appendChild(circle);
+        }
+        beatCountDisplay.innerText = beatsPerMeasure;
+    }
+
+    // --- Audio Engine ---
+
+    function initAudioContext() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGainNode = audioCtx.createGain();
+            masterGainNode.gain.value = masterVolume;
+            masterGainNode.connect(audioCtx.destination);
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+    }
+
+    function updateMasterVolume() {
+        if (masterGainNode) {
+            masterGainNode.gain.setTargetAtTime(isMuted ? 0 : masterVolume, audioCtx.currentTime, 0.02);
+        }
+        
+        // Update UI (Trigger Button & Inside Menu)
+        const showMute = (isMuted || masterVolume === 0);
+        
+        if (showMute) {
+            volIconTriggerHigh.classList.add('hidden');
+            volIconTriggerMute.classList.remove('hidden');
+            
+            volIconMenuHigh.classList.add('hidden');
+            volIconMenuMute.classList.remove('hidden');
+            
+            volumeTrigger.classList.add('text-slate-400');
+            volumeTrigger.classList.remove('text-slate-700');
+            muteBtn.classList.add('text-slate-400');
+            muteBtn.classList.remove('text-indigo-500');
+        } else {
+            volIconTriggerHigh.classList.remove('hidden');
+            volIconTriggerMute.classList.add('hidden');
+            
+            volIconMenuHigh.classList.remove('hidden');
+            volIconMenuMute.classList.add('hidden');
+            
+            volumeTrigger.classList.remove('text-slate-400');
+            volumeTrigger.classList.add('text-slate-700');
+            muteBtn.classList.remove('text-slate-400');
+        }
+    }
+
+    function playSound(time, toneType) {
+        if (!audioCtx || toneType === 3) return; 
+
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        osc.connect(gainNode);
+        gainNode.connect(masterGainNode);
+
+        let freq = 800; 
+        let gain = 1.8; 
+
+        if (toneType === 2) { 
+            freq = 1200;
+            gain = 3.0; 
+        } else if (toneType === 1) { 
+            freq = 600;
+            gain = 1.5; 
+        } 
+
+        osc.frequency.value = freq;
+        
+        gainNode.gain.setValueAtTime(gain, time);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+
+        osc.start(time);
+        osc.stop(time + 0.05);
+    }
+
+    function playTimerEndSound() {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        osc.connect(gainNode);
+        gainNode.connect(masterGainNode);
+        
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
+        osc.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1); 
+        
+        gainNode.gain.setValueAtTime(1.5, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
+        
+        osc.start();
+        osc.stop(audioCtx.currentTime + 1.5);
+    }
+
+    function scheduleDraw(beatNumber, time, toneType, isMainBeat) {
+        const drawTime = (time - audioCtx.currentTime) * 1000;
+        
+        setTimeout(() => {
+            const mainBeatIndex = Math.floor(beatNumber) % beatsPerMeasure;
+            const circles = beatContainer.children;
+            if (!circles[mainBeatIndex]) return;
+
+            const circle = circles[mainBeatIndex];
+
+            if (isMainBeat) {
+                 Array.from(circles).forEach(c => {
+                    c.classList.remove('active', 'move-left', 'move-right');
+                });
+            }
+
+            if (toneType === 3) return; 
+
+            if (isMainBeat) {
+                circle.classList.add('active');
+                
+                if (mainBeatIndex % 2 === 0) {
+                    circle.classList.add('move-left');
+                } else {
+                    circle.classList.add('move-right');
+                }
+            } 
+
+            setTimeout(() => {
+                circle.classList.remove('active', 'move-left', 'move-right');
+            }, 200);
+
+        }, Math.max(0, drawTime));
+    }
+
+    function nextNote() {
+        const secondsPerBeat = 60.0 / bpm;
+
+        if (subdivision === '1') {
+            nextNoteTime += secondsPerBeat;
+            currentBeatIndex++;
+        } else if (subdivision === '2') {
+            nextNoteTime += 0.5 * secondsPerBeat;
+            currentBeatIndex += 0.5;
+        } else if (subdivision === '3') {
+            nextNoteTime += (1/3) * secondsPerBeat;
+            currentBeatIndex += (1/3);
+        } else if (subdivision === '4') {
+            nextNoteTime += 0.25 * secondsPerBeat;
+            currentBeatIndex += 0.25;
+        } else if (subdivision === '5') {
+            nextNoteTime += 0.2 * secondsPerBeat;
+            currentBeatIndex += 0.2;
+        } else if (subdivision === '6') {
+            nextNoteTime += (1/6) * secondsPerBeat;
+            currentBeatIndex += (1/6);
+        } else if (subdivision === 'shuffle') {
+            const rounded = Math.round(currentBeatIndex);
+            const isOnBeat = Math.abs(currentBeatIndex - rounded) < 0.01;
+            if (isOnBeat) {
+                nextNoteTime += (2/3) * secondsPerBeat;
+                currentBeatIndex += (2/3);
+            } else {
+                nextNoteTime += (1/3) * secondsPerBeat;
+                currentBeatIndex = Math.round(currentBeatIndex + (1/3));
+            }
+        }
+
+        if (Math.abs(Math.round(currentBeatIndex) - currentBeatIndex) < 0.01) {
+            currentBeatIndex = Math.round(currentBeatIndex);
+        }
+
+        if (currentBeatIndex >= beatsPerMeasure) {
+            currentBeatIndex = 0; 
+        }
+    }
+
+    function scheduleNote(beatIndex, time) {
+        const mainBeatInt = Math.floor(beatIndex + 0.05); 
+        const isMainBeat = Math.abs(beatIndex - mainBeatInt) < 0.05; 
+        
+        const arrayIndex = mainBeatInt % beatsPerMeasure;
+        const toneType = beatStates[arrayIndex]; 
+
+        if (toneType !== 3) { 
+            if (isMainBeat) {
+                 playSound(time, toneType);
+            } else {
+                 playSound(time, 0); 
+            }
+        }
+
+        scheduleDraw(beatIndex, time, toneType, isMainBeat);
+    }
+
+    function scheduler() {
+        while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+            scheduleNote(currentBeatIndex, nextNoteTime);
+            nextNote();
+        }
+        timerID = setTimeout(scheduler, lookahead);
+    }
+
+    function updatePendulumSpeed() {
+        visualLight.style.animationDuration = (60 / bpm) + 's';
+    }
+
+    // --- Timer Functions ---
+    function formatTime(totalSeconds) {
+        const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const s = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function updateTimerDisplay() {
+        timerCountdown.innerText = `⏱ ${formatTime(secondsRemaining)}`;
+    }
+
+    function setTimer(minutes) {
+        if (minutes === 'off') {
+            isTimerActive = false;
+            targetDuration = 0;
+            secondsRemaining = 0;
+            timerActiveDot.classList.add('hidden');
+            timerDisplayContainer.classList.add('hidden');
+        } else {
+            isTimerActive = true;
+            targetDuration = parseInt(minutes);
+            secondsRemaining = targetDuration * 60;
+            timerActiveDot.classList.remove('hidden');
+            timerDisplayContainer.classList.remove('hidden');
+            updateTimerDisplay();
+        }
+        
+        if (isPlaying && isTimerActive) {
+            startTimerCountdown();
+        } else {
+            stopTimerCountdown();
+            if(isTimerActive) secondsRemaining = targetDuration * 60; 
+            updateTimerDisplay();
+        }
+    }
+
+    function startTimerCountdown() {
+        stopTimerCountdown(); 
+        if (!isTimerActive || secondsRemaining <= 0) return;
+        
+        timerInterval = setInterval(() => {
+            secondsRemaining--;
+            updateTimerDisplay();
+            if (secondsRemaining <= 0) {
+                stopTimerCountdown();
+                togglePlay(); 
+                playTimerEndSound(); 
+                secondsRemaining = targetDuration * 60;
+                updateTimerDisplay();
+            }
+        }, 1000);
+    }
+
+    function stopTimerCountdown() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    function togglePlay() {
+        if (isPlaying) {
+            isPlaying = false;
+            clearTimeout(timerID);
+            stopTimerCountdown(); 
+            
+            playText.innerText = "START";
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+            playBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
+            playBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
+            
+            visualLight.classList.remove('swinging');
+            
+            renderBeatIndicators(); 
+            return;
+        }
+
+        initAudioContext(); 
+
+        isPlaying = true;
+        currentBeatIndex = 0;
+        nextNoteTime = audioCtx.currentTime + 0.1; 
+        
+        if (isTimerActive) {
+            startTimerCountdown();
+        }
+
+        updatePendulumSpeed();
+        visualLight.classList.remove('swinging');
+        void visualLight.offsetWidth; 
+        
+        setTimeout(() => {
+            if(isPlaying) visualLight.classList.add('swinging');
+        }, 50); 
+        
+        playText.innerText = "STOP";
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+        
+        playBtn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
+        playBtn.classList.add('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
+
+        scheduler();
+    }
+
+    function updateBpm(val) {
+        bpm = Math.min(Math.max(val, 30), 250);
+        bpmDisplay.innerText = bpm;
+        bpmSlider.value = bpm;
+        if(isPlaying) {
+            updatePendulumSpeed();
+        }
+    }
+
+    // --- Event Listeners ---
+
+    playBtn.addEventListener('click', togglePlay);
+
+    bpmSlider.addEventListener('input', (e) => updateBpm(e.target.value));
+    
+    decreaseBpmBtn.addEventListener('click', () => updateBpm(bpm - 1));
+    increaseBpmBtn.addEventListener('click', () => updateBpm(bpm + 1));
+    decreaseBpm5Btn.addEventListener('click', () => updateBpm(bpm - 5));
+    increaseBpm5Btn.addEventListener('click', () => updateBpm(bpm + 5));
+
+    decreaseBeatsBtn.addEventListener('click', () => {
+        if (beatsPerMeasure > 1) {
+            beatsPerMeasure--;
+            initBeats();
+            if (isPlaying) currentBeatIndex = 0;
+        }
+    });
+
+    increaseBeatsBtn.addEventListener('click', () => {
+        if (beatsPerMeasure < 12) { 
+            beatsPerMeasure++;
+            initBeats();
+        }
+    });
+
+    // Volume Control Logic
+    // Toggle Menu
+    volumeTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        volumeMenu.classList.toggle('hidden');
+        timerMenu.classList.add('hidden'); // Close others
+        rhythmMenu.classList.add('hidden');
+    });
+
+    // Slider Input
+    volumeSlider.addEventListener('input', (e) => {
+        masterVolume = e.target.value / 100;
+        if (masterVolume > 0) {
+            isMuted = false;
+            previousVolume = masterVolume;
+        }
+        initAudioContext(); 
+        updateMasterVolume();
+    });
+
+    // Mute Button (inside menu)
+    muteBtn.addEventListener('click', () => {
+        isMuted = !isMuted;
+        if (isMuted) {
+            volumeSlider.value = 0;
+        } else {
+            masterVolume = previousVolume > 0 ? previousVolume : 0.5; 
+            volumeSlider.value = masterVolume * 100;
+        }
+        initAudioContext();
+        updateMasterVolume();
+    });
+
+    // Rhythm Menu
+    rhythmTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        rhythmMenu.classList.toggle('hidden');
+        timerMenu.classList.add('hidden'); 
+        volumeMenu.classList.add('hidden');
+    });
+
+    rhythmItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            rhythmItems.forEach(i => i.classList.remove('selected'));
+            const target = e.currentTarget;
+            target.classList.add('selected');
+            subdivision = target.dataset.value;
+            rhythmTrigger.innerHTML = target.innerHTML;
+            rhythmMenu.classList.add('hidden');
+        });
+    });
+
+    // Timer Menu
+    timerTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        timerMenu.classList.toggle('hidden');
+        rhythmMenu.classList.add('hidden'); 
+        volumeMenu.classList.add('hidden');
+    });
+
+    timerItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            timerItems.forEach(i => i.classList.remove('selected'));
+            const target = e.currentTarget;
+            target.classList.add('selected');
+            
+            setTimer(target.dataset.time);
+            timerMenu.classList.add('hidden');
+        });
+    });
+
+    // Close all dropdowns
+    window.addEventListener('click', (e) => {
+        if (!rhythmTrigger.contains(e.target) && !rhythmMenu.contains(e.target)) {
+            rhythmMenu.classList.add('hidden');
+        }
+        if (!timerTrigger.contains(e.target) && !timerMenu.contains(e.target)) {
+            timerMenu.classList.add('hidden');
+        }
+        if (!volumeTrigger.contains(e.target) && !volumeMenu.contains(e.target)) {
+            volumeMenu.classList.add('hidden');
+        }
+    });
+
+    if(rhythmItems[0]) rhythmItems[0].classList.add('selected');
+
+    tapBtn.addEventListener('click', () => {
+        const now = Date.now();
+        tapTimes.push(now);
+        if (tapTimes.length > 1 && now - tapTimes[tapTimes.length - 2] > 2000) tapTimes = [now];
+        if (tapTimes.length > 4) tapTimes.shift();
+
+        if (tapTimes.length > 1) {
+            let intervals = [];
+            for (let i = 0; i < tapTimes.length - 1; i++) {
+                intervals.push(tapTimes[i+1] - tapTimes[i]);
+            }
+            const avg = intervals.reduce((a, b) => a + b) / intervals.length;
+            updateBpm(Math.round(60000 / avg));
+        }
+        
+        tapBtn.classList.add('bg-slate-200');
+        setTimeout(() => tapBtn.classList.remove('bg-slate-200'), 100);
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault(); 
+            togglePlay();
+        }
+        if (e.code === 'ArrowUp') updateBpm(bpm + 1);
+        if (e.code === 'ArrowDown') updateBpm(bpm - 1);
+    });
+
+    // Init
+    initBeats();
+
+</script>
+</body>
+</html>
