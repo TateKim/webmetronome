@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap');
-        
+
         body {
             font-family: 'Noto Sans KR', sans-serif;
             touch-action: manipulation;
@@ -16,10 +16,10 @@
 
         /* 커스텀 슬라이더 스타일 (Main BPM) */
         input[type=range].main-slider {
-            -webkit-appearance: none; 
-            background: transparent; 
+            -webkit-appearance: none;
+            background: transparent;
         }
-        
+
         input[type=range].main-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             height: 28px;
@@ -27,7 +27,7 @@
             border-radius: 50%;
             background: #6366f1;
             cursor: grab;
-            margin-top: -12px; 
+            margin-top: -12px;
             box-shadow: 0 2px 6px rgba(0,0,0,0.2);
             transition: transform 0.1s;
         }
@@ -48,14 +48,14 @@
         input[type=range].vol-slider {
             -webkit-appearance: none;
             background: transparent;
-            height: 24px; /* 터치 영역 확보 */
+            height: 24px;
         }
         input[type=range].vol-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             height: 14px;
             width: 14px;
             border-radius: 50%;
-            background: #6366f1; /* Indigo-500 */
+            background: #6366f1;
             cursor: pointer;
             margin-top: -5px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.2);
@@ -71,7 +71,6 @@
             border-radius: 2px;
         }
 
-        /* 버튼 스타일 */
         .control-btn {
             transition: all 0.1s ease;
         }
@@ -79,7 +78,6 @@
             transform: scale(0.95);
         }
 
-        /* 비트 인디케이터 스타일 */
         .beat-grid {
             display: flex;
             justify-content: center;
@@ -99,15 +97,14 @@
             align-items: center;
             justify-content: center;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border: 2px solid transparent; /* For active states */
+            border: 2px solid transparent;
         }
 
-        /* --- Beat States (Colors) --- */
-        .beat-circle.state-0 { background-color: #818cf8; } /* Indigo */
-        .beat-circle.state-1 { background-color: #34d399; } /* Emerald */
-        .beat-circle.state-2 { background-color: #fb7185; } /* Rose */
+        .beat-circle.state-0 { background-color: #818cf8; }
+        .beat-circle.state-1 { background-color: #34d399; }
+        .beat-circle.state-2 { background-color: #fb7185; }
         .beat-circle.state-3 {
-            background-color: #f1f5f9; /* Slate-100 */
+            background-color: #f1f5f9;
             border-color: #cbd5e1;
             box-shadow: none;
         }
@@ -128,20 +125,18 @@
             transform: rotate(-45deg);
         }
 
-        /* --- Animation Active States (Flash) --- */
         .beat-circle.active {
             transform: scale(1.15);
-            filter: brightness(1.1); 
-            box-shadow: 0 0 15px currentColor; 
+            filter: brightness(1.1);
+            box-shadow: 0 0 15px currentColor;
         }
         .beat-circle.state-0.active { box-shadow: 0 0 15px rgba(99, 102, 241, 0.6); background-color: #6366f1; }
         .beat-circle.state-1.active { box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); background-color: #10b981; }
         .beat-circle.state-2.active { box-shadow: 0 0 15px rgba(244, 63, 94, 0.6); background-color: #f43f5e; }
-        
+
         .move-left { transform: translateX(-4px); }
         .move-right { transform: translateX(4px); }
 
-        /* Visualizer Animation */
         @keyframes light-move {
             0% { left: 0; transform: translate(0, -50%); }
             100% { left: 100%; transform: translate(-100%, -50%); }
@@ -150,7 +145,7 @@
         .visual-track {
             position: relative;
             width: 100%;
-            height: 8px; /* 트랙 높이 약간 증가 */
+            height: 8px;
             background-color: #f1f5f9;
             border-radius: 4px;
         }
@@ -160,12 +155,12 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 36px; /* 직사각형 너비 */
-            height: 20px; /* 직사각형 높이 */
+            width: 36px;
+            height: 20px;
             background-color: #6366f1;
-            border-radius: 6px; /* 모서리가 둥근 사각형 */
+            border-radius: 6px;
             box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
-            transition: left 0.3s ease, transform 0.3s ease; 
+            transition: left 0.3s ease, transform 0.3s ease;
         }
 
         .visual-light.swinging {
@@ -176,7 +171,6 @@
             animation-direction: alternate;
         }
 
-        /* 커스텀 드롭다운 스타일 */
         .dropdown-menu {
             animation: fadeIn 0.1s ease-out;
         }
@@ -185,28 +179,52 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .dropdown-item:hover {
-            background-color: #eff6ff; 
-            color: #6366f1; 
+            background-color: #eff6ff;
+            color: #6366f1;
         }
         .dropdown-item.selected {
             color: #6366f1;
-            background-color: #e0e7ff; 
+            background-color: #e0e7ff;
         }
         .dropdown-item svg { transition: all 0.2s; }
         .dropdown-item:hover svg, .dropdown-item.selected svg { fill: #6366f1; stroke: #6366f1; }
         .dropdown-item:hover svg text, .dropdown-item.selected svg text { fill: #6366f1; }
+
+        /* Accel trigger */
+        #accelTrigger {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: 700;
+            color: #cbd5e1;
+            cursor: pointer;
+            line-height: 1;
+            transition: color 0.15s;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        #accelTrigger:hover { color: #6366f1; }
+        #accelTrigger.accel-set { color: #6366f1; font-size: 13px; }
+        #accelTrigger.accel-playing { color: #a5b4fc; font-size: 13px; pointer-events: none; }
+
+        .accel-timer-btn.accel-selected { background-color: #ede9fe !important; color: #4f46e5 !important; }
+        #accelTimerCustomWrap.accel-selected { background-color: #ede9fe; }
+        #accelTimerCustomWrap.accel-selected #accelTimerCustomLabel { color: #4f46e5; }
+
+        #timerCustomRow { cursor: ns-resize; }
+        #timerCustomRow:hover { background-color: #eff6ff; color: #6366f1; }
+        #timerCustomRow.selected { color: #6366f1; background-color: #e0e7ff; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative">
-        
+
         <!-- 헤더: 좌우 정렬 -->
         <div class="flex justify-between items-end mb-6 px-2 pt-2">
-            
+
             <!-- 왼쪽 그룹: 타이머 + 볼륨 -->
             <div class="flex items-end gap-2">
-                
+
                 <!-- 타이머 -->
                 <div class="flex flex-col items-center relative">
                     <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Timer</span>
@@ -217,42 +235,40 @@
                         </svg>
                         <div id="timerActiveDot" class="hidden absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border border-white"></div>
                     </button>
-                    
+
                     <div id="timerMenu" class="dropdown-menu hidden absolute top-full mt-2 left-0 w-24 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 flex flex-col p-1">
                         <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="1">1 min</button>
                         <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="5">5 min</button>
                         <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="10">10 min</button>
                         <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="30">30 min</button>
                         <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-600 rounded-lg" data-time="60">60 min</button>
+                        <div id="timerCustomRow" class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-slate-400 rounded-lg select-none" title="scroll to adjust">
+                            <span id="timerCustomLabel">&#9861;</span>
+                        </div>
                         <div class="h-px bg-slate-100 my-1"></div>
                         <button class="dropdown-item w-full h-10 flex items-center justify-center text-sm font-bold text-rose-500 rounded-lg" data-time="off">OFF</button>
                     </div>
                 </div>
 
-                <!-- 볼륨 (New Location & UI) -->
+                <!-- 볼륨 -->
                 <div class="flex flex-col items-center relative">
                     <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Vol</span>
                     <button id="volumeTrigger" class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-center shadow-sm border border-transparent focus:border-indigo-300 group">
-                        <!-- Volume High -->
                         <svg id="volIconTriggerHigh" class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-                        <!-- Volume Mute -->
                         <svg id="volIconTriggerMute" class="w-6 h-6 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
                     </button>
 
-                    <!-- 볼륨 팝업 메뉴 -->
                     <div id="volumeMenu" class="dropdown-menu hidden absolute top-full mt-2 left-0 w-40 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 flex items-center gap-3 p-3">
-                        <!-- Mute Button inside Menu -->
                         <button id="muteBtn" class="text-slate-400 hover:text-indigo-500 transition-colors w-6 h-6 flex-shrink-0 flex items-center justify-center" title="Mute">
                             <svg id="volIconMenuHigh" class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
                             <svg id="volIconMenuMute" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
                         </button>
-                        <!-- Slider -->
                         <input type="range" id="volumeSlider" min="0" max="100" value="80" class="vol-slider flex-1 cursor-pointer w-full">
                     </div>
                 </div>
 
             </div>
-            
+
             <!-- 오른쪽 그룹: 리듬 패턴 + 비트 수 -->
             <div class="flex items-end gap-2">
                 <!-- 리듬 패턴 선택 -->
@@ -264,8 +280,7 @@
                              <path d="M15 17V6" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
                         </svg>
                     </button>
-                    
-                    <!-- 리듬 메뉴 -->
+
                     <div id="rhythmMenu" class="dropdown-menu hidden absolute top-full mt-2 right-0 w-16 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50 flex flex-col p-1">
                         <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="1" title="Quarter">
                             <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24">
@@ -361,20 +376,60 @@
 
         <!-- BPM 디스플레이 & 슬라이더 -->
         <div class="flex flex-col items-center mb-4">
-            <div class="relative flex items-baseline justify-center w-full mb-4">
+            <div class="relative flex items-baseline justify-center w-full">
                 <span id="bpmDisplay" class="text-8xl font-bold text-slate-800 tabular-nums tracking-tighter leading-none">120</span>
                 <span class="text-xl text-slate-400 font-bold ml-2">BPM</span>
             </div>
-            
+
+            <!-- Accel indicator (right-aligned, below BPM) -->
+            <div class="w-full text-right pr-1 mb-4" style="min-height:20px; margin-top:2px;">
+                <div id="accelOverlayWrap" class="relative inline-block">
+                    <span id="accelTrigger">&#8674;</span>
+                    <!-- Accel overlay -->
+                    <div id="accelOverlay" class="dropdown-menu hidden absolute bg-white rounded-2xl shadow-xl border border-slate-100 z-50 p-4" style="width:230px; top:22px; right:0;">
+                        <!-- Target BPM -->
+                        <div class="mb-3">
+                            <div class="text-xs text-slate-400 font-semibold tracking-wider uppercase mb-2">Target BPM</div>
+                            <div class="flex items-center justify-center gap-3 mb-1">
+                                <span id="accelDecBtn" class="text-indigo-200 text-lg cursor-pointer hover:text-indigo-400" style="user-select:none; -webkit-user-select:none;">&#9664;</span>
+                                <span id="accelTargetDisplay" class="text-4xl font-extrabold text-indigo-500 tabular-nums" style="cursor:ew-resize; user-select:none; -webkit-user-select:none;">150</span>
+                                <span id="accelIncBtn" class="text-indigo-200 text-lg cursor-pointer hover:text-indigo-400" style="user-select:none; -webkit-user-select:none;">&#9654;</span>
+                            </div>
+                            <div class="text-center text-xs text-slate-300">&#8592; drag or scroll &#8594;</div>
+                        </div>
+                        <div class="h-px bg-slate-100 my-3"></div>
+                        <!-- Timer -->
+                        <div class="mb-3">
+                            <div class="text-xs text-slate-400 font-semibold tracking-wider uppercase mb-2">Duration</div>
+                            <div class="flex gap-1 items-center">
+                                <button class="accel-timer-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" data-time="1">1m</button>
+                                <button class="accel-timer-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" data-time="5">5m</button>
+                                <button class="accel-timer-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" data-time="10">10m</button>
+                                <button class="accel-timer-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" data-time="30">30m</button>
+                                <button class="accel-timer-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" data-time="60">60m</button>
+                                <div id="accelTimerCustomWrap" class="flex items-center gap-0.5 bg-slate-100 rounded-lg px-2 py-1 cursor-ns-resize hover:bg-indigo-50 transition-colors" title="scroll to adjust" style="user-select:none; -webkit-user-select:none;">
+                                    <span id="accelTimerCustomLabel" class="text-xs font-bold text-slate-400">&#9861;</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Footer -->
+                        <div class="flex gap-2">
+                            <button id="accelConfirmBtn" class="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-sm py-2 rounded-xl transition-colors">Set</button>
+                            <button id="accelOffBtn" class="bg-slate-100 hover:bg-slate-200 text-slate-400 font-semibold text-sm py-2 px-3 rounded-xl transition-colors">Off</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- BPM 컨트롤 버튼 -->
             <div class="w-full px-0 flex items-center justify-between gap-2 mb-6">
                 <button id="decreaseBpm5" class="control-btn w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold text-sm" title="-5 BPM">-5</button>
                 <button id="decreaseBpm" class="control-btn w-10 h-10 rounded-xl border-2 border-slate-100 text-slate-500 hover:border-slate-300 hover:bg-slate-50 flex items-center justify-center font-bold text-xl" title="-1 BPM">-</button>
-                
+
                 <div class="flex-1 relative h-6 flex items-center mx-1">
                     <input type="range" id="bpmSlider" min="30" max="250" value="120" class="main-slider w-full z-10">
                 </div>
-                
+
                 <button id="increaseBpm" class="control-btn w-10 h-10 rounded-xl border-2 border-slate-100 text-slate-500 hover:border-slate-300 hover:bg-slate-50 flex items-center justify-center font-bold text-xl" title="+1 BPM">+</button>
                 <button id="increaseBpm5" class="control-btn w-10 h-10 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center font-bold text-sm" title="+5 BPM">+5</button>
             </div>
@@ -395,12 +450,11 @@
             </div>
         </div>
 
-        <!-- 메인 컨트롤 (타이머 디스플레이 포함) -->
+        <!-- 메인 컨트롤 -->
         <div class="flex flex-col gap-2 w-full">
-            <!-- Timer Display Overlay (Visible when timer active) -->
             <div id="timerDisplayContainer" class="hidden w-full flex justify-center mb-2">
                 <span id="timerCountdown" class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full shadow-sm border border-rose-100 tabular-nums">
-                    ⏱ 05:00
+                    &#9203; 05:00
                 </span>
             </div>
 
@@ -421,31 +475,43 @@
 <script>
     // --- Audio & Timing Variables ---
     let audioCtx = null;
-    let masterGainNode = null; 
+    let masterGainNode = null;
     let isPlaying = false;
-    let lookahead = 25.0; 
-    let scheduleAheadTime = 0.1; 
-    let nextNoteTime = 0.0; 
+    let lookahead = 25.0;
+    let scheduleAheadTime = 0.1;
+    let nextNoteTime = 0.0;
     let timerID = null;
-    
+
     // --- State Variables ---
     let bpm = 120;
-    let subdivision = '1'; 
+    let subdivision = '1';
     let beatsPerMeasure = 4;
-    let currentBeatIndex = 0; 
+    let currentBeatIndex = 0;
     let tapTimes = [];
-    let beatStates = []; 
-    
+    let beatStates = [];
+
     // Volume State
-    let masterVolume = 0.8; 
+    let masterVolume = 0.8;
     let isMuted = false;
     let previousVolume = 0.8;
 
     // --- Timer Variables ---
-    let targetDuration = 0; 
+    let targetDuration = 0;
     let timerInterval = null;
+    let timerExpired = false;
     let secondsRemaining = 0;
     let isTimerActive = false;
+    let timerCustomMinutes = 15;
+    let timerIsCustom = false;
+
+    // --- Accel Variables ---
+    let accelTargetBpm = null;
+    let accelStartBpm = null;
+    let accelStartAudioTime = null;
+    let accelTotalSeconds = 0;
+    let accelEditBpm = 150;
+    let accelDragStartX = null;
+    let accelDragStartBpm = null;
 
     // --- DOM Elements ---
     const playBtn = document.getElementById('playBtn');
@@ -464,7 +530,7 @@
     const decreaseBeatsBtn = document.getElementById('decreaseBeats');
     const increaseBeatsBtn = document.getElementById('increaseBeats');
     const visualLight = document.getElementById('visualLight');
-    
+
     // Dropdown Elements
     const rhythmTrigger = document.getElementById('rhythmTrigger');
     const rhythmMenu = document.getElementById('rhythmMenu');
@@ -473,10 +539,12 @@
     // Timer Elements
     const timerTrigger = document.getElementById('timerTrigger');
     const timerMenu = document.getElementById('timerMenu');
-    const timerItems = document.querySelectorAll('#timerMenu .dropdown-item');
+    const timerItems = document.querySelectorAll('#timerMenu button[data-time]');
     const timerActiveDot = document.getElementById('timerActiveDot');
     const timerDisplayContainer = document.getElementById('timerDisplayContainer');
     const timerCountdown = document.getElementById('timerCountdown');
+    const timerCustomRow = document.getElementById('timerCustomRow');
+    const timerCustomLabel = document.getElementById('timerCustomLabel');
 
     // Volume Elements
     const volumeTrigger = document.getElementById('volumeTrigger');
@@ -488,16 +556,29 @@
     const volIconMenuHigh = document.getElementById('volIconMenuHigh');
     const volIconMenuMute = document.getElementById('volIconMenuMute');
 
+    // Accel Elements
+    const accelTrigger = document.getElementById('accelTrigger');
+    const accelOverlayWrap = document.getElementById('accelOverlayWrap');
+    const accelOverlay = document.getElementById('accelOverlay');
+    const accelTargetDisplay = document.getElementById('accelTargetDisplay');
+    const accelDecBtn = document.getElementById('accelDecBtn');
+    const accelIncBtn = document.getElementById('accelIncBtn');
+    const accelTimerBtns = document.querySelectorAll('.accel-timer-btn');
+    const accelTimerCustomWrap = document.getElementById('accelTimerCustomWrap');
+    const accelTimerCustomLabel = document.getElementById('accelTimerCustomLabel');
+    const accelConfirmBtn = document.getElementById('accelConfirmBtn');
+    const accelOffBtn = document.getElementById('accelOffBtn');
+
     // --- Initialization ---
-    
+
     function initBeats() {
         if (beatStates.length !== beatsPerMeasure) {
-            const newArr = new Array(beatsPerMeasure).fill(0); 
+            const newArr = new Array(beatsPerMeasure).fill(0);
             for(let i=0; i<Math.min(beatStates.length, beatsPerMeasure); i++) {
                 newArr[i] = beatStates[i];
             }
             if (beatStates.length === 0 && beatsPerMeasure > 0) {
-                newArr[0] = 2; 
+                newArr[0] = 2;
             }
             beatStates = newArr;
         }
@@ -505,20 +586,20 @@
     }
 
     function renderBeatIndicators() {
-        beatContainer.innerHTML = '';
+        while (beatContainer.firstChild) beatContainer.removeChild(beatContainer.firstChild);
         for (let i = 0; i < beatsPerMeasure; i++) {
             const circle = document.createElement('div');
-            circle.className = `beat-circle state-${beatStates[i]}`;
+            circle.className = 'beat-circle state-' + beatStates[i];
             circle.dataset.index = i;
-            
+
             circle.addEventListener('click', () => {
                 beatStates[i] = (beatStates[i] + 1) % 4;
-                renderBeatIndicators(); 
+                renderBeatIndicators();
             });
 
             beatContainer.appendChild(circle);
         }
-        beatCountDisplay.innerText = beatsPerMeasure;
+        beatCountDisplay.textContent = beatsPerMeasure;
     }
 
     // --- Audio Engine ---
@@ -539,17 +620,14 @@
         if (masterGainNode) {
             masterGainNode.gain.setTargetAtTime(isMuted ? 0 : masterVolume, audioCtx.currentTime, 0.02);
         }
-        
-        // Update UI (Trigger Button & Inside Menu)
+
         const showMute = (isMuted || masterVolume === 0);
-        
+
         if (showMute) {
             volIconTriggerHigh.classList.add('hidden');
             volIconTriggerMute.classList.remove('hidden');
-            
             volIconMenuHigh.classList.add('hidden');
             volIconMenuMute.classList.remove('hidden');
-            
             volumeTrigger.classList.add('text-slate-400');
             volumeTrigger.classList.remove('text-slate-700');
             muteBtn.classList.add('text-slate-400');
@@ -557,10 +635,8 @@
         } else {
             volIconTriggerHigh.classList.remove('hidden');
             volIconTriggerMute.classList.add('hidden');
-            
             volIconMenuHigh.classList.remove('hidden');
             volIconMenuMute.classList.add('hidden');
-            
             volumeTrigger.classList.remove('text-slate-400');
             volumeTrigger.classList.add('text-slate-700');
             muteBtn.classList.remove('text-slate-400');
@@ -568,7 +644,7 @@
     }
 
     function playSound(time, toneType) {
-        if (!audioCtx || toneType === 3) return; 
+        if (!audioCtx || toneType === 3) return;
 
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
@@ -576,22 +652,20 @@
         osc.connect(gainNode);
         gainNode.connect(masterGainNode);
 
-        let freq = 800; 
-        let gain = 1.8; 
+        let freq = 800;
+        let gain = 1.8;
 
-        if (toneType === 2) { 
+        if (toneType === 2) {
             freq = 1200;
-            gain = 3.0; 
-        } else if (toneType === 1) { 
+            gain = 3.0;
+        } else if (toneType === 1) {
             freq = 600;
-            gain = 1.5; 
-        } 
+            gain = 1.5;
+        }
 
         osc.frequency.value = freq;
-        
         gainNode.gain.setValueAtTime(gain, time);
         gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
-
         osc.start(time);
         osc.stop(time + 0.05);
     }
@@ -600,23 +674,21 @@
         if (!audioCtx) return;
         const osc = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
-        
+
         osc.connect(gainNode);
         gainNode.connect(masterGainNode);
-        
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); 
-        osc.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1); 
-        
+
+        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1);
         gainNode.gain.setValueAtTime(1.5, audioCtx.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.5);
-        
         osc.start();
         osc.stop(audioCtx.currentTime + 1.5);
     }
 
     function scheduleDraw(beatNumber, time, toneType, isMainBeat) {
         const drawTime = (time - audioCtx.currentTime) * 1000;
-        
+
         setTimeout(() => {
             const mainBeatIndex = Math.floor(beatNumber) % beatsPerMeasure;
             const circles = beatContainer.children;
@@ -625,22 +697,21 @@
             const circle = circles[mainBeatIndex];
 
             if (isMainBeat) {
-                 Array.from(circles).forEach(c => {
+                Array.from(circles).forEach(c => {
                     c.classList.remove('active', 'move-left', 'move-right');
                 });
             }
 
-            if (toneType === 3) return; 
+            if (toneType === 3) return;
 
             if (isMainBeat) {
                 circle.classList.add('active');
-                
                 if (mainBeatIndex % 2 === 0) {
                     circle.classList.add('move-left');
                 } else {
                     circle.classList.add('move-right');
                 }
-            } 
+            }
 
             setTimeout(() => {
                 circle.classList.remove('active', 'move-left', 'move-right');
@@ -687,22 +758,23 @@
         }
 
         if (currentBeatIndex >= beatsPerMeasure) {
-            currentBeatIndex = 0; 
+            onMeasureEnd();
+            currentBeatIndex = 0;
         }
     }
 
     function scheduleNote(beatIndex, time) {
-        const mainBeatInt = Math.floor(beatIndex + 0.05); 
-        const isMainBeat = Math.abs(beatIndex - mainBeatInt) < 0.05; 
-        
-        const arrayIndex = mainBeatInt % beatsPerMeasure;
-        const toneType = beatStates[arrayIndex]; 
+        const mainBeatInt = Math.floor(beatIndex + 0.05);
+        const isMainBeat = Math.abs(beatIndex - mainBeatInt) < 0.05;
 
-        if (toneType !== 3) { 
+        const arrayIndex = mainBeatInt % beatsPerMeasure;
+        const toneType = beatStates[arrayIndex];
+
+        if (toneType !== 3) {
             if (isMainBeat) {
-                 playSound(time, toneType);
+                playSound(time, toneType);
             } else {
-                 playSound(time, 0); 
+                playSound(time, 0);
             }
         }
 
@@ -713,6 +785,19 @@
         while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
             scheduleNote(currentBeatIndex, nextNoteTime);
             nextNote();
+            if (timerExpired && currentBeatIndex === 0) {
+                // Just crossed a measure boundary with an expired timer.
+                // Let the already-scheduled measure play out, then stop.
+                timerExpired = false;
+                const delay = Math.max(0, (nextNoteTime - audioCtx.currentTime) * 1000);
+                setTimeout(() => {
+                    togglePlay();
+                    playTimerEndSound();
+                    secondsRemaining = targetDuration * 60;
+                    updateTimerDisplay();
+                }, delay);
+                return;
+            }
         }
         timerID = setTimeout(scheduler, lookahead);
     }
@@ -725,16 +810,59 @@
     function formatTime(totalSeconds) {
         const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const s = (totalSeconds % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
+        return m + ':' + s;
     }
 
     function updateTimerDisplay() {
-        timerCountdown.innerText = `⏱ ${formatTime(secondsRemaining)}`;
+        timerCountdown.textContent = '\u23F1 ' + formatTime(secondsRemaining);
+    }
+
+    function syncTimerUI() {
+        // Update main timer dropdown
+        timerItems.forEach(btn => btn.classList.remove('selected'));
+        timerCustomRow.classList.remove('selected');
+
+        if (isTimerActive) {
+            if (timerIsCustom) {
+                timerCustomRow.classList.add('selected');
+                timerCustomLabel.textContent = timerCustomMinutes + 'm';
+            } else {
+                timerCustomLabel.textContent = '\u2295';
+                timerItems.forEach(btn => {
+                    if (parseInt(btn.dataset.time) === targetDuration) {
+                        btn.classList.add('selected');
+                    }
+                });
+            }
+        } else {
+            timerCustomLabel.textContent = timerIsCustom ? (timerCustomMinutes + 'm') : '\u2295';
+        }
+
+        // Update accel overlay timer buttons
+        accelTimerBtns.forEach(btn => btn.classList.remove('accel-selected'));
+        accelTimerCustomWrap.classList.remove('accel-selected');
+
+        if (isTimerActive) {
+            if (timerIsCustom) {
+                accelTimerCustomWrap.classList.add('accel-selected');
+                accelTimerCustomLabel.textContent = timerCustomMinutes + 'm';
+            } else {
+                accelTimerCustomLabel.textContent = '\u2295';
+                accelTimerBtns.forEach(btn => {
+                    if (parseInt(btn.dataset.time) === targetDuration) {
+                        btn.classList.add('accel-selected');
+                    }
+                });
+            }
+        } else {
+            accelTimerCustomLabel.textContent = timerIsCustom ? (timerCustomMinutes + 'm') : '\u2295';
+        }
     }
 
     function setTimer(minutes) {
         if (minutes === 'off') {
             isTimerActive = false;
+            timerIsCustom = false;
             targetDuration = 0;
             secondsRemaining = 0;
             timerActiveDot.classList.add('hidden');
@@ -747,29 +875,28 @@
             timerDisplayContainer.classList.remove('hidden');
             updateTimerDisplay();
         }
-        
+
+        syncTimerUI();
+
         if (isPlaying && isTimerActive) {
             startTimerCountdown();
         } else {
             stopTimerCountdown();
-            if(isTimerActive) secondsRemaining = targetDuration * 60; 
+            if (isTimerActive) secondsRemaining = targetDuration * 60;
             updateTimerDisplay();
         }
     }
 
     function startTimerCountdown() {
-        stopTimerCountdown(); 
+        stopTimerCountdown();
         if (!isTimerActive || secondsRemaining <= 0) return;
-        
+
         timerInterval = setInterval(() => {
             secondsRemaining--;
             updateTimerDisplay();
             if (secondsRemaining <= 0) {
                 stopTimerCountdown();
-                togglePlay(); 
-                playTimerEndSound(); 
-                secondsRemaining = targetDuration * 60;
-                updateTimerDisplay();
+                timerExpired = true;
             }
         }, 1000);
     }
@@ -781,46 +908,134 @@
         }
     }
 
+    // --- Accel Functions ---
+
+    function isAccelActive() {
+        return accelTargetBpm !== null
+            && accelTargetBpm !== accelStartBpm
+            && isTimerActive
+            && isPlaying;
+    }
+
+    function accelGraceSecs() {
+        if (accelTargetBpm === null) return 0;
+        return Math.ceil(beatsPerMeasure * 60 / accelTargetBpm);
+    }
+
+    function onMeasureEnd() {
+        if (!isAccelActive()) return;
+        const elapsed = audioCtx.currentTime - accelStartAudioTime;
+        const ratio = Math.min(elapsed / accelTotalSeconds, 1);
+        const newBpm = Math.round(accelStartBpm + (accelTargetBpm - accelStartBpm) * ratio);
+        if (newBpm === bpm) return;
+        // Update bpm immediately so the scheduler uses correct intervals for the new measure
+        bpm = Math.min(Math.max(newBpm, 30), 250);
+        // Schedule all visual updates to coincide with beat 0 actual playback time
+        const delay = Math.max(0, (nextNoteTime - audioCtx.currentTime) * 1000);
+        setTimeout(() => {
+            bpmDisplay.textContent = bpm;
+            bpmSlider.value = bpm;
+            if (isPlaying) updatePendulumSpeed();
+        }, delay);
+    }
+
+    function updateAccelTrigger() {
+        if (accelTargetBpm === null) {
+            accelTrigger.textContent = '\u21e2';
+            accelTrigger.className = '';
+        } else if (isPlaying) {
+            accelTrigger.textContent = '\u2192 ' + accelTargetBpm;
+            accelTrigger.className = 'accel-playing';
+        } else {
+            accelTrigger.textContent = '\u2192 ' + accelTargetBpm;
+            accelTrigger.className = 'accel-set';
+        }
+    }
+
+    function resetAccelAnchor() {
+        if (accelTargetBpm !== null && isPlaying && audioCtx) {
+            accelStartBpm = bpm;
+            accelStartAudioTime = audioCtx.currentTime + scheduleAheadTime;
+            accelTotalSeconds = Math.max(secondsRemaining - accelGraceSecs(), 0);
+        }
+    }
+
+    function setAccelEditBpm(val) {
+        accelEditBpm = Math.min(Math.max(val, 30), 250);
+        accelTargetDisplay.textContent = accelEditBpm;
+    }
+
+    function openAccelOverlay() {
+        accelEditBpm = accelTargetBpm !== null ? accelTargetBpm : 150;
+        accelTargetDisplay.textContent = accelEditBpm;
+        // Auto-select 5m if no timer is active
+        if (!isTimerActive) {
+            timerIsCustom = false;
+            setTimer(5);
+        }
+        syncTimerUI();
+        accelOverlay.classList.remove('hidden');
+    }
+
+    function closeAccelOverlay() {
+        accelOverlay.classList.add('hidden');
+    }
+
+    // --- togglePlay ---
+
     function togglePlay() {
         if (isPlaying) {
             isPlaying = false;
+            timerExpired = false;
             clearTimeout(timerID);
-            stopTimerCountdown(); 
-            
-            playText.innerText = "START";
+            stopTimerCountdown();
+
+            if (accelStartBpm !== null) {
+                updateBpm(accelStartBpm);
+            }
+            accelStartBpm = null;
+            accelStartAudioTime = null;
+            updateAccelTrigger();
+
+            playText.textContent = 'START';
             playIcon.classList.remove('hidden');
             pauseIcon.classList.add('hidden');
             playBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
             playBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
-            
+
             visualLight.classList.remove('swinging');
-            
-            renderBeatIndicators(); 
+
+            renderBeatIndicators();
             return;
         }
 
-        initAudioContext(); 
+        initAudioContext();
 
         isPlaying = true;
         currentBeatIndex = 0;
-        nextNoteTime = audioCtx.currentTime + 0.1; 
-        
+        nextNoteTime = audioCtx.currentTime + scheduleAheadTime;
+
+        accelStartBpm = bpm;
+        accelStartAudioTime = audioCtx.currentTime + scheduleAheadTime;
+        accelTotalSeconds = Math.max(targetDuration * 60 - accelGraceSecs(), 0);
+        updateAccelTrigger();
+
         if (isTimerActive) {
             startTimerCountdown();
         }
 
         updatePendulumSpeed();
         visualLight.classList.remove('swinging');
-        void visualLight.offsetWidth; 
-        
+        void visualLight.offsetWidth;
+
         setTimeout(() => {
-            if(isPlaying) visualLight.classList.add('swinging');
-        }, 50); 
-        
-        playText.innerText = "STOP";
+            if (isPlaying) visualLight.classList.add('swinging');
+        }, 50);
+
+        playText.textContent = 'STOP';
         playIcon.classList.add('hidden');
         pauseIcon.classList.remove('hidden');
-        
+
         playBtn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
         playBtn.classList.add('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
 
@@ -829,9 +1044,9 @@
 
     function updateBpm(val) {
         bpm = Math.min(Math.max(val, 30), 250);
-        bpmDisplay.innerText = bpm;
+        bpmDisplay.textContent = bpm;
         bpmSlider.value = bpm;
-        if(isPlaying) {
+        if (isPlaying) {
             updatePendulumSpeed();
         }
     }
@@ -840,12 +1055,12 @@
 
     playBtn.addEventListener('click', togglePlay);
 
-    bpmSlider.addEventListener('input', (e) => updateBpm(e.target.value));
-    
-    decreaseBpmBtn.addEventListener('click', () => updateBpm(bpm - 1));
-    increaseBpmBtn.addEventListener('click', () => updateBpm(bpm + 1));
-    decreaseBpm5Btn.addEventListener('click', () => updateBpm(bpm - 5));
-    increaseBpm5Btn.addEventListener('click', () => updateBpm(bpm + 5));
+    bpmSlider.addEventListener('input', (e) => { updateBpm(parseInt(e.target.value)); resetAccelAnchor(); });
+
+    decreaseBpmBtn.addEventListener('click', () => { updateBpm(bpm - 1); resetAccelAnchor(); });
+    increaseBpmBtn.addEventListener('click', () => { updateBpm(bpm + 1); resetAccelAnchor(); });
+    decreaseBpm5Btn.addEventListener('click', () => { updateBpm(bpm - 5); resetAccelAnchor(); });
+    increaseBpm5Btn.addEventListener('click', () => { updateBpm(bpm + 5); resetAccelAnchor(); });
 
     decreaseBeatsBtn.addEventListener('click', () => {
         if (beatsPerMeasure > 1) {
@@ -856,39 +1071,37 @@
     });
 
     increaseBeatsBtn.addEventListener('click', () => {
-        if (beatsPerMeasure < 12) { 
+        if (beatsPerMeasure < 12) {
             beatsPerMeasure++;
             initBeats();
         }
     });
 
-    // Volume Control Logic
-    // Toggle Menu
+    // Volume Control
     volumeTrigger.addEventListener('click', (e) => {
         e.stopPropagation();
         volumeMenu.classList.toggle('hidden');
-        timerMenu.classList.add('hidden'); // Close others
+        timerMenu.classList.add('hidden');
         rhythmMenu.classList.add('hidden');
+        closeAccelOverlay();
     });
 
-    // Slider Input
     volumeSlider.addEventListener('input', (e) => {
         masterVolume = e.target.value / 100;
         if (masterVolume > 0) {
             isMuted = false;
             previousVolume = masterVolume;
         }
-        initAudioContext(); 
+        initAudioContext();
         updateMasterVolume();
     });
 
-    // Mute Button (inside menu)
     muteBtn.addEventListener('click', () => {
         isMuted = !isMuted;
         if (isMuted) {
             volumeSlider.value = 0;
         } else {
-            masterVolume = previousVolume > 0 ? previousVolume : 0.5; 
+            masterVolume = previousVolume > 0 ? previousVolume : 0.5;
             volumeSlider.value = masterVolume * 100;
         }
         initAudioContext();
@@ -899,8 +1112,9 @@
     rhythmTrigger.addEventListener('click', (e) => {
         e.stopPropagation();
         rhythmMenu.classList.toggle('hidden');
-        timerMenu.classList.add('hidden'); 
+        timerMenu.classList.add('hidden');
         volumeMenu.classList.add('hidden');
+        closeAccelOverlay();
     });
 
     rhythmItems.forEach(item => {
@@ -909,7 +1123,9 @@
             const target = e.currentTarget;
             target.classList.add('selected');
             subdivision = target.dataset.value;
-            rhythmTrigger.innerHTML = target.innerHTML;
+            // Replace trigger icon with selected item's SVG using safe DOM cloning
+            while (rhythmTrigger.firstChild) rhythmTrigger.removeChild(rhythmTrigger.firstChild);
+            Array.from(target.childNodes).forEach(node => rhythmTrigger.appendChild(node.cloneNode(true)));
             rhythmMenu.classList.add('hidden');
         });
     });
@@ -918,22 +1134,119 @@
     timerTrigger.addEventListener('click', (e) => {
         e.stopPropagation();
         timerMenu.classList.toggle('hidden');
-        rhythmMenu.classList.add('hidden'); 
+        rhythmMenu.classList.add('hidden');
         volumeMenu.classList.add('hidden');
+        closeAccelOverlay();
     });
 
     timerItems.forEach(item => {
         item.addEventListener('click', (e) => {
-            timerItems.forEach(i => i.classList.remove('selected'));
-            const target = e.currentTarget;
-            target.classList.add('selected');
-            
-            setTimer(target.dataset.time);
+            timerIsCustom = false;
+            setTimer(e.currentTarget.dataset.time);
             timerMenu.classList.add('hidden');
         });
     });
 
-    // Close all dropdowns
+    timerCustomRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        timerIsCustom = true;
+        setTimer(timerCustomMinutes);
+        timerMenu.classList.add('hidden');
+    });
+
+    timerCustomRow.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        timerCustomMinutes = Math.min(Math.max(timerCustomMinutes - Math.sign(e.deltaY), 1), 240);
+        timerCustomLabel.textContent = timerCustomMinutes + 'm';
+        if (timerIsCustom) setTimer(timerCustomMinutes);
+    }, { passive: false });
+
+    // Accel trigger
+    accelTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isPlaying) return;
+        if (accelOverlay.classList.contains('hidden')) {
+            timerMenu.classList.add('hidden');
+            rhythmMenu.classList.add('hidden');
+            volumeMenu.classList.add('hidden');
+            openAccelOverlay();
+        } else {
+            closeAccelOverlay();
+        }
+    });
+
+    // Target BPM drag
+    accelTargetDisplay.addEventListener('mousedown', (e) => {
+        accelDragStartX = e.clientX;
+        accelDragStartBpm = accelEditBpm;
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (accelDragStartX === null) return;
+        const delta = Math.round((e.clientX - accelDragStartX) / 3);
+        setAccelEditBpm(accelDragStartBpm + delta);
+    });
+
+    window.addEventListener('mouseup', () => {
+        accelDragStartX = null;
+        accelDragStartBpm = null;
+    });
+
+    // Target BPM wheel
+    accelTargetDisplay.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        setAccelEditBpm(accelEditBpm - Math.sign(e.deltaY));
+    }, { passive: false });
+
+    // Target BPM arrow buttons
+    accelDecBtn.addEventListener('click', () => setAccelEditBpm(accelEditBpm - 1));
+    accelIncBtn.addEventListener('click', () => setAccelEditBpm(accelEditBpm + 1));
+
+    // Accel overlay timer preset buttons
+    accelTimerBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            timerIsCustom = false;
+            setTimer(e.currentTarget.dataset.time);
+        });
+    });
+
+    // Accel overlay custom timer
+    accelTimerCustomWrap.addEventListener('click', (e) => {
+        e.stopPropagation();
+        timerIsCustom = true;
+        setTimer(timerCustomMinutes);
+    });
+
+    accelTimerCustomWrap.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        timerCustomMinutes = Math.min(Math.max(timerCustomMinutes - Math.sign(e.deltaY), 1), 240);
+        accelTimerCustomLabel.textContent = timerCustomMinutes + 'm';
+        timerCustomLabel.textContent = timerCustomMinutes + 'm';
+        if (timerIsCustom) setTimer(timerCustomMinutes);
+    }, { passive: false });
+
+    // Accel confirm
+    accelConfirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        accelTargetBpm = accelEditBpm;
+        updateAccelTrigger();
+        closeAccelOverlay();
+    });
+
+    // Accel off
+    accelOffBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        accelTargetBpm = null;
+        accelStartBpm = null;
+        accelStartAudioTime = null;
+        updateAccelTrigger();
+        setTimer('off');
+        closeAccelOverlay();
+    });
+
+    // Close all dropdowns on outside click
     window.addEventListener('click', (e) => {
         if (!rhythmTrigger.contains(e.target) && !rhythmMenu.contains(e.target)) {
             rhythmMenu.classList.add('hidden');
@@ -944,9 +1257,12 @@
         if (!volumeTrigger.contains(e.target) && !volumeMenu.contains(e.target)) {
             volumeMenu.classList.add('hidden');
         }
+        if (!accelOverlayWrap.contains(e.target)) {
+            closeAccelOverlay();
+        }
     });
 
-    if(rhythmItems[0]) rhythmItems[0].classList.add('selected');
+    if (rhythmItems[0]) rhythmItems[0].classList.add('selected');
 
     tapBtn.addEventListener('click', () => {
         const now = Date.now();
@@ -961,15 +1277,16 @@
             }
             const avg = intervals.reduce((a, b) => a + b) / intervals.length;
             updateBpm(Math.round(60000 / avg));
+            resetAccelAnchor();
         }
-        
+
         tapBtn.classList.add('bg-slate-200');
         setTimeout(() => tapBtn.classList.remove('bg-slate-200'), 100);
     });
 
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Space') {
-            e.preventDefault(); 
+            e.preventDefault();
             togglePlay();
         }
         if (e.code === 'ArrowUp') updateBpm(bpm + 1);
