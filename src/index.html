@@ -213,11 +213,47 @@
         #timerCustomRow { cursor: ns-resize; }
         #timerCustomRow:hover { background-color: #eff6ff; color: #6366f1; }
         #timerCustomRow.selected { color: #6366f1; background-color: #e0e7ff; }
+
+        .accel-mode-btn { transition: all 0.15s; }
+        .accel-mode-btn.mode-selected { background-color: #ede9fe !important; color: #4f46e5 !important; }
+
+        input[type=range].weight-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            height: 20px;
+            width: 100%;
+        }
+        input[type=range].weight-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -5px;
+        }
+        input[type=range].weight-slider::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 2px;
+        }
+
+        #accelPreviewOverlay {
+            animation: fadeIn 0.15s ease-out;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
 
     <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative">
+
+        <!-- Accel Breakdown Overlay (top, always shown while accel is open) -->
+        <div id="accelPreviewOverlay" class="hidden absolute top-0 left-0 right-0 bg-white rounded-t-[2.5rem] border-b border-slate-200 z-50 px-6 py-4">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Breakdown</div>
+            <div id="accelPreviewContent"></div>
+        </div>
 
         <!-- 헤더: 좌우 정렬 -->
         <div class="flex justify-between items-end mb-6 px-2 pt-2">
@@ -381,9 +417,10 @@
                 <span class="text-xl text-slate-400 font-bold ml-2">BPM</span>
             </div>
 
-            <!-- Accel indicator (right-aligned, below BPM) -->
-            <div class="w-full text-right pr-1 mb-4" style="min-height:20px; margin-top:2px;">
-                <div id="accelOverlayWrap" class="relative inline-block">
+            <!-- Accel indicator (below BPM) -->
+            <div class="w-full relative flex justify-center items-center px-1 mb-4" style="min-height:20px; margin-top:2px;">
+                <span id="accelStatus" class="text-xs tabular-nums font-bold" style="visibility:hidden; color:#a5b4fc;"></span>
+                <div id="accelOverlayWrap" class="absolute right-0 inline-block">
                     <span id="accelTrigger">&#8674;</span>
                     <!-- Accel overlay -->
                     <div id="accelOverlay" class="dropdown-menu hidden absolute bg-white rounded-2xl shadow-xl border border-slate-100 z-50 p-4" style="width:230px; top:22px; right:0;">
@@ -410,6 +447,28 @@
                                 <div id="accelTimerCustomWrap" class="flex items-center gap-0.5 bg-slate-100 rounded-lg px-2 py-1 cursor-ns-resize hover:bg-indigo-50 transition-colors" title="scroll to adjust" style="user-select:none; -webkit-user-select:none;">
                                     <span id="accelTimerCustomLabel" class="text-xs font-bold text-slate-400">&#9861;</span>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="h-px bg-slate-100 my-3"></div>
+                        <!-- Mode -->
+                        <div class="mb-3">
+                            <div class="text-xs text-slate-400 font-semibold tracking-wider uppercase mb-2">Mode</div>
+                            <div class="flex gap-1">
+                                <button id="accelModeLinear" class="accel-mode-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors mode-selected" title="Equal time per BPM">Time</button>
+                                <button id="accelModeCount" class="accel-mode-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" title="Equal reps per BPM">Count</button>
+                                <button id="accelModeWeighted" class="accel-mode-btn flex-1 py-1 rounded-lg text-xs font-semibold bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-500 transition-colors" title="More time for slower BPMs">Weighted</button>
+                            </div>
+                        </div>
+                        <!-- Weight (weighted 모드에서만 표시) -->
+                        <div id="accelWeightRow" class="mb-3 hidden">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-xs text-slate-400 font-semibold tracking-wider uppercase">Intensity</span>
+                                <span id="accelWeightDisplay" class="text-xs font-bold text-indigo-500">2.0</span>
+                            </div>
+                            <input type="range" id="accelWeightSlider" min="1" max="5" step="0.5" value="2" class="weight-slider">
+                            <div class="flex justify-between text-xs text-slate-300 mt-0.5">
+                                <span>Uniform</span>
+                                <span>Front-loaded</span>
                             </div>
                         </div>
                         <!-- Footer -->
@@ -452,15 +511,20 @@
 
         <!-- 메인 컨트롤 -->
         <div class="flex flex-col gap-2 w-full">
-            <div id="timerDisplayContainer" class="hidden w-full flex justify-center mb-2">
+            <div id="timerDisplayContainer" class="hidden w-full relative flex justify-center items-center mb-2">
                 <span id="timerCountdown" class="text-sm font-bold text-rose-500 bg-rose-50 px-3 py-1 rounded-full shadow-sm border border-rose-100 tabular-nums">
                     &#9203; 05:00
                 </span>
+                <button id="accelResetBtn" class="hidden absolute right-0 text-xs font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-full shadow-sm border border-indigo-100 hover:bg-indigo-100 transition-colors" title="Reset to start BPM">&#8634; Reset</button>
             </div>
 
             <div class="flex gap-3">
                 <button id="tapBtn" class="flex-1 bg-slate-100 text-slate-600 font-bold py-4 rounded-2xl text-sm hover:bg-slate-200 transition-colors active:scale-95">
                     TAP TEMPO
+                </button>
+                <button id="accelStopBtn" class="hidden flex-1 bg-rose-500 hover:bg-rose-600 text-white font-bold py-4 rounded-2xl text-sm transition-colors active:scale-95 shadow-lg shadow-rose-200 flex items-center justify-center gap-2">
+                    STOP
+                    <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
                 </button>
                 <button id="playBtn" class="flex-[2] bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-4 rounded-2xl text-xl transition-all active:scale-95 shadow-lg shadow-indigo-200 flex items-center justify-center gap-2">
                     <span id="playText">START</span>
@@ -507,11 +571,17 @@
     // --- Accel Variables ---
     let accelTargetBpm = null;
     let accelStartBpm = null;
-    let accelStartAudioTime = null;
+    let accelMeasureCount = 0;
     let accelTotalSeconds = 0;
     let accelEditBpm = 150;
     let accelDragStartX = null;
     let accelDragStartBpm = null;
+    let accelMode = 'linear'; // 'linear' | 'weighted'
+    let accelWeight = 2;
+    let accelSchedule = [];
+    let accelOriginalBpm = null; // remembers start BPM for reset after accel ends
+    let accelLastTargetBpm = null; // remembers target BPM even after Off
+    let accelPaused = false; // true when stopped mid-accel without settings changes
 
     // --- DOM Elements ---
     const playBtn = document.getElementById('playBtn');
@@ -556,8 +626,12 @@
     const volIconMenuHigh = document.getElementById('volIconMenuHigh');
     const volIconMenuMute = document.getElementById('volIconMenuMute');
 
+    // Accel Stop Button
+    const accelStopBtn = document.getElementById('accelStopBtn');
+
     // Accel Elements
     const accelTrigger = document.getElementById('accelTrigger');
+    const accelStatus = document.getElementById('accelStatus');
     const accelOverlayWrap = document.getElementById('accelOverlayWrap');
     const accelOverlay = document.getElementById('accelOverlay');
     const accelTargetDisplay = document.getElementById('accelTargetDisplay');
@@ -568,6 +642,15 @@
     const accelTimerCustomLabel = document.getElementById('accelTimerCustomLabel');
     const accelConfirmBtn = document.getElementById('accelConfirmBtn');
     const accelOffBtn = document.getElementById('accelOffBtn');
+    const accelModeLinearBtn = document.getElementById('accelModeLinear');
+    const accelModeCountBtn = document.getElementById('accelModeCount');
+    const accelModeWeightedBtn = document.getElementById('accelModeWeighted');
+    const accelWeightRow = document.getElementById('accelWeightRow');
+    const accelWeightSlider = document.getElementById('accelWeightSlider');
+    const accelWeightDisplay = document.getElementById('accelWeightDisplay');
+    const accelPreviewOverlay = document.getElementById('accelPreviewOverlay');
+    const accelResetBtn = document.getElementById('accelResetBtn');
+    const accelPreviewContent = document.getElementById('accelPreviewContent');
 
     // --- Initialization ---
 
@@ -860,6 +943,7 @@
     }
 
     function setTimer(minutes) {
+        accelPaused = false;
         if (minutes === 'off') {
             isTimerActive = false;
             timerIsCustom = false;
@@ -885,6 +969,8 @@
             if (isTimerActive) secondsRemaining = targetDuration * 60;
             updateTimerDisplay();
         }
+
+        renderAccelPreview();
     }
 
     function startTimerCountdown() {
@@ -917,25 +1003,64 @@
             && isPlaying;
     }
 
-    function accelGraceSecs() {
-        if (accelTargetBpm === null) return 0;
-        return Math.ceil(beatsPerMeasure * 60 / accelTargetBpm);
+    function buildAccelSchedule() {
+        if (accelStartBpm === null || accelTargetBpm === null) return [];
+        const stepItems = calcStepReps(accelStartBpm, accelTargetBpm, accelTotalSeconds);
+        if (stepItems.length === 0) return [];
+        const schedule = [];
+        let cumReps = 0;
+        stepItems.forEach(item => {
+            schedule.push({ bpm: item.bpm, startRep: cumReps });
+            cumReps += item.reps;
+        });
+        return schedule;
+    }
+
+    function updateAccelStatus() {
+        if ((!isAccelActive() && !accelPaused) || accelSchedule.length === 0) {
+            accelStatus.style.visibility = 'hidden';
+            return;
+        }
+        // 현재 스케줄 인덱스 찾기
+        let idx = 0;
+        for (let i = accelSchedule.length - 1; i >= 0; i--) {
+            if (accelMeasureCount >= accelSchedule[i].startRep) { idx = i; break; }
+        }
+        const nextIdx = idx + 1;
+        if (nextIdx >= accelSchedule.length) {
+            // 마지막 BPM 도달
+            accelStatus.textContent = accelTargetBpm + ' BPM \u2714';
+            accelStatus.style.visibility = 'visible';
+            return;
+        }
+        const repsLeft = accelSchedule[nextIdx].startRep - accelMeasureCount;
+        const nextBpm = accelSchedule[nextIdx].bpm;
+        const prefix = accelPaused ? '\u23F8 ' : '';
+        accelStatus.textContent = prefix + repsLeft + ' rep to ' + nextBpm + ' BPM';
+        accelStatus.style.visibility = 'visible';
     }
 
     function onMeasureEnd() {
         if (!isAccelActive()) return;
-        const elapsed = audioCtx.currentTime - accelStartAudioTime;
-        const ratio = Math.min(elapsed / accelTotalSeconds, 1);
-        const newBpm = Math.round(accelStartBpm + (accelTargetBpm - accelStartBpm) * ratio);
-        if (newBpm === bpm) return;
-        // Update bpm immediately so the scheduler uses correct intervals for the new measure
-        bpm = Math.min(Math.max(newBpm, 30), 250);
-        // Schedule all visual updates to coincide with beat 0 actual playback time
+        accelMeasureCount++;
+        let newBpm = accelStartBpm;
+        for (let i = accelSchedule.length - 1; i >= 0; i--) {
+            if (accelMeasureCount >= accelSchedule[i].startRep) {
+                newBpm = accelSchedule[i].bpm;
+                break;
+            }
+        }
         const delay = Math.max(0, (nextNoteTime - audioCtx.currentTime) * 1000);
+        if (newBpm === bpm) {
+            setTimeout(updateAccelStatus, delay);
+            return;
+        }
+        bpm = Math.min(Math.max(newBpm, 30), 250);
         setTimeout(() => {
             bpmDisplay.textContent = bpm;
             bpmSlider.value = bpm;
             if (isPlaying) updatePendulumSpeed();
+            updateAccelStatus();
         }, delay);
     }
 
@@ -943,30 +1068,179 @@
         if (accelTargetBpm === null) {
             accelTrigger.textContent = '\u21e2';
             accelTrigger.className = '';
+            accelStatus.style.visibility = 'hidden';
         } else if (isPlaying) {
             accelTrigger.textContent = '\u2192 ' + accelTargetBpm;
             accelTrigger.className = 'accel-playing';
+            updateAccelStatus();
+        } else if (accelPaused) {
+            accelTrigger.textContent = '\u23F8 ' + accelTargetBpm;
+            accelTrigger.className = 'accel-set';
+            updateAccelStatus();
         } else {
             accelTrigger.textContent = '\u2192 ' + accelTargetBpm;
+            accelStatus.style.visibility = 'hidden';
             accelTrigger.className = 'accel-set';
         }
+        // Show reset button when accel is set, not playing, and not paused
+        const showReset = accelTargetBpm !== null && !isPlaying && !accelPaused && accelOriginalBpm !== null;
+        accelResetBtn.classList.toggle('hidden', !showReset);
     }
 
     function resetAccelAnchor() {
+        if (accelPaused) {
+            // BPM/timer changed during pause — invalidate pause state
+            accelFullStop();
+        }
+        accelPaused = false;
         if (accelTargetBpm !== null && isPlaying && audioCtx) {
             accelStartBpm = bpm;
-            accelStartAudioTime = audioCtx.currentTime + scheduleAheadTime;
-            accelTotalSeconds = Math.max(secondsRemaining - accelGraceSecs(), 0);
+            accelMeasureCount = 0;
+            accelTotalSeconds = secondsRemaining;
+            accelSchedule = buildAccelSchedule();
         }
     }
 
     function setAccelEditBpm(val) {
         accelEditBpm = Math.min(Math.max(val, 30), 250);
         accelTargetDisplay.textContent = accelEditBpm;
+        renderAccelPreview();
+    }
+
+    function calcStepReps(startBpm, endBpm, effectiveSecs) {
+        const range = Math.abs(endBpm - startBpm);
+        if (range === 0) return [];
+        const dir = endBpm > startBpm ? 1 : -1;
+
+        // 시간에 맞게 BPM 레벨 수 자동 조절 (각 레벨 최소 1마디 필요)
+        const maxLevels = range + 1;
+        const avgBpm = (startBpm + endBpm) / 2;
+        const avgMeasDur = beatsPerMeasure * 60 / avgBpm;
+        const count = Math.min(maxLevels, Math.max(2, Math.floor(effectiveSecs / avgMeasDur)));
+
+        // start~end 균등 분배 (양 끝 항상 포함)
+        const stepBpms = Array.from({ length: count }, (_, i) =>
+            Math.round(startBpm + range * (i / (count - 1)) * dir)
+        );
+
+        if (accelMode === 'linear') {
+            const timePerStep = effectiveSecs / count;
+            return stepBpms.map(b => ({
+                bpm: b,
+                reps: Math.max(1, Math.round(timePerStep / (beatsPerMeasure * 60 / b)))
+            }));
+        } else if (accelMode === 'count') {
+            const measDurs = stepBpms.map(b => beatsPerMeasure * 60 / b);
+            const sumOneCycle = measDurs.reduce((a, b) => a + b, 0);
+            const cycles = Math.max(1, Math.round(effectiveSecs / sumOneCycle));
+            return stepBpms.map(b => ({ bpm: b, reps: cycles }));
+        } else {
+            // Weighted: 앞쪽(느린) BPM에 더 많은 시간
+            const weights = Array.from({ length: count }, (_, i) => Math.pow(count - i, accelWeight - 1));
+            const totalWeight = weights.reduce((a, b) => a + b, 0);
+            return stepBpms.map((b, i) => {
+                const timeFrac = (weights[i] / totalWeight) * effectiveSecs;
+                return { bpm: b, reps: Math.max(1, Math.round(timeFrac / (beatsPerMeasure * 60 / b))) };
+            });
+        }
+    }
+
+    function calcAccelPreviewItems() {
+        const startBpm = bpm;
+        const endBpm = accelEditBpm;
+        if (endBpm === startBpm) return [];
+        const totalSecs = targetDuration * 60;
+        // calcStepReps가 endBpm을 항상 포함하며 최소 1rep 보장 → grace 불필요
+        return calcStepReps(startBpm, endBpm, totalSecs);
+    }
+
+    function renderAccelPreview() {
+        const allItems = calcAccelPreviewItems();
+        accelPreviewContent.textContent = '';
+        if (allItems.length === 0) {
+            const p = document.createElement('p');
+            p.className = 'text-xs text-slate-400 text-center py-2';
+            p.textContent = 'Start BPM equals target BPM';
+            accelPreviewContent.appendChild(p);
+            return;
+        }
+
+        const items = allItems;
+
+        function fmtSecs(secs) {
+            const m = Math.floor(secs / 60);
+            const s = parseFloat((secs % 60).toFixed(1));
+            return m > 0 ? m + 'm ' + s.toFixed(1) + 's' : s.toFixed(1) + 's';
+        }
+
+        function itemSecs(item) {
+            return item.reps * (beatsPerMeasure * 60 / item.bpm);
+        }
+
+        // BPM step 계산 (items가 균등 분배이므로 첫 두 항목 간 차이)
+        const bpmStep = items.length >= 2 ? Math.abs(items[1].bpm - items[0].bpm) : 0;
+
+        // 최대 4개 구간으로 나누기
+        const NUM_GROUPS = Math.min(4, items.length);
+        const groups = [];
+        const baseSize = Math.floor(items.length / NUM_GROUPS);
+        const remainder = items.length % NUM_GROUPS;
+        let offset = 0;
+        for (let g = 0; g < NUM_GROUPS; g++) {
+            const size = baseSize + (g < remainder ? 1 : 0);
+            groups.push(items.slice(offset, offset + size));
+            offset += size;
+        }
+
+        const wrap = document.createElement('div');
+        wrap.className = 'space-y-1.5';
+
+        // BPM step 표시 (2 이상일 때)
+        if (bpmStep > 1) {
+            const stepRow = document.createElement('div');
+            stepRow.className = 'text-xs tabular-nums text-slate-400 mb-1';
+            stepRow.textContent = items.length + ' levels · step ' + bpmStep + ' BPM';
+            wrap.appendChild(stepRow);
+        }
+
+        groups.forEach(group => {
+            const first = group[0];
+            const last = group[group.length - 1];
+            const single = group.length === 1;
+
+            const groupTotalSecs = group.reduce((sum, item) => sum + itemSecs(item), 0);
+            const totalReps = group.reduce((sum, item) => sum + item.reps, 0);
+
+            const row = document.createElement('div');
+            row.className = 'flex justify-between items-center gap-2';
+
+            const label = document.createElement('span');
+            label.className = 'text-xs font-bold tabular-nums text-indigo-400 shrink-0';
+            label.textContent = single ? first.bpm + ' BPM' : first.bpm + ' ~ ' + last.bpm + ' BPM';
+
+            const info = document.createElement('span');
+            info.className = 'text-xs tabular-nums text-slate-500 text-right';
+            info.textContent = fmtSecs(groupTotalSecs) + ' · ' + totalReps + 'rep';
+
+            row.appendChild(label);
+            row.appendChild(info);
+            wrap.appendChild(row);
+        });
+
+        accelPreviewContent.appendChild(wrap);
+    }
+
+    function setAccelMode(mode) {
+        accelMode = mode;
+        accelModeLinearBtn.classList.toggle('mode-selected', mode === 'linear');
+        accelModeCountBtn.classList.toggle('mode-selected', mode === 'count');
+        accelModeWeightedBtn.classList.toggle('mode-selected', mode === 'weighted');
+        accelWeightRow.classList.toggle('hidden', mode !== 'weighted');
+        renderAccelPreview();
     }
 
     function openAccelOverlay() {
-        accelEditBpm = accelTargetBpm !== null ? accelTargetBpm : 150;
+        accelEditBpm = accelTargetBpm !== null ? accelTargetBpm : (accelLastTargetBpm !== null ? accelLastTargetBpm : 150);
         accelTargetDisplay.textContent = accelEditBpm;
         // Auto-select 5m if no timer is active
         if (!isTimerActive) {
@@ -975,13 +1249,150 @@
         }
         syncTimerUI();
         accelOverlay.classList.remove('hidden');
+        accelPreviewOverlay.classList.remove('hidden');
+        renderAccelPreview();
     }
 
     function closeAccelOverlay() {
+        accelLastTargetBpm = accelEditBpm;
         accelOverlay.classList.add('hidden');
+        accelPreviewOverlay.classList.add('hidden');
+    }
+
+    function renderLiveAccelPreview() {
+        if (!isAccelActive() && !accelPaused) return;
+        const items = calcStepReps(accelStartBpm, accelTargetBpm, accelTotalSeconds);
+        if (items.length === 0) return;
+
+        accelPreviewContent.textContent = '';
+
+        function fmtSecs(secs) {
+            const m = Math.floor(secs / 60);
+            const s = parseFloat((secs % 60).toFixed(1));
+            return m > 0 ? m + 'm ' + s.toFixed(1) + 's' : s.toFixed(1) + 's';
+        }
+        function itemSecs(item) {
+            return item.reps * (beatsPerMeasure * 60 / item.bpm);
+        }
+
+        const bpmStep = items.length >= 2 ? Math.abs(items[1].bpm - items[0].bpm) : 0;
+
+        const NUM_GROUPS = Math.min(4, items.length);
+        const groups = [];
+        const baseSize = Math.floor(items.length / NUM_GROUPS);
+        const remainder = items.length % NUM_GROUPS;
+        let offset = 0;
+        for (let g = 0; g < NUM_GROUPS; g++) {
+            const size = baseSize + (g < remainder ? 1 : 0);
+            groups.push(items.slice(offset, offset + size));
+            offset += size;
+        }
+
+        // 각 그룹의 누적 startRep 계산 (현재 진행 위치 표시용)
+        let cumRep = 0;
+        const groupStartReps = groups.map(group => {
+            const start = cumRep;
+            group.forEach(item => { cumRep += item.reps; });
+            return start;
+        });
+        const groupEndReps = [];
+        cumRep = 0;
+        groups.forEach(group => {
+            group.forEach(item => { cumRep += item.reps; });
+            groupEndReps.push(cumRep);
+        });
+
+        const wrap = document.createElement('div');
+        wrap.className = 'space-y-1.5';
+
+        if (bpmStep > 1) {
+            const stepRow = document.createElement('div');
+            stepRow.className = 'text-xs tabular-nums text-slate-400 mb-1';
+            stepRow.textContent = items.length + ' levels · step ' + bpmStep + ' BPM';
+            wrap.appendChild(stepRow);
+        }
+
+        groups.forEach((group, gi) => {
+            const first = group[0];
+            const last = group[group.length - 1];
+            const single = group.length === 1;
+
+            const groupTotalSecs = group.reduce((sum, item) => sum + itemSecs(item), 0);
+            const totalReps = group.reduce((sum, item) => sum + item.reps, 0);
+
+            const row = document.createElement('div');
+            row.className = 'flex justify-between items-center gap-2';
+
+            // 현재 진행 구간 강조
+            const isCurrent = accelMeasureCount >= groupStartReps[gi] && accelMeasureCount < groupEndReps[gi];
+            const isPast = accelMeasureCount >= groupEndReps[gi];
+
+            const label = document.createElement('span');
+            label.className = 'text-xs font-bold tabular-nums shrink-0 '
+                + (isCurrent ? 'text-indigo-500' : isPast ? 'text-slate-300' : 'text-indigo-400');
+            label.textContent = (isCurrent ? '\u25B6 ' : '') + (single ? first.bpm + ' BPM' : first.bpm + ' ~ ' + last.bpm + ' BPM');
+
+            const info = document.createElement('span');
+            info.className = 'text-xs tabular-nums text-right '
+                + (isPast ? 'text-slate-300' : 'text-slate-500');
+            info.textContent = fmtSecs(groupTotalSecs) + ' · ' + totalReps + 'rep';
+
+            row.appendChild(label);
+            row.appendChild(info);
+            wrap.appendChild(row);
+        });
+
+        accelPreviewContent.appendChild(wrap);
+        accelPreviewOverlay.classList.remove('hidden');
     }
 
     // --- togglePlay ---
+
+    function setPlayBtnStyle(mode) {
+        // mode: 'start' | 'stop' | 'pause' | 'resume'
+        const allColors = ['bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200',
+                           'bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200',
+                           'bg-amber-500', 'hover:bg-amber-600', 'shadow-amber-200',
+                           'bg-emerald-500', 'hover:bg-emerald-600', 'shadow-emerald-200'];
+        playBtn.classList.remove(...allColors);
+        if (mode === 'start') {
+            playText.textContent = 'START';
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+            playBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
+        } else if (mode === 'stop') {
+            playText.textContent = 'STOP';
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+            playBtn.classList.add('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
+        } else if (mode === 'pause') {
+            playText.textContent = 'PAUSE';
+            playIcon.classList.add('hidden');
+            pauseIcon.classList.remove('hidden');
+            playBtn.classList.add('bg-amber-500', 'hover:bg-amber-600', 'shadow-amber-200');
+        } else if (mode === 'resume') {
+            playText.textContent = 'RESUME';
+            playIcon.classList.remove('hidden');
+            pauseIcon.classList.add('hidden');
+            playBtn.classList.add('bg-emerald-500', 'hover:bg-emerald-600', 'shadow-emerald-200');
+        }
+    }
+
+    function accelFullStop() {
+        // Full stop from paused state
+        accelPaused = false;
+        accelStartBpm = null;
+        accelMeasureCount = 0;
+
+        setPlayBtnStyle('start');
+        tapBtn.classList.remove('hidden');
+        accelStopBtn.classList.add('hidden');
+        accelPreviewOverlay.classList.add('hidden');
+
+        visualLight.classList.remove('swinging');
+        renderBeatIndicators();
+        updateAccelTrigger();
+    }
 
     function togglePlay() {
         if (isPlaying) {
@@ -990,21 +1401,31 @@
             clearTimeout(timerID);
             stopTimerCountdown();
 
-            if (accelStartBpm !== null) {
-                updateBpm(accelStartBpm);
+            // Preserve accel state for resume if mid-accel
+            // (can't use isAccelActive() here — isPlaying is already false)
+            accelPaused = accelTargetBpm !== null
+                && accelTargetBpm !== bpm
+                && isTimerActive
+                && accelSchedule.length > 0;
+            if (!accelPaused) {
+                accelStartBpm = null;
+                accelMeasureCount = 0;
             }
-            accelStartBpm = null;
-            accelStartAudioTime = null;
             updateAccelTrigger();
 
-            playText.textContent = 'START';
-            playIcon.classList.remove('hidden');
-            pauseIcon.classList.add('hidden');
-            playBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
-            playBtn.classList.add('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
+            if (accelPaused) {
+                // Pause state: show RESUME + STOP buttons, keep breakdown visible
+                setPlayBtnStyle('resume');
+                tapBtn.classList.add('hidden');
+                accelStopBtn.classList.remove('hidden');
+                renderLiveAccelPreview();
+            } else {
+                setPlayBtnStyle('start');
+                tapBtn.classList.remove('hidden');
+                accelStopBtn.classList.add('hidden');
+            }
 
             visualLight.classList.remove('swinging');
-
             renderBeatIndicators();
             return;
         }
@@ -1015,10 +1436,21 @@
         currentBeatIndex = 0;
         nextNoteTime = audioCtx.currentTime + scheduleAheadTime;
 
-        accelStartBpm = bpm;
-        accelStartAudioTime = audioCtx.currentTime + scheduleAheadTime;
-        accelTotalSeconds = Math.max(targetDuration * 60 - accelGraceSecs(), 0);
+        if (accelPaused) {
+            // Resume: keep existing schedule, measureCount, startBpm — continue where we left off
+            accelPaused = false;
+        } else {
+            accelStartBpm = bpm;
+            if (accelTargetBpm !== null) accelOriginalBpm = bpm;
+            accelMeasureCount = 0;
+            accelTotalSeconds = targetDuration * 60;
+            accelSchedule = buildAccelSchedule();
+        }
         updateAccelTrigger();
+
+        // Restore tap button, hide stop button
+        tapBtn.classList.remove('hidden');
+        accelStopBtn.classList.add('hidden');
 
         if (isTimerActive) {
             startTimerCountdown();
@@ -1032,12 +1464,9 @@
             if (isPlaying) visualLight.classList.add('swinging');
         }, 50);
 
-        playText.textContent = 'STOP';
-        playIcon.classList.add('hidden');
-        pauseIcon.classList.remove('hidden');
-
-        playBtn.classList.remove('bg-indigo-500', 'hover:bg-indigo-600', 'shadow-indigo-200');
-        playBtn.classList.add('bg-rose-500', 'hover:bg-rose-600', 'shadow-rose-200');
+        // In accel mode: show PAUSE, otherwise STOP
+        const inAccelMode = accelTargetBpm !== null && isTimerActive && accelSchedule.length > 0;
+        setPlayBtnStyle(inAccelMode ? 'pause' : 'stop');
 
         scheduler();
     }
@@ -1052,6 +1481,8 @@
     }
 
     // --- Event Listeners ---
+
+    accelStopBtn.addEventListener('click', accelFullStop);
 
     playBtn.addEventListener('click', togglePlay);
 
@@ -1175,6 +1606,16 @@
         }
     });
 
+    // Accel hover preview (playing 중 hover로 breakdown 표시)
+    accelOverlayWrap.addEventListener('mouseenter', () => {
+        if (isAccelActive() || accelPaused) renderLiveAccelPreview();
+    });
+    accelOverlayWrap.addEventListener('mouseleave', () => {
+        if (isPlaying && !accelPaused) {
+            accelPreviewOverlay.classList.add('hidden');
+        }
+    });
+
     // Target BPM drag
     accelTargetDisplay.addEventListener('mousedown', (e) => {
         accelDragStartX = e.clientX;
@@ -1231,6 +1672,19 @@
     accelConfirmBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         accelTargetBpm = accelEditBpm;
+        accelLastTargetBpm = accelEditBpm;
+        if (accelPaused) {
+            accelPaused = false;
+            tapBtn.classList.remove('hidden');
+            accelStopBtn.classList.add('hidden');
+            setPlayBtnStyle('start');
+            accelPreviewOverlay.classList.add('hidden');
+        }
+        // Reset timer countdown so a new accel run starts fresh
+        if (isTimerActive) {
+            secondsRemaining = targetDuration * 60;
+            updateTimerDisplay();
+        }
         updateAccelTrigger();
         closeAccelOverlay();
     });
@@ -1240,10 +1694,50 @@
         e.stopPropagation();
         accelTargetBpm = null;
         accelStartBpm = null;
-        accelStartAudioTime = null;
+        accelMeasureCount = 0;
+        accelOriginalBpm = null;
+        if (accelPaused) {
+            accelPaused = false;
+            tapBtn.classList.remove('hidden');
+            accelStopBtn.classList.add('hidden');
+            setPlayBtnStyle('start');
+            accelPreviewOverlay.classList.add('hidden');
+        }
         updateAccelTrigger();
         setTimer('off');
         closeAccelOverlay();
+    });
+
+    // Accel reset — restore original BPM and reset timer
+    accelResetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (accelOriginalBpm !== null) {
+            updateBpm(accelOriginalBpm);
+        }
+        if (isTimerActive) {
+            secondsRemaining = targetDuration * 60;
+            updateTimerDisplay();
+        }
+        accelMeasureCount = 0;
+        accelStartBpm = null;
+        accelPaused = false;
+    });
+
+    // Accel mode buttons
+    accelModeLinearBtn.addEventListener('click', (e) => { e.stopPropagation(); setAccelMode('linear'); });
+    accelModeCountBtn.addEventListener('click', (e) => { e.stopPropagation(); setAccelMode('count'); });
+    accelModeWeightedBtn.addEventListener('click', (e) => { e.stopPropagation(); setAccelMode('weighted'); });
+
+    // Accel weight slider
+    accelWeightSlider.addEventListener('input', (e) => {
+        accelWeight = parseFloat(e.target.value);
+        accelWeightDisplay.textContent = accelWeight.toFixed(1);
+        renderAccelPreview();
+    });
+
+    // Preview 실시간 업데이트: BPM/timer 변경 시
+    accelTargetDisplay.addEventListener('accelEditChanged', () => {
+        renderAccelPreview();
     });
 
     // Close all dropdowns on outside click

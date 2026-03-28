@@ -1,0 +1,13 @@
+{
+  "name": "webmetronome-tests",
+  "private": true,
+  "scripts": {
+    "test": "npx playwright test",
+    "test:accel": "npx playwright test tests/acceleration.spec.js",
+    "test:headed": "npx playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "serve": "^14.2.0"
+  }
+}

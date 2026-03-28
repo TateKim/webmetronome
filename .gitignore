@@ -1,3 +1,7 @@
 /dist/
 .playwright-mcp/
 .claude/
+tmp/
+node_modules/
+test-results/
+playwright-report/
