@@ -726,6 +726,23 @@
         }
     }
 
+    // Shortest interval between two consecutive clicks at the current bpm/subdivision.
+    // Used to cap click duration so it never dominates the beat spacing.
+    function getMinNoteInterval() {
+        const secondsPerBeat = 60.0 / bpm;
+        const fractions = {
+            '1': 1,
+            '2': 0.5,
+            '3': 1 / 3,
+            '4': 0.25,
+            '5': 0.2,
+            '6': 1 / 6,
+            'shuffle': 1 / 3, // shorter of the two shuffle sub-intervals
+        };
+        const f = fractions[subdivision] || 1;
+        return secondsPerBeat * f;
+    }
+
     function playSound(time, toneType) {
         if (!audioCtx || toneType === 3) return;
 
@@ -746,11 +763,15 @@
             gain = 1.5;
         }
 
+        // Cap click duration at 30% of the interval to the next click so beats
+        // stay clearly separated at high tempos / fine subdivisions.
+        const duration = Math.min(0.05, 0.15 * getMinNoteInterval());
+
         osc.frequency.value = freq;
         gainNode.gain.setValueAtTime(gain, time);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
         osc.start(time);
-        osc.stop(time + 0.05);
+        osc.stop(time + duration);
     }
 
     function playTimerEndSound() {
