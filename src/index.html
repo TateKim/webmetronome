@@ -366,6 +366,17 @@
                                 <path d="M4.5 10H22.5" stroke="currentColor" stroke-width="2" stroke-linecap="butt"/>
                             </svg>
                         </button>
+                        <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="4e" title="16th (따으으따)">
+                            <svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+                                <!-- note 1: filled (따) -->
+                                <ellipse cx="3" cy="17" rx="2" ry="1.5" transform="rotate(-20 3 17)" />
+                                <!-- note 4: filled (따) -->
+                                <ellipse cx="21" cy="17" rx="2" ry="1.5" transform="rotate(-20 21 17)" />
+                                <path d="M4.5 17V7 M10.5 17V7 M16.5 17V7 M22.5 17V7" stroke="currentColor" stroke-width="1" fill="none"/>
+                                <path d="M4.5 7H22.5" stroke="currentColor" stroke-width="2" stroke-linecap="butt"/>
+                                <path d="M4.5 10H22.5" stroke="currentColor" stroke-width="2" stroke-linecap="butt"/>
+                            </svg>
+                        </button>
                         <button class="dropdown-item w-full h-12 flex items-center justify-center rounded-lg transition-colors" data-value="5" title="Quintuplet">
                             <svg class="w-8 h-8" viewBox="0 0 32 32" fill="current">
                                 <path d="M5.5 8.5 V 5.5 H 14.5" stroke="currentColor" stroke-width="1" fill="none"/>
@@ -738,6 +749,7 @@
             '5': 0.2,
             '6': 1 / 6,
             'shuffle': 1 / 3, // shorter of the two shuffle sub-intervals
+            '4e': 0.25,
         };
         const f = fractions[subdivision] || 1;
         return secondsPerBeat * f;
@@ -836,7 +848,7 @@
         } else if (subdivision === '3') {
             nextNoteTime += (1/3) * secondsPerBeat;
             currentBeatIndex += (1/3);
-        } else if (subdivision === '4') {
+        } else if (subdivision === '4' || subdivision === '4e') {
             nextNoteTime += 0.25 * secondsPerBeat;
             currentBeatIndex += 0.25;
         } else if (subdivision === '5') {
@@ -873,6 +885,16 @@
 
         const arrayIndex = mainBeatInt % beatsPerMeasure;
         const toneType = beatStates[arrayIndex];
+
+        // 따으으따: only the 1st and 4th 16th notes within each beat play
+        if (subdivision === '4e' && !isMainBeat) {
+            const subPos = beatIndex - mainBeatInt;
+            const isLastSixteenth = Math.abs(subPos - 0.75) < 0.05;
+            if (!isLastSixteenth) {
+                scheduleDraw(beatIndex, time, 3, false);
+                return;
+            }
+        }
 
         if (toneType !== 3) {
             if (isMainBeat) {
