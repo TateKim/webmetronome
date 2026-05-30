@@ -91,7 +91,7 @@
             height: 40px;
             border-radius: 50%;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: transform 0.2s ease;
             position: relative;
             display: flex;
             align-items: center;
@@ -138,8 +138,8 @@
         .move-right { transform: translateX(4px); }
 
         @keyframes light-move {
-            0% { left: 0; transform: translate(0, -50%); }
-            100% { left: 100%; transform: translate(-100%, -50%); }
+            0% { transform: translate(0, -50%); }
+            100% { transform: translate(var(--swing-travel, 0px), -50%); }
         }
 
         .visual-track {
@@ -153,18 +153,19 @@
         .visual-light {
             position: absolute;
             top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            left: 0;
+            transform: translate(var(--swing-rest, 0px), -50%);
             width: 36px;
             height: 20px;
             background-color: #6366f1;
             border-radius: 6px;
             box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
-            transition: left 0.3s ease, transform 0.3s ease;
+            transition: transform 0.3s ease;
         }
 
         .visual-light.swinging {
             transition: none;
+            will-change: transform;
             animation-name: light-move;
             animation-timing-function: ease-in-out;
             animation-iteration-count: infinite;
@@ -970,6 +971,10 @@
     }
 
     function updatePendulumSpeed() {
+        const track = visualLight.parentElement;
+        const travel = Math.max(0, track.clientWidth - visualLight.offsetWidth);
+        visualLight.style.setProperty('--swing-travel', travel + 'px');
+        visualLight.style.setProperty('--swing-rest', (travel / 2) + 'px');
         visualLight.style.animationDuration = (60 / bpm) + 's';
     }
 
@@ -1873,6 +1878,8 @@
 
     // Init
     initBeats();
+    updatePendulumSpeed();
+    window.addEventListener('resize', updatePendulumSpeed);
 
 </script>
 </body>
