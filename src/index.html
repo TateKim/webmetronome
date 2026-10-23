@@ -244,11 +244,136 @@
         #accelPreviewOverlay {
             animation: fadeIn 0.15s ease-out;
         }
+
+        /* ---------- Timing Check (mic input) ----------
+           Moving elements (track, sweep, meter fill/threshold, marks) only change transform/opacity. */
+        [hidden] { display: none !important; }
+        [data-q="good"] { --q: #10b981; }
+        [data-q="warn"] { --q: #f59e0b; }
+        [data-q="bad"]  { --q: #f43f5e; }
+
+        #timingBtn { transition: background-color 0.15s, color 0.15s; }
+
+        .tm-addon { border-top: 1px dashed #e2e8f0; margin: 0 -8px 24px; padding: 16px 8px 0; display: flex; flex-direction: column; gap: 12px; text-align: left; }
+        .tm-body { display: flex; flex-direction: column; gap: 12px; }
+        .tm-error { font-size: 0.78rem; font-weight: 700; color: #e11d48; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 8px 12px; }
+        .tm-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .tm-row.between { justify-content: space-between; gap: 10px; }
+        .tm-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; }
+        .tm-seg { display: flex; gap: 2px; background: #f1f5f9; border-radius: 12px; padding: 3px; flex-wrap: wrap; }
+        .tm-seg button { border: 0; background: transparent; color: #64748b; font-weight: 700; font-size: 0.75rem; padding: 6px 10px; border-radius: 9px; cursor: pointer; font-family: inherit; }
+        .tm-seg button[aria-pressed="true"] { background: #fff; color: #6366f1; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+        .tm-seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .tm-hint-ind { font-size: 0.68rem; font-weight: 700; color: #6366f1; }
+        .tm-select { flex: 1; min-width: 0; max-width: 100%; font: 600 0.78rem 'Noto Sans KR', sans-serif; color: #334155; background: #f1f5f9; border: 1px solid transparent; border-radius: 10px; padding: 6px 8px; }
+        .tm-step { display: flex; align-items: center; gap: 4px; background: #f1f5f9; border-radius: 12px; padding: 3px; }
+        .tm-step-btn { width: 28px; height: 28px; border: 0; border-radius: 9px; background: #fff; color: #64748b; font-weight: 700; font-size: 1rem; line-height: 1; cursor: pointer; font-family: inherit; box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); touch-action: manipulation; }
+        .tm-step-btn:active { transform: scale(0.95); }
+        .tm-step-val { min-width: 4.6ch; text-align: center; font: 700 0.8rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; color: #334155; cursor: text; }
+        .tm-step-input { width: 6ch; text-align: center; font: 700 0.8rem ui-monospace, 'Cascadia Mono', Consolas, monospace; border: 1px solid #c7d2fe; border-radius: 6px; padding: 2px 0; }
+        .tm-loop { display: flex; flex-direction: column; gap: 6px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 8px 10px; }
+        .tm-cal-btn { border: 0; background: #eef2ff; color: #6366f1; font-weight: 700; font-size: 0.72rem; padding: 6px 10px; border-radius: 9px; cursor: pointer; font-family: inherit; }
+        .tm-cal-btn:disabled, .tm-text-btn:disabled { opacity: 0.45; cursor: default; }
+        .tm-loop-live { font: 700 0.72rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; color: #475569; min-height: 1rem; }
+        .tm-loop-result { font-size: 0.75rem; font-weight: 700; color: var(--q, #475569); }
+        .tm-view-row { flex-wrap: nowrap; gap: 8px; }
+        .tm-view-row .tm-seg { flex: none; flex-wrap: nowrap; }
+        .tm-pop-wrap { position: relative; margin-left: auto; flex: none; }
+        .tm-sec { display: flex; flex-direction: column; gap: 4px; }
+        .tm-nowrap { flex-wrap: nowrap; }
+        .tm-pair { display: inline-flex; align-items: center; margin-left: auto; }
+        .tm-pair .tm-text-btn { font-size: 0.66rem; padding: 4px 6px; }
+        .tm-pair .tm-text-btn + .tm-text-btn { border-left: 1px solid #e2e8f0; border-radius: 0; }
+        .tm-set-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: #f1f5f9; color: #475569; border-radius: 10px; padding: 6px 8px; cursor: pointer; font-family: inherit; position: relative; }
+        .tm-set-btn:hover, .tm-set-btn[aria-expanded="true"] { background: #e0e7ff; color: #4f46e5; }
+        .tm-set-ico { width: 14px; height: 14px; flex: none; }
+        .tm-set-vals { font: 700 0.72rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+        .tm-set-est { font-size: 0.5rem; font-weight: 700; color: #94a3b8; vertical-align: super; line-height: 1; align-self: flex-start; margin-top: 4px; }
+        .tm-pulse { width: 7px; height: 7px; border-radius: 50%; background: #6366f1; animation: tm-pulse 1s ease-in-out infinite; }
+        @keyframes tm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+        @media (prefers-reduced-motion: reduce) { .tm-pulse { animation: none; } }
+        .tm-popover { position: absolute; right: 0; top: calc(100% + 6px); width: 280px; max-width: calc(100vw - 16px); z-index: 50; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #fff; border: 1px solid #f1f5f9; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); text-align: left; }
+        .tm-est { font-size: 0.68rem; font-weight: 700; color: #94a3b8; }
+        .tm-text-btn { border: 0; background: transparent; color: #6366f1; font-weight: 700; font-size: 0.72rem; padding: 4px 6px; cursor: pointer; font-family: inherit; }
+        .tm-meter-wrap { display: flex; align-items: center; gap: 8px; width: 100%; }
+        .tm-mic-ico { width: 16px; height: 16px; color: #94a3b8; flex: none; }
+        .tm-meter { position: relative; flex: 1; height: 8px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+        .tm-meter-fill { position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(0); background: #cbd5e1; will-change: transform; }
+        .tm-meter-fill.hit { background: #6366f1; }
+        .tm-meter-fill.hot { background: #e11d48; }
+        .tm-hot { font-size: 0.72rem; font-weight: 700; color: #e11d48; margin-top: -4px; line-height: 1.1rem; height: 1.1rem; visibility: hidden; } /* space is reserved so the warning never shifts the layout */
+        .tm-hot.on { visibility: visible; }
+        .tm-meter-th { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; will-change: transform; pointer-events: none; }
+        .tm-meter-th::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #334155; }
+        .tm-meter-q { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; will-change: transform; pointer-events: none; }
+        .tm-meter-q::after { content: ""; position: absolute; top: 2px; bottom: 2px; left: 0; width: 1px; background: rgb(100 116 139 / 0.5); }
+        [data-q="listen"] { --q: #64748b; }
+        .tm-status { font-size: 0.68rem; font-weight: 700; color: var(--q, #94a3b8); width: 9ch; text-align: right; white-space: nowrap; flex: none; }
+        .tm-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+        .tm-sm { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 6px 10px; min-width: 0; }
+        .tm-sm .k { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tm-sm .v { font: 700 1rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; color: var(--q, #334155); min-height: 1.5em; }
+        .tm-note { font-size: 0.68rem; color: #94a3b8; font-weight: 500; margin: 0; }
+
+        .tm-chart { position: relative; overflow: hidden; background: #f8fafc; border: 1px solid #f1f5f9; }
+        .tm-band { position: absolute; left: 0; right: 0; background: rgb(16 185 129 / 0.14); }
+        .tm-mid { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgb(16 185 129 / 0.55); }
+        .tm-side { position: absolute; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.1em; color: #94a3b8; z-index: 3; }
+        .tm-gl { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: #e2e8f0; }
+        .tm-gl.sub { background: rgb(226 232 240 / 0.55); }
+        .tm-gl.bar { width: 2px; background: #cbd5e1; }
+        .tm-dot { position: absolute; left: 0; top: 50%; border-radius: 50%; background: var(--q); box-shadow: 0 0 0 1.5px #f8fafc; z-index: 2; }
+        .tm-dot.d0 { width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; }
+        .tm-dot.d2 { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
+        .tm-dot.d1 { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+        /* out-of-range accepted hit: red triangle pinned at the edge, pointing outward (only x is moved with transform) */
+        .tm-tri { position: absolute; left: 0; width: 0; height: 0; margin-left: -5px; border-left: 5px solid transparent; border-right: 5px solid transparent; z-index: 2; }
+        .tm-tri.up { top: 2px; border-bottom: 8px solid #f43f5e; }
+        .tm-tri.down { bottom: 2px; border-top: 8px solid #f43f5e; }
+        /* rejected (off-grid) hit: hollow grey ring on the centre line */
+        .tm-ring { position: absolute; left: 0; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; box-sizing: border-box; border: 1.5px solid #94a3b8; border-radius: 50%; z-index: 2; }
+        .tm-noinput { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: none; background: rgb(248 250 252 / 0.72); opacity: 0; transition: opacity 250ms; }
+        .tm-noinput.on { opacity: 1; }
+        .tm-noinput span { font-size: 0.75rem; font-weight: 700; color: #64748b; background: #fff; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 999px; }
+
+        /* Timeline view: fixed NOW line, last 2 bars scroll left */
+        .tm-timeline { height: 132px; border-radius: 16px; }
+        .tm-timeline .tm-band { top: calc(50% - 12px); height: 24px; }
+        .tm-timeline .tm-side { left: 8px; }
+        .tm-timeline .tm-side.t { top: 5px; } .tm-timeline .tm-side.b { bottom: 5px; }
+        .tm-track { position: absolute; inset: 0; will-change: transform; }
+        .tm-now { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: #6366f1; z-index: 4; will-change: transform; }
+        .tm-now::after { content: "NOW"; position: absolute; top: 4px; right: 5px; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.08em; color: #6366f1; }
+
+        /* On beats view: attached under the beat circles, 1 bar, sweeping position bar */
+        .tm-strip { position: relative; height: 96px; margin-top: 14px; text-align: left; }
+        .tm-cstrip { position: absolute; top: 0; height: 100%; border-radius: 12px; }
+        .tm-cstrip .tm-band { top: calc(50% - 9px); height: 18px; }
+        .tm-cstrip .tm-side { right: 5px; }
+        .tm-cstrip .tm-side.t { top: 3px; } .tm-cstrip .tm-side.b { bottom: 3px; }
+        .tm-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: #6366f1; z-index: 4; will-change: transform; }
+        .tm-sweep::before { content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 18px; background: linear-gradient(to right, rgb(99 102 241 / 0.18), transparent); }
+        /* narrow phones: tighter page/card padding and a compact header so nothing scrolls sideways (desktop unchanged) */
+        @media (max-width: 420px) {
+            body.p-4 { padding: 8px; }
+            .tm-card.p-8 { padding-left: 20px; padding-right: 20px; }
+            .tm-hdr.px-2 { padding-left: 0; padding-right: 0; }
+            .tm-hdr > div.gap-2 { gap: 6px; }
+            .tm-hdr button.w-12 { width: 44px; height: 44px; }
+            .tm-hdr .h-12 { height: 44px; }
+            .tm-hdr #decreaseBeats, .tm-hdr #increaseBeats { width: 34px; height: 34px; }
+            .tm-hdr #beatCountDisplay { width: 28px; }
+            .tm-hdr .text-xs { font-size: 0.65rem; letter-spacing: 0.02em; }
+        }
+        /* narrow screens (kept after the base rules so they win) */
+        @media (max-width: 420px) { .tm-set-feel { display: none; } }
+        @media (max-width: 359px) { .tm-view-row { flex-wrap: wrap; } }
+        @media (prefers-reduced-motion: reduce) { .tm-noinput { transition: none; } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
 
-    <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative">
+    <div class="tm-card w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative">
 
         <!-- Accel Breakdown Overlay (top, always shown while accel is open) -->
         <div id="accelPreviewOverlay" class="hidden absolute top-0 left-0 right-0 bg-white rounded-t-[2.5rem] border-b border-slate-200 z-50 px-6 py-4">
@@ -257,7 +382,7 @@
         </div>
 
         <!-- 헤더: 좌우 정렬 -->
-        <div class="flex justify-between items-end mb-6 px-2 pt-2">
+        <div class="tm-hdr flex justify-between items-end mb-6 px-2 pt-2">
 
             <!-- 왼쪽 그룹: 타이머 + 볼륨 -->
             <div class="flex items-end gap-2">
@@ -302,6 +427,15 @@
                         </button>
                         <input type="range" id="volumeSlider" min="0" max="100" value="80" class="vol-slider flex-1 cursor-pointer w-full">
                     </div>
+                </div>
+
+                <!-- Timing check (mic) -->
+                <div class="flex flex-col items-center relative">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Timing</span>
+                    <button id="timingBtn" aria-pressed="false" title="Check your timing with the mic" class="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors flex items-center justify-center shadow-sm border border-transparent focus:border-indigo-300 group relative">
+                        <svg class="w-6 h-6 fill-none stroke-current" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>
+                        <div id="timingLiveDot" hidden class="absolute top-2 right-2 w-2 h-2 bg-emerald-500 rounded-full border border-white"></div>
+                    </button>
                 </div>
 
             </div>
@@ -536,6 +670,132 @@
             <div id="beatContainer" class="beat-grid">
                 <!-- Javascript generated -->
             </div>
+
+            <!-- Timing Check: "On beats" strip attached under the beat circles -->
+            <div id="timingBeatsStrip" class="tm-strip" hidden>
+                <div id="timingBeatsChart" class="tm-chart tm-cstrip">
+                    <div class="tm-band"></div><div class="tm-mid"></div>
+                    <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span>
+                    <div id="timingBeatsGrid"></div>
+                    <div id="timingBeatsMarks"></div>
+                    <div id="timingSweep" class="tm-sweep"></div>
+                    <div id="timingNoInputC" class="tm-noinput"><span>No input</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timing Check add-on (visible only while Timing is on) -->
+        <div id="timingAddon" class="tm-addon" hidden>
+            <div id="timingError" class="tm-error" role="alert" hidden></div>
+            <div id="timingBody" class="tm-body">
+                <div id="timingHot" class="tm-hot" role="alert">Input too hot — lower the gain on your interface.</div>
+                <div class="tm-row between tm-view-row">
+                    <div id="timingViewSeg" class="tm-seg" role="group" aria-label="Timing view">
+                        <button type="button" data-v="timeline" aria-pressed="true">Timeline</button>
+                        <button type="button" data-v="beats" aria-pressed="false">On beats</button>
+                    </div>
+                    <div class="tm-pop-wrap">
+                        <button id="timingSetBtn" type="button" class="tm-set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="timingPopover" title="Input, feel, latency and sensitivity">
+                            <span id="timingSetFeel" class="tm-set-vals tm-set-feel">Straight ·</span>
+                            <span id="timingSetVals" class="tm-set-vals">0 ms · S5</span>
+                            <span id="timingSetEst" class="tm-set-est" hidden>est.</span>
+                            <span id="timingSetBusy" class="tm-pulse" hidden title="Measuring latency"></span>
+                        </button>
+                        <div id="timingPopover" class="tm-popover dropdown-menu" role="dialog" aria-label="Timing settings" hidden>
+                            <div class="tm-sec">
+                                <label class="tm-label" for="timingDeviceSelect">Input</label>
+                                <div class="tm-row">
+                                    <select id="timingDeviceSelect" class="tm-select"></select>
+                                    <div id="timingChSeg" class="tm-seg" role="group" aria-label="Input channel" hidden>
+                                        <button type="button" data-v="0" aria-pressed="true">Ch 1</button>
+                                        <button type="button" data-v="1" aria-pressed="false">Ch 2</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tm-sec">
+                                <span class="tm-label">Feel</span>
+                                <div class="tm-row">
+                                    <div id="timingFeelSeg" class="tm-seg" role="group" aria-label="Feel to check against">
+                                        <button type="button" data-v="straight" aria-pressed="true">Straight</button>
+                                        <button type="button" data-v="shuffle" aria-pressed="false">Shuffle</button>
+                                        <button type="button" data-v="halftime" aria-pressed="false" title="Half-time shuffle">Half-time</button>
+                                    </div>
+                                    <span id="timingFeelHint" class="tm-hint-ind" hidden>Set by rhythm</span>
+                                </div>
+                            </div>
+                            <div class="tm-sec">
+                                <span class="tm-label">Latency</span>
+                                <div class="tm-row tm-nowrap">
+                                    <div class="tm-step">
+                                        <button id="timingLatMinus" type="button" class="tm-step-btn" aria-label="Decrease latency">−</button>
+                                        <span id="timingLatValue" class="tm-step-val" tabindex="0" role="button" title="Play steady on the click and adjust until Avg sits near 0 ms.">0 ms</span>
+                                        <input id="timingLatInput" class="tm-step-input" type="number" min="0" max="300" step="1" hidden>
+                                        <button id="timingLatPlus" type="button" class="tm-step-btn" aria-label="Increase latency">+</button>
+                                    </div>
+                                    <span id="timingLatEst" class="tm-est" hidden>est.</span>
+                                    <span class="tm-pair">
+                                        <button id="timingLatReset" type="button" class="tm-text-btn" title="Reset to the browser's latency estimate">Reset</button>
+                                        <button id="timingLoopOpen" type="button" class="tm-text-btn" title="Measure the system latency with a loopback cable">Measure</button>
+                                    </span>
+                                </div>
+                                <div id="timingLoopPanel" class="tm-loop" hidden>
+                                    <p class="tm-note">Connect your interface output to its input with a cable, then press Start. Keep the output volume low.</p>
+                                    <div class="tm-row">
+                                        <button id="timingLoopStart" type="button" class="tm-cal-btn">Start</button>
+                                        <button id="timingLoopStop" type="button" class="tm-text-btn" disabled>Stop</button>
+                                        <button id="timingLoopClose" type="button" class="tm-text-btn">Close</button>
+                                    </div>
+                                    <div id="timingLoopLive" class="tm-loop-live"></div>
+                                    <div class="tm-row">
+                                        <span id="timingLoopResult" class="tm-loop-result"></span>
+                                        <button id="timingLoopApply" type="button" class="tm-cal-btn" hidden>Apply</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tm-sec">
+                                <span class="tm-label">Sensitivity</span>
+                                <div class="tm-row">
+                                    <div class="tm-step">
+                                        <button id="timingSensMinus" type="button" class="tm-step-btn" aria-label="Decrease sensitivity">−</button>
+                                        <span id="timingSensValue" class="tm-step-val" tabindex="0" role="button" title="Higher catches softer attacks. Lower it if one note shows up as several dots.">5</span>
+                                        <input id="timingSensInput" class="tm-step-input" type="number" min="1" max="10" step="1" hidden>
+                                        <button id="timingSensPlus" type="button" class="tm-step-btn" aria-label="Increase sensitivity">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tm-sec">
+                                <span class="tm-label">Quiet below</span>
+                                <div class="tm-row">
+                                    <div class="tm-step">
+                                        <button id="timingQuietMinus" type="button" class="tm-step-btn" aria-label="Lower the quiet level">−</button>
+                                        <span id="timingQuietValue" class="tm-step-val" tabindex="0" role="button" title="Input below this level counts as silence.">-60 dB</span>
+                                        <input id="timingQuietInput" class="tm-step-input" type="number" min="-80" max="-30" step="1" hidden>
+                                        <button id="timingQuietPlus" type="button" class="tm-step-btn" aria-label="Raise the quiet level">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="tm-meter-wrap" title="Input level. Sounds below the line are ignored; the faint tick marks the quiet level.">
+                    <svg class="tm-mic-ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>
+                    <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterTh" class="tm-meter-th"></div><div id="timingMeterQuiet" class="tm-meter-q"></div></div>
+                    <span id="timingStatus" class="tm-status">Quiet</span>
+                </div>
+                <div id="timingTimeline" class="tm-chart tm-timeline">
+                    <div class="tm-band"></div><div class="tm-mid"></div>
+                    <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span>
+                    <div id="timingTrack" class="tm-track"></div>
+                    <div id="timingNow" class="tm-now"></div>
+                    <div id="timingNoInputB" class="tm-noinput"><span>No input</span></div>
+                </div>
+                <div class="tm-summary">
+                    <div class="tm-sm"><div id="timingAvgLabel" class="k">Avg · last 2 bars</div><div id="timingAvg" class="v">–</div></div>
+                    <div class="tm-sm"><div class="k">Spread</div><div id="timingSpread" class="v">–</div></div>
+                    <div class="tm-sm"><div class="k">Hits</div><div id="timingHitCount" class="v">–</div></div>
+                </div>
+                <p class="tm-note">Use headphones so the mic doesn't pick up the click.</p>
+            </div>
         </div>
 
         <!-- 메인 컨트롤 -->
@@ -712,6 +972,7 @@
             beatContainer.appendChild(circle);
         }
         beatCountDisplay.textContent = beatsPerMeasure;
+        timingLayoutBeatsStrip();
     }
 
     // --- Audio Engine ---
@@ -924,6 +1185,7 @@
     function scheduleNote(beatIndex, time) {
         const mainBeatInt = Math.floor(beatIndex + 0.05);
         const isMainBeat = Math.abs(beatIndex - mainBeatInt) < 0.05;
+        if (isMainBeat && timingOn) timingRecordBeat(time, mainBeatInt % beatsPerMeasure);
 
         const arrayIndex = mainBeatInt % beatsPerMeasure;
         const toneType = beatStates[arrayIndex];
@@ -1516,6 +1778,7 @@
 
             visualLight.classList.remove('swinging');
             renderBeatIndicators();
+            timingOnPlayStop();
             return;
         }
 
@@ -1557,6 +1820,7 @@
         const inAccelMode = accelTargetBpm !== null && isTimerActive && accelSchedule.length > 0;
         setPlayBtnStyle(inAccelMode ? 'pause' : 'stop');
 
+        timingOnPlayStart(); // must run before scheduler() records the first beat
         scheduler();
     }
 
@@ -1567,6 +1831,7 @@
         if (isPlaying) {
             updatePendulumSpeed();
         }
+        timingRelayoutTimeline();
     }
 
     // --- Event Listeners ---
@@ -1647,6 +1912,7 @@
             while (rhythmTrigger.firstChild) rhythmTrigger.removeChild(rhythmTrigger.firstChild);
             Array.from(target.childNodes).forEach(node => rhythmTrigger.appendChild(node.cloneNode(true)));
             rhythmMenu.classList.add('hidden');
+            timingApplyFeel();
         });
     });
 
@@ -1875,6 +2141,1662 @@
         if (e.code === 'ArrowUp') updateBpm(bpm + 1);
         if (e.code === 'ArrowDown') updateBpm(bpm - 1);
     });
+
+    // =====================================================================
+    // --- Timing Check (mic input) ---
+    // Spec: docs/superpowers/specs/2026-10-23-timing-check-design.md
+    // Onsets are detected in an AudioWorklet and stamped with the AudioContext clock
+    // (currentFrame / sampleRate), the same clock the lookahead scheduler uses.
+    // Every hook called from existing code is a no-op while timingOn is false.
+    // =====================================================================
+
+    // --- Timing state ---
+    let timingOn = false;
+    let timingView = 'timeline';          // 'timeline' | 'beats'
+    let timingFeel = 'straight';          // 'straight' | 'shuffle' | 'halftime'
+    let timingStream = null;
+    let timingSource = null;
+    let timingNode = null;
+    let timingSink = null;
+    let timingDeviceId = '';
+    let timingLatencyMs = 0;              // compensation applied to onset times
+    let timingLatencyEst = true;          // true while the value is the browser estimate (no saved value)
+    let timingTrackLatency = 0;           // track.getSettings().latency in seconds (0 when unavailable)
+    let timingChannel = 0;                // selected input channel index
+    let timingChannels = 1;               // channels actually received
+    let timingSensitivity = 5;            // 1..10, 5 = reference tuning
+    let timingBeats = [];                 // ring buffer (64) of { time, beatInMeasure, n, dur }
+    let timingHits = [];                  // accepted hits log
+    let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac }
+    let timingLastHitTime = 0;            // context time of last accepted hit
+    let timingBeatSeq = 0;
+    let timingToken = 0;                  // invalidates async start/switch when Timing is toggled
+    let timingModuleReady = null;
+    let timingError = '';
+    let timingLevelDb = -120;
+    let timingThDb = -45;
+    let timingLevelCount = 0;             // level messages received (diagnostics / tests)
+    let timingMuteOnsets = false;         // tests: drop live mic onsets so synthetic ones are the only input
+    let timingPlayStart = 0;
+    let timingFrozenNow = 0;
+    let timingRaf = 0;
+    let timingMeterQueued = false;
+    let timingHotUntil = 0;               // performance.now() until which the clipping warning stays (UI only)
+    let timingHotShown = false;
+    let timingQuietDb = -60;              // raw input below this counts as silence (-80..-30 dBFS)
+    let timingQuietSince = 0;             // performance.now() since the raw level has been below timingQuietDb (0 = above it)
+    let timingQuietShown = null;
+    let timingNoInputOn = false;
+    let timingBeatsWrapped = false;
+    let timingStatusState = { text: 'Quiet', q: '', until: 0, rank: 0 };
+    let timingStatusShown = '';
+    let timingLastSummaryTs = 0;
+    let timingLastPruneTs = 0;
+
+    const TIMING_BEAT_BUFFER = 64;
+    const TIMING_RANGE_MS = 50;           // +/- range mapped to the top/bottom edge of the views
+    const TIMING_TL_H = 132;
+    const TIMING_C_H = 96;
+
+    // --- Timing DOM ---
+    const timingBtn = document.getElementById('timingBtn');
+    const timingLiveDot = document.getElementById('timingLiveDot');
+    const timingAddon = document.getElementById('timingAddon');
+    const timingBody = document.getElementById('timingBody');
+    const timingErrorEl = document.getElementById('timingError');
+    const timingDeviceSelect = document.getElementById('timingDeviceSelect');
+    const timingChSeg = document.getElementById('timingChSeg');
+    const timingHotEl = document.getElementById('timingHot');
+    const timingMeterQuiet = document.getElementById('timingMeterQuiet');
+    const timingQuietMinus = document.getElementById('timingQuietMinus');
+    const timingQuietPlus = document.getElementById('timingQuietPlus');
+    const timingQuietValue = document.getElementById('timingQuietValue');
+    const timingQuietInput = document.getElementById('timingQuietInput');
+    const timingSetBtn = document.getElementById('timingSetBtn');
+    const timingPopover = document.getElementById('timingPopover');
+    const timingSetVals = document.getElementById('timingSetVals');
+    const timingSetFeel = document.getElementById('timingSetFeel');
+    const timingSetEst = document.getElementById('timingSetEst');
+    const timingSetBusy = document.getElementById('timingSetBusy');
+    const timingLoopOpen = document.getElementById('timingLoopOpen');
+    const timingLoopPanel = document.getElementById('timingLoopPanel');
+    const timingLoopStartBtn = document.getElementById('timingLoopStart');
+    const timingLoopStopBtn = document.getElementById('timingLoopStop');
+    const timingLoopCloseBtn = document.getElementById('timingLoopClose');
+    const timingLoopLive = document.getElementById('timingLoopLive');
+    const timingLoopResult = document.getElementById('timingLoopResult');
+    const timingLoopApplyBtn = document.getElementById('timingLoopApply');
+    const timingLatMinus = document.getElementById('timingLatMinus');
+    const timingLatPlus = document.getElementById('timingLatPlus');
+    const timingLatValue = document.getElementById('timingLatValue');
+    const timingLatInput = document.getElementById('timingLatInput');
+    const timingLatEst = document.getElementById('timingLatEst');
+    const timingLatReset = document.getElementById('timingLatReset');
+    const timingSensMinus = document.getElementById('timingSensMinus');
+    const timingSensPlus = document.getElementById('timingSensPlus');
+    const timingSensValue = document.getElementById('timingSensValue');
+    const timingSensInput = document.getElementById('timingSensInput');
+    const timingViewSeg = document.getElementById('timingViewSeg');
+    const timingMeterFill = document.getElementById('timingMeterFill');
+    const timingMeterTh = document.getElementById('timingMeterTh');
+    const timingStatusEl = document.getElementById('timingStatus');
+    const timingFeelSeg = document.getElementById('timingFeelSeg');
+    const timingFeelHint = document.getElementById('timingFeelHint');
+    const timingTimeline = document.getElementById('timingTimeline');
+    const timingTrack = document.getElementById('timingTrack');
+    const timingNow = document.getElementById('timingNow');
+    const timingNoInputB = document.getElementById('timingNoInputB');
+    const timingNoInputC = document.getElementById('timingNoInputC');
+    const timingAvgLabel = document.getElementById('timingAvgLabel');
+    const timingAvgEl = document.getElementById('timingAvg');
+    const timingSpreadEl = document.getElementById('timingSpread');
+    const timingHitCountEl = document.getElementById('timingHitCount');
+    const timingBeatsStrip = document.getElementById('timingBeatsStrip');
+    const timingBeatsChart = document.getElementById('timingBeatsChart');
+    const timingBeatsGrid = document.getElementById('timingBeatsGrid');
+    const timingBeatsMarks = document.getElementById('timingBeatsMarks');
+    const timingSweep = document.getElementById('timingSweep');
+
+    // --- Persistence (always try/catch) ---
+    function timingLsGet(key) {
+        try { return localStorage.getItem(key); } catch (e) { return null; }
+    }
+    function timingLsSet(key, value) {
+        try { localStorage.setItem(key, String(value)); } catch (e) { /* storage unavailable */ }
+    }
+
+    // --- Grids (positions are fractions of a beat) ---
+    function timingGridGap(pos) {
+        let gap = Infinity;
+        for (let i = 0; i < pos.length; i++) {
+            const next = i + 1 < pos.length ? pos[i + 1] : 1 + pos[0];
+            gap = Math.min(gap, next - pos[i]);
+        }
+        return gap;
+    }
+
+    // role: 0 = beat (big dot), 2 = main off-beat (medium), 1 = other (small)
+    const TIMING_GRIDS = {
+        straight:   { name: 'Straight',          pos: [0, 1/4, 1/2, 3/4],            role: [0, 1, 2, 1] },
+        shuffle:    { name: 'Shuffle',           pos: [0, 1/3, 2/3],                 role: [0, 1, 2] },
+        halftime:   { name: 'Half-time shuffle', pos: [0, 1/3, 1/2, 5/6],            role: [0, 1, 2, 1] },
+        triplet:    { name: 'Triplet',           pos: [0, 1/3, 2/3],                 role: [0, 1, 1] },
+        quintuplet: { name: 'Quintuplet',        pos: [0, 1/5, 2/5, 3/5, 4/5],       role: [0, 1, 1, 1, 1] },
+        sextuplet:  { name: 'Sextuplet',         pos: [0, 1/6, 2/6, 3/6, 4/6, 5/6],  role: [0, 1, 1, 2, 1, 1] },
+    };
+    Object.keys(TIMING_GRIDS).forEach(k => { TIMING_GRIDS[k].gap = timingGridGap(TIMING_GRIDS[k].pos); });
+
+    // subdivision values that force a grid
+    const TIMING_LOCK = { 'shuffle': 'shuffle', '16shuffle': 'halftime', '3': 'triplet', '5': 'quintuplet', '6': 'sextuplet' };
+
+    function getTimingGrid() {
+        const lockKey = TIMING_LOCK[subdivision];
+        const key = lockKey || timingFeel;
+        const g = TIMING_GRIDS[key] || TIMING_GRIDS.straight;
+        return { key, name: g.name, pos: g.pos, role: g.role, gap: g.gap, locked: !!lockKey };
+    }
+
+    // --- Pure helpers ---
+    function median(arr) {
+        if (!arr.length) return NaN;
+        const s = arr.slice().sort((a, b) => a - b);
+        const m = s.length >> 1;
+        return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+    }
+    function mad(arr) {
+        if (!arr.length) return NaN;
+        const med = median(arr);
+        return median(arr.map(x => Math.abs(x - med)));
+    }
+    function timingQuality(ms) {
+        const a = Math.abs(ms);
+        return a <= 10 ? 'good' : a <= 25 ? 'warn' : 'bad';
+    }
+    function timingSpreadQuality(sd) {
+        return sd <= 8 ? 'good' : sd <= 16 ? 'warn' : 'bad';
+    }
+
+    // Match a latency-compensated onset time to the nearest grid point.
+    // beats: [{ time, beatInMeasure, n? }] in scheduling order. fallbackDur: duration of the newest beat (60/bpm).
+    // Returns { offsetMs, beatGlobal, beatInMeasure, pos, role, gridTime } or null when it must be ignored.
+    let timingLastMatchReason = ''; // why the last matchOnsetToGrid() returned null (debug recorder)
+    function matchOnsetToGrid(tComp, beats, grid, fallbackDur) {
+        timingLastMatchReason = 'before-first-beat';
+        if (!beats || !beats.length) return null;
+        let k = -1;
+        for (let i = beats.length - 1; i >= 0; i--) {
+            if (beats[i].time <= tComp) { k = i; break; }
+        }
+        if (k < 0) return null; // before the first beat
+        const cur = beats[k];
+        const nxt = beats[k + 1];
+        const dur = nxt ? nxt.time - cur.time : fallbackDur;
+        if (!(dur > 0)) return null;
+        const curN = cur.n !== undefined ? cur.n : k;
+        // Role-weighted capture: every grid point scores |offset| / weight (beat 1.0, main off-beat 0.85, other 0.6);
+        // the lowest score wins. Reject when the runner-up is within 8 % (ambiguous) or the hit is > 0.45 beat away.
+        const W = [1.0, 0.6, 0.85];
+        const cands = [];
+        for (let j = 0; j < grid.pos.length; j++) {
+            const g = cur.time + grid.pos[j] * dur;
+            cands.push({ off: tComp - g, gridTime: g, beatGlobal: curN, beatInMeasure: cur.beatInMeasure, pos: grid.pos[j], role: grid.role[j] });
+        }
+        // beat 0 of the next beat is also a candidate (early hit on the next beat)
+        const nextTime = nxt ? nxt.time : cur.time + dur;
+        const nextBim = nxt ? nxt.beatInMeasure : (cur.beatInMeasure + 1) % Math.max(1, beatsPerMeasure);
+        cands.push({ off: tComp - nextTime, gridTime: nextTime, beatGlobal: nxt && nxt.n !== undefined ? nxt.n : curN + 1, beatInMeasure: nextBim, pos: 0, role: grid.role[0] });
+        let best = null, second = Infinity;
+        cands.forEach(c => {
+            c.score = Math.abs(c.off) / (W[c.role] || 0.6);
+            if (!best || c.score < best.score) { if (best) second = best.score; best = c; }
+            else if (c.score < second) second = c.score;
+        });
+        const offsetMs = best.off * 1000;
+        if (Math.abs(best.off) > 0.45 * dur) { timingLastMatchReason = 'too-far'; return null; }
+        if (second <= best.score * 1.08) { timingLastMatchReason = 'ambiguous'; return null; }
+        timingLastMatchReason = '';
+        return { offsetMs, beatGlobal: best.beatGlobal, beatInMeasure: best.beatInMeasure, pos: best.pos, role: best.role, gridTime: best.gridTime };
+    }
+
+    // --- Onset detector core (no AudioWorklet dependency; also constructed in the page by tests) ---
+    // Multi-band rise detector: 4 band-passes (150-400, 400-1k, 1-2.5k, 2.5-6k Hz), 64-sample block maxima per band.
+    // A band triggers on a fast rise (m > 1.7 x the max over a 35 ms reference window that ends 8 ms earlier) above
+    // its gate (max(-55 dBFS, floor + 6 dB)); a summed positive rise >= 10 dB over several bands also triggers.
+    // Re-trigger guard: >= 40 ms and the band must have dropped below 0.7 x its peak (or exceed 1.5 x it).
+    // Onset time = earliest crossing sample of the triggering bands.
+    const TIMING_ONSET_CORE_SRC = `
+class OnsetCore {
+  constructor(sr, opts) {
+    opts = opts || {};
+    this.sr = sr;
+    // 4 band-passes (biquads); each band has its own block-max / reference-window / noise floor
+    const edges = opts.bands || [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]];
+    this.nb = edges.length;
+    this.W = Math.max(2, Math.ceil((opts.winMs || 35) / 1000 * sr / 64)); // reference window length (blocks)
+    this.G = Math.max(1, Math.round((opts.gapMs || 8) / 1000 * sr / 64)); // reference window ends this many blocks before now
+    this.L = this.W + this.G;
+    this.baseJumps = opts.jumps || [3, 2.5, 1.7, 1.7]; // per-band single-band rise ratio at sensitivity 5 (upper bands: +4.5 dB)
+    this.baseCombDb = opts.combDb || 10;               // summed positive rise over bands (dB) at sensitivity 5
+    this.setSensitivity(opts.sensitivity || 5);
+    this.floorCoef = 1 - Math.exp(-64 / (0.5 * sr));
+    this.holdSamples = Math.round(0.030 * sr);
+    this.refracSamples = Math.round(0.040 * sr);
+    this.quietSamples = Math.round(0.150 * sr);
+    this.bands = edges.map((e) => {
+      const f = Math.sqrt(e[0] * e[1]), q = f / (e[1] - e[0]), w0 = 2 * Math.PI * f / sr;
+      const al = Math.sin(w0) / (2 * q), a0 = 1 + al;
+      return {
+        b0: al / a0, b2: -al / a0, a1: -2 * Math.cos(w0) / a0, a2: (1 - al) / a0,
+        x1: 0, x2: 0, y1: 0, y2: 0, u1: 0, u2: 0, z1: 0, z2: 0, // two cascaded biquads per band (4th order)
+        buf: new Float32Array(64), bmax: 0,
+        hist: new Float32Array(this.L), floor: 1e-5, peak: 0, dropped: true, th: this.minTh, trig: 0
+      };
+    });
+    this.hi = 0; this.blocks = 0;
+    this.n = 0; this.blockStart = 0;
+    this.state = 0; this.onsetFrame = -1e12;
+    this.lvl = 0; this.thMin = this.minTh; this.raw = 0; this.clip = false;
+    this.rec = false; this.near = []; this.lastNear = -1e12; this.trigInfo = null; // debug recorder only
+  }
+  processChannels(chs, idx, startFrame) {
+    return this.process(chs[idx] || chs[0], startFrame);
+  }
+  takeLevel() {
+    const r = { db: 20 * Math.log10(this.lvl > 1e-9 ? this.lvl : 1e-9), thDb: 20 * Math.log10(this.thMin), rawDb: 20 * Math.log10(this.raw > 1e-9 ? this.raw : 1e-9), clip: this.clip };
+    this.lvl = 0; this.raw = 0; this.clip = false;
+    return r;
+  }
+  // Sensitivity 1..10 (5 = reference tuning). f scales the required rises: 1.5 at 1, 1.0 at 5, 0.55 at 10.
+  setSensitivity(v) {
+    v = Math.max(1, Math.min(10, +v || 5));
+    const f = v >= 5 ? 1 - (v - 5) * 0.09 : 1 + (5 - v) * 0.125;
+    this.sens = v; this.f = f;
+    this.jumps = this.baseJumps.map(j => Math.pow(j, f)); // jump dB x f
+    this.combDb = this.baseCombDb * f;
+    this.thRatio = Math.pow(2, f);                     // gate: floor + 6 dB x f
+    this.minTh = Math.pow(10, (-55 + (5 - v) * 2) / 20); // absolute gate, -55 dBFS shifted 2 dB per step
+    this.drop = v >= 5 ? 0.7 + (v - 5) * 0.02 : 0.7 - (5 - v) * 0.025; // re-trigger drop: 0.6 at 1, 0.8 at 10
+    if (this.thMin !== undefined) this.thMin = this.minTh;
+  }
+  params() {
+    return { sensitivity: this.sens, f: this.f, jumpDb: this.jumps.map(j => 20 * Math.log10(j)), combDb: this.combDb,
+             gateAboveFloorDb: 20 * Math.log10(this.thRatio), minGateDbfs: 20 * Math.log10(this.minTh), dropRatio: this.drop };
+  }
+  takeNear() {
+    const r = this.near;
+    this.near = [];
+    return r;
+  }
+  process(x, startFrame) {
+    const out = [];
+    const n = x.length, nb = this.nb, bands = this.bands;
+    for (let i = 0; i < n; i++) {
+      const v = x[i];
+      const av = v < 0 ? -v : v;
+      if (av > this.raw) this.raw = av; // raw input peak (before the band filters)
+      // clipping: any raw sample at full scale (>= 0.999, about -0.01 dBFS)
+      if (av >= 0.999) this.clip = true;
+      if (this.n === 0) this.blockStart = startFrame + i;
+      const k = this.n;
+      for (let b = 0; b < nb; b++) {
+        const B = bands[b];
+        const w = B.b0 * v + B.b2 * B.x2 - B.a1 * B.y1 - B.a2 * B.y2;
+        B.x2 = B.x1; B.x1 = v; B.y2 = B.y1; B.y1 = w;
+        const y = B.b0 * w + B.b2 * B.u2 - B.a1 * B.z1 - B.a2 * B.z2;
+        B.u2 = B.u1; B.u1 = w; B.z2 = B.z1; B.z1 = y;
+        const e = y < 0 ? -y : y;
+        B.buf[k] = e;
+        if (k === 0 || e > B.bmax) B.bmax = e;
+      }
+      this.n = k + 1;
+      if (this.n === 64) this.endBlock(out);
+    }
+    return out;
+  }
+  endBlock(out) {
+    const nb = this.nb, bands = this.bands, L = this.L, start = this.blockStart;
+    this.n = 0;
+    let thMin = Infinity;
+    for (let b = 0; b < nb; b++) {
+      const B = bands[b], m = B.bmax;
+      let ref = 0;
+      for (let a = this.G; a < L; a++) { // ages G .. L-1 blocks back
+        const v = B.hist[(this.hi - 1 - a + 2 * L) % L];
+        if (v > ref) ref = v;
+      }
+      B.ref = ref;
+      let th = B.floor * this.thRatio;
+      if (th < this.minTh) th = this.minTh;
+      B.th = th;
+      if (th < thMin) thMin = th;
+      if (m > this.lvl) this.lvl = m;
+    }
+    this.thMin = thMin;
+    if (this.state === 1) {
+      for (let b = 0; b < nb; b++) {
+        const B = bands[b];
+        if (B.bmax > B.peak) B.peak = B.bmax;
+        if (B.bmax < this.drop * B.peak) B.dropped = true;
+      }
+      if (start + 64 - this.onsetFrame >= this.holdSamples) {
+        let pk = 0;
+        for (let b = 0; b < nb; b++) if (bands[b].peak > pk) pk = bands[b].peak;
+        out.push({ time: this.onsetFrame / this.sr, peakDb: 20 * Math.log10(pk > 1e-9 ? pk : 1e-9), thDb: 20 * Math.log10(thMin), bands: this.trigInfo });
+        this.state = 0;
+      }
+    } else {
+      for (let b = 0; b < nb; b++) {
+        const B = bands[b];
+        if (B.bmax < this.drop * B.peak) B.dropped = true;
+      }
+      if (this.blocks >= L && start - this.onsetFrame >= this.refracSamples) this.tryTrigger(start);
+    }
+    if (this.rec && this.state === 0 && start - this.lastNear >= 0.02 * this.sr) {
+      // near misses: a band rose to >= 60 % (in dB) of its jump ratio and the gate passed or nearly passed
+      let bestB = -1, bestF = 0, bestR = 0, bestNeed = 0;
+      for (let b = 0; b < nb; b++) {
+        const B = bands[b];
+        if (!(B.ref > 0) || !(B.bmax > 0.5 * B.th)) continue;
+        const r = 20 * Math.log10(B.bmax / B.ref), need = 20 * Math.log10(this.jumps[b]);
+        if (r >= 0.6 * need && r / need > bestF) { bestB = b; bestF = r / need; bestR = r; bestNeed = need; }
+      }
+      if (bestB >= 0) {
+        const B = bands[bestB];
+        this.near.push({ time: start / this.sr, band: bestB, ratioDb: bestR, needDb: bestNeed, levelDb: 20 * Math.log10(B.bmax), gateDb: 20 * Math.log10(B.th) });
+        this.lastNear = start;
+      }
+    }
+    if (this.state === 0 && start - this.onsetFrame > this.quietSamples) {
+      for (let b = 0; b < nb; b++) {
+        const B = bands[b];
+        B.floor += (B.bmax - B.floor) * this.floorCoef;
+        if (B.floor < 1e-5) B.floor = 1e-5;
+      }
+    }
+    for (let b = 0; b < nb; b++) bands[b].hist[this.hi] = bands[b].bmax;
+    this.hi = (this.hi + 1) % L;
+    this.blocks++;
+  }
+  tryTrigger(start) {
+    const nb = this.nb, bands = this.bands;
+    let single = false, sum = 0;
+    for (let b = 0; b < nb; b++) {
+      const B = bands[b], m = B.bmax;
+      B.trig = 0;
+      const ok = m > B.th && (B.dropped || m > 1.5 * B.peak);
+      if (!ok) continue;
+      if (m > this.jumps[b] * B.ref) { B.trig = this.jumps[b]; single = true; }
+      if (B.ref > 0 && m > 1.2 * B.ref) sum += 20 * Math.log10(m / B.ref);
+    }
+    if (!single) {
+      if (sum < this.combDb) return;
+      for (let b = 0; b < nb; b++) {
+        const B = bands[b];
+        if (B.bmax > B.th && (B.dropped || B.bmax > 1.5 * B.peak) && B.ref > 0 && B.bmax > 1.2 * B.ref) B.trig = 1.2;
+      }
+    }
+    let best = 64;
+    for (let b = 0; b < nb; b++) {
+      const B = bands[b];
+      if (!B.trig) continue;
+      const thr = Math.max(B.th, B.trig * B.ref);
+      let i = 0;
+      while (i < 63 && B.buf[i] <= thr) i++;
+      if (i < best) best = i;
+    }
+    if (best >= 64) best = 0;
+    this.trigInfo = [];
+    for (let b = 0; b < nb; b++) {
+      const B = bands[b];
+      if (B.trig) this.trigInfo.push({ band: b, ratioDb: B.ref > 0 ? 20 * Math.log10(B.bmax / B.ref) : null, jumpDb: 20 * Math.log10(B.trig), combined: !single });
+    }
+    this.onsetFrame = start + best;
+    this.state = 1;
+    for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = false; }
+  }
+}
+`;
+    function timingMakeOnsetCoreParams(sr, sensitivity) {
+        const c = timingMakeOnsetCore(sr, { sensitivity });
+        return Object.assign({ bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
+    }
+    function timingMakeOnsetCore(sr, opts) {
+        const Core = new Function(TIMING_ONSET_CORE_SRC + '; return OnsetCore;')();
+        return new Core(sr, opts);
+    }
+
+    // --- Worklet (inline string, loaded through a Blob URL so the app stays single-file) ---
+    const TIMING_WORKLET_SRC = TIMING_ONSET_CORE_SRC + `
+class OnsetDetector extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.core = new OnsetCore(sampleRate);
+    this.ch = 0;
+    this.acc = 0;
+    this.rec = false; this.recBuf = null; this.recN = 0; this.recFrame = 0;
+    this.port.onmessage = (e) => {
+      const m = e.data;
+      if (m && m.type === 'config') {
+        if (typeof m.channel === 'number') this.ch = m.channel | 0;
+        if (typeof m.sensitivity === 'number') this.core.setSensitivity(m.sensitivity);
+        if (typeof m.record === 'boolean' && m.record !== this.rec) {
+          this.rec = m.record;
+          this.core.rec = m.record;
+          if (m.record) { this.recBuf = new Float32Array(1024); this.recN = 0; }
+          else { this.flushRaw(); this.port.postMessage({ type: 'recend' }); }
+        }
+      }
+    };
+  }
+  flushRaw() {
+    if (this.recBuf && this.recN > 0) {
+      const out = this.recBuf.slice(0, this.recN);
+      this.port.postMessage({ type: 'raw', frame: this.recFrame, samples: out }, [out.buffer]);
+    }
+    this.recBuf = this.rec ? new Float32Array(1024) : null; this.recN = 0;
+  }
+  process(inputs) {
+    const chs = inputs[0];
+    if (!chs || !chs.length) return true;
+    const ons = this.core.processChannels(chs, this.ch, currentFrame);
+    for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands });
+    if (this.rec) {
+      const x = chs[this.ch] || chs[0];
+      if (this.recN + x.length > this.recBuf.length) this.flushRaw();
+      if (this.recN === 0) this.recFrame = currentFrame;
+      this.recBuf.set(x, this.recN);
+      this.recN += x.length;
+      if (this.recN >= this.recBuf.length) this.flushRaw();
+      const nr = this.core.takeNear();
+      for (let i = 0; i < nr.length; i++) this.port.postMessage({ type: 'near', time: nr[i].time, band: nr[i].band, ratioDb: nr[i].ratioDb, needDb: nr[i].needDb, levelDb: nr[i].levelDb, gateDb: nr[i].gateDb });
+    }
+    this.acc += chs[0].length;
+    if (this.acc >= 1024) {
+      this.acc = 0;
+      const l = this.core.takeLevel();
+      this.port.postMessage({ type: 'level', db: l.db, thDb: l.thDb, rawDb: l.rawDb, clip: l.clip });
+    }
+    return true;
+  }
+}
+registerProcessor('onset-detector', OnsetDetector);
+`;
+
+    function timingEnsureWorklet() {
+        if (!audioCtx || !audioCtx.audioWorklet) return Promise.reject(new Error('noworklet'));
+        if (!timingModuleReady) {
+            const url = URL.createObjectURL(new Blob([TIMING_WORKLET_SRC], { type: 'application/javascript' }));
+            timingModuleReady = audioCtx.audioWorklet.addModule(url);
+            timingModuleReady.then(() => URL.revokeObjectURL(url), () => { URL.revokeObjectURL(url); timingModuleReady = null; });
+        }
+        return timingModuleReady;
+    }
+
+    // --- Small DOM helpers ---
+    function timingSetText(el, text) {
+        if (el.textContent !== text) el.textContent = text;
+    }
+    function timingSetQ(el, q) {
+        if (q) { if (el.dataset.q !== q) el.dataset.q = q; }
+        else if (el.dataset.q !== undefined) delete el.dataset.q;
+    }
+    function timingClamp(v, r) { return Math.max(-r, Math.min(r, v)); }
+    function timingMod(a, n) { return ((a % n) + n) % n; }
+    function timingBarDur() { return beatsPerMeasure * 60 / bpm; }
+    function timingNowSec() {
+        if (!audioCtx) return 0;
+        return isPlaying ? audioCtx.currentTime : (timingFrozenNow || audioCtx.currentTime);
+    }
+    function timingFmtMs(ms) {
+        const r = Math.round(ms);
+        return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r) + ' ms';
+    }
+    const timingReduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // --- Status text (Detected / Too weak / Quiet) ---
+    function timingSetStatus(text, q, rank) {
+        const now = performance.now(); // UI-only timer, never used for hit timing
+        const s = timingStatusState;
+        if (now < s.until && rank < s.rank) return;
+        timingStatusState = { text, q: q || '', until: now + 450, rank };
+        timingQueueMeter();
+    }
+
+    // --- Meter ---
+    function timingQueueMeter() {
+        if (timingMeterQueued || timingRaf || !timingOn) return;
+        timingMeterQueued = true;
+        requestAnimationFrame(timingRenderMeter);
+    }
+    function timingRenderMeter() {
+        timingMeterQueued = false;
+        if (!timingOn) return;
+        const f = Math.max(0, Math.min(1, (timingLevelDb + 80) / 80));   // meter scale -80..0 dBFS
+        const tf = Math.max(0, Math.min(0.99, (timingThDb + 80) / 80));
+        timingMeterFill.style.transform = 'scaleX(' + f.toFixed(3) + ')';
+        timingMeterTh.style.transform = 'translateX(' + (tf * 100).toFixed(2) + '%)';
+        const hot = timingLevelDb >= timingThDb;
+        if (timingMeterFill.classList.contains('hit') !== hot) timingMeterFill.classList.toggle('hit', hot);
+        const tooHot = performance.now() < timingHotUntil;
+        if (tooHot !== timingHotShown) {
+            timingHotShown = tooHot;
+            timingHotEl.classList.toggle('on', tooHot);
+            timingMeterFill.classList.toggle('hot', tooHot);
+        }
+        if (tooHot) timingQueueMeterLater(timingHotUntil - performance.now());
+        const s = timingStatusState;
+        const live = performance.now() < s.until;
+        // no live event: Quiet after >= 1 s below the quiet level, otherwise Listening
+        const quiet = !!timingQuietSince && performance.now() - timingQuietSince >= 1000;
+        const text = live ? s.text : (quiet ? 'Quiet' : 'Listening');
+        const q = live ? s.q : (quiet ? '' : 'listen');
+        const key = text + '|' + q;
+        if (key !== timingStatusShown) {
+            timingStatusShown = key;
+            timingSetText(timingStatusEl, text);
+            timingSetQ(timingStatusEl, q);
+        }
+        if (timingQuietShown !== timingQuietDb) {
+            timingQuietShown = timingQuietDb;
+            const qf = Math.max(0, Math.min(1, (timingQuietDb + 80) / 80));
+            timingMeterQuiet.style.transform = 'translateX(' + (qf * 100).toFixed(2) + '%)';
+        }
+        if (live) timingQueueMeterLater(s.until - performance.now());
+    }
+    let timingMeterTimer = 0;
+    function timingQueueMeterLater(ms) {
+        if (timingMeterTimer) return;
+        timingMeterTimer = setTimeout(() => { timingMeterTimer = 0; timingQueueMeter(); }, Math.max(16, ms + 20));
+    }
+
+    // --- Latency (manual) / threshold / channel controls ---
+    const TIMING_LAT_MAX = 300;
+    function timingEstimateLatencyMs() {
+        if (!audioCtx) return 0;
+        const sec = (audioCtx.outputLatency || 0) + (audioCtx.baseLatency || 0) + (timingTrackLatency || 0.010);
+        return Math.max(0, Math.min(TIMING_LAT_MAX, Math.round(sec * 1000)));
+    }
+    function timingLoadLatency() {
+        const raw = timingLsGet('wm.timing.latency.' + timingDeviceId);
+        const n = raw === null ? NaN : parseFloat(raw);
+        if (isFinite(n) && n >= 0) { timingLatencyMs = Math.min(TIMING_LAT_MAX, Math.round(n)); timingLatencyEst = false; }
+        else { timingLatencyMs = timingEstimateLatencyMs(); timingLatencyEst = true; }
+        timingRenderLatency();
+    }
+    function timingSetLatency(ms) {
+        const v = Math.max(0, Math.min(TIMING_LAT_MAX, Math.round(Number(ms))));
+        if (!isFinite(v)) return;
+        timingLatencyMs = v;
+        timingLatencyEst = false;
+        timingLsSet('wm.timing.latency.' + timingDeviceId, v);
+        timingRenderLatency();
+    }
+    function timingResetLatency() {
+        try { localStorage.removeItem('wm.timing.latency.' + timingDeviceId); } catch (e) { /* storage unavailable */ }
+        timingLatencyMs = timingEstimateLatencyMs();
+        timingLatencyEst = true;
+        timingRenderLatency();
+    }
+    function timingRenderLatency() {
+        timingSetText(timingLatValue, Math.round(timingLatencyMs) + ' ms');
+        timingLatEst.hidden = !timingLatencyEst;
+        timingRenderSettingsBtn();
+        let title = 'Play steady on the click and adjust until Avg sits near 0 ms.';
+        const last = timingLoopLoadLast();
+        if (last) title += ' Last loopback measurement: ' + Math.round(last.median) + ' ms \u00b1 ' + last.sd.toFixed(1) + ' ms (' + last.n + ' clicks' + (last.at ? ', ' + String(last.at).slice(0, 10) : '') + ').';
+        if (timingLatValue.title !== title) timingLatValue.title = title;
+    }
+
+    function timingLoadSensitivity() {
+        const raw = timingLsGet('wm.timing.sensitivity.' + timingDeviceId);
+        const n = raw === null ? NaN : parseFloat(raw);
+        timingSensitivity = isFinite(n) ? Math.max(1, Math.min(10, Math.round(n))) : 5;
+        timingSetText(timingSensValue, String(timingSensitivity));
+        timingRenderSettingsBtn();
+    }
+    function timingSetSensitivity(v) {
+        const n = Math.max(1, Math.min(10, Math.round(Number(v))));
+        if (!isFinite(n)) return;
+        timingSensitivity = n;
+        timingLsSet('wm.timing.sensitivity.' + timingDeviceId, n);
+        timingSetText(timingSensValue, String(n));
+        timingRenderSettingsBtn();
+        timingPostConfig();
+    }
+
+    function timingLoadQuiet() {
+        const raw = timingLsGet('wm.timing.quiet.' + timingDeviceId);
+        const n = raw === null ? NaN : parseFloat(raw);
+        timingQuietDb = isFinite(n) ? Math.max(-80, Math.min(-30, Math.round(n))) : -60;
+        timingSetText(timingQuietValue, timingQuietDb + ' dB');
+        timingQuietSince = performance.now();
+        timingQueueMeter();
+    }
+    function timingSetQuiet(db) {
+        const n = Math.max(-80, Math.min(-30, Math.round(Number(db))));
+        if (!isFinite(n)) return;
+        timingQuietDb = n;
+        timingLsSet('wm.timing.quiet.' + timingDeviceId, n);
+        timingSetText(timingQuietValue, n + ' dB');
+        timingQueueMeter();
+    }
+
+    function timingPostConfig() {
+        if (timingNode) timingNode.port.postMessage({ type: 'config', channel: timingChannel, sensitivity: timingSensitivity });
+    }
+    function timingLoadChannel() {
+        const raw = timingLsGet('wm.timing.channel.' + timingDeviceId);
+        const n = raw === null ? 0 : parseInt(raw, 10);
+        timingChannel = isFinite(n) && n >= 0 && n < timingChannels ? n : 0;
+        timingChSeg.hidden = timingChannels < 2;
+        timingChSeg.querySelectorAll('button').forEach(b => {
+            b.hidden = parseInt(b.dataset.v, 10) >= timingChannels;
+            b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === timingChannel));
+        });
+    }
+    function timingSetChannel(i) {
+        timingChannel = i;
+        timingLsSet('wm.timing.channel.' + timingDeviceId, i);
+        timingChSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === i)));
+        timingPostConfig();
+    }
+
+    // +/- stepper with press-and-hold repeat (400 ms delay, then 60 ms) and click-to-type value
+    function timingWireStepper(o) {
+        // each button owns its repeat timers, so another button losing focus/pointer cannot cancel a running hold
+        [[o.minus, -1], [o.plus, 1]].forEach(([btn, dir]) => {
+            let delayT = 0, repT = 0;
+            const stop = () => { clearTimeout(delayT); clearInterval(repT); delayT = repT = 0; };
+            btn.addEventListener('pointerdown', (ev) => {
+                if (ev.button !== undefined && ev.button !== 0) return;
+                stop();
+                o.set(o.get() + dir);
+                delayT = setTimeout(() => { repT = setInterval(() => o.set(o.get() + dir), 60); }, 400);
+            });
+            ['pointerup', 'pointerleave', 'pointercancel', 'blur'].forEach(t => btn.addEventListener(t, stop));
+            btn.addEventListener('click', (e) => { if (e.detail === 0) o.set(o.get() + dir); }); // keyboard activation
+        });
+        let cancelled = false;
+        const open = () => {
+            cancelled = false;
+            o.input.value = String(o.get());
+            o.value.hidden = true; o.input.hidden = false;
+            o.input.focus(); o.input.select();
+        };
+        const close = (apply) => {
+            if (o.input.hidden) return;
+            const txt = o.input.value;
+            o.input.hidden = true; o.value.hidden = false;
+            if (apply && txt !== '' && isFinite(Number(txt))) o.set(Number(txt));
+        };
+        o.value.addEventListener('click', open);
+        o.value.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+        o.input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); close(true); }
+            else if (e.key === 'Escape') { e.preventDefault(); cancelled = true; close(false); }
+            e.stopPropagation(); // keep Space/Arrow shortcuts of the metronome out of the text field
+        });
+        o.input.addEventListener('blur', () => { if (!cancelled) close(true); });
+    }
+
+    // --- Recording hook (called from scheduleNote when timingOn) ---
+    function timingRecordBeat(time, beatInMeasure) {
+        if (!timingOn) return;
+        const prev = timingBeats[timingBeats.length - 1];
+        if (prev) prev.dur = time - prev.time;
+        timingBeats.push({ time, beatInMeasure, n: timingBeatSeq++, dur: 0 });
+        if (timingDbg) timingDbg.beats.push({ time, beatInMeasure, n: timingBeatSeq - 1, bpm, subdivision, grid: getTimingGrid().key });
+        if (timingBeats.length > TIMING_BEAT_BUFFER) timingBeats.shift();
+    }
+
+    // --- Session hooks (togglePlay) ---
+    function timingResetSession() {
+        timingBeats = [];
+        timingBeatSeq = 0;
+        timingHits = [];
+        timingRejects = [];
+        const now = audioCtx ? audioCtx.currentTime : 0;
+        timingPlayStart = now;
+        timingLastHitTime = now;
+        timingFrozenNow = 0;
+        timingSetNoInput(false);
+        timingTlReset(now);
+        timingCClearMarks();
+        timingUpdateSummary();
+    }
+    function timingOnPlayStart() {
+        if (!timingOn) return;
+        timingLoopCancel('Cancelled: the metronome started.');
+        timingResetSession();
+        timingStartLoop();
+    }
+    function timingOnPlayStop() {
+        if (!timingOn) return;
+        timingStopLoop();
+        timingFrozenNow = audioCtx ? audioCtx.currentTime : 0;
+        timingSetNoInput(false);
+        timingUpdateSummary();
+        timingRenderLatency();
+        timingLoopRender();
+    }
+    function timingStartLoop() {
+        if (timingRaf || !timingOn || !isPlaying || !audioCtx) return;
+        timingRaf = requestAnimationFrame(timingFrame);
+    }
+    function timingStopLoop() {
+        if (timingRaf) cancelAnimationFrame(timingRaf);
+        timingRaf = 0;
+    }
+
+    // --- Onset handling ---
+    // Entry point for detected hits (the worklet message handler calls this; tests inject synthetic onsets here).
+    function timingHandleOnset(time, peakDb) {
+        if (!timingOn || !audioCtx) return null;
+        if (!isPlaying) { if (timingDbg) timingDbgMatch(time, null, null, 'not-playing'); return null; }
+        const tComp = time - timingLatencyMs / 1000;
+        const m = matchOnsetToGrid(tComp, timingBeats, getTimingGrid(), 60 / bpm);
+        if (!m) {
+            const reason = timingLastMatchReason;
+            if (timingDbg) timingDbgMatch(time, tComp, null, reason);
+            if (reason === 'ambiguous' || reason === 'too-far') {
+                // fractional position inside the bar from the beat ring buffer
+                let k = timingBeats.length - 1;
+                while (k >= 0 && timingBeats[k].time > tComp) k--;
+                if (k >= 0) {
+                    const b = timingBeats[k], dur = b.dur > 0 ? b.dur : 60 / bpm;
+                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)) };
+                    timingRejects.push(rej);
+                    if (timingView === 'timeline') timingTlAddRing(rej); else timingCAddRing(rej);
+                }
+            }
+            timingSetStatus('Off grid', '', 2);
+            return null;
+        }
+        const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb };
+        timingHits.push(hit);
+        if (timingDbg) timingDbgMatch(time, tComp, hit, '');
+        timingLastHitTime = audioCtx.currentTime;
+        timingSetNoInput(false);
+        timingSetStatus('Detected', 'good', 2);
+        if (timingView === 'timeline') timingTlAddDot(hit); else timingCAddMark(hit);
+        timingUpdateSummary();
+        return hit;
+    }
+
+    function timingOnWorkletMessage(ev) {
+        const m = ev.data;
+        if (!m) return;
+        if (m.type === 'level') {
+            timingLevelDb = m.db;
+            timingThDb = m.thDb;
+            timingLevelCount++;
+            if (typeof m.rawDb === 'number') {
+                if (m.rawDb < timingQuietDb) { if (!timingQuietSince) timingQuietSince = performance.now(); }
+                else timingQuietSince = 0;
+            }
+            if (m.clip) { timingHotUntil = performance.now() + 3000; timingQueueMeter(); }
+            if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
+            timingQueueMeter();
+        } else if (m.type === 'raw') {
+            if (timingDbg) timingDbg.chunks.push({ frame: m.frame, data: m.samples });
+        } else if (m.type === 'near') {
+            if (timingDbg) timingDbg.near.push(m);
+        } else if (m.type === 'recend') {
+            if (timingDbg) timingDbgFinish();
+        } else if (m.type === 'onset') {
+            if (timingDbg) timingDbg.onsets.push({ time: m.time, peakDb: m.peakDb, thDb: m.thDb, bands: m.bands, ctxNow: audioCtx ? audioCtx.currentTime : null });
+            if (timingLoop && timingLoop.running) { timingLoopOnset(m.time); return; } // measurement clicks never reach the matcher/views
+            if (timingMuteOnsets) return;
+            timingHandleOnset(m.time, m.peakDb);
+        }
+    }
+
+    // --- Settings popover (latency, loopback measurement, sensitivity) ---
+    function timingRenderSettingsBtn() {
+        const g = getTimingGrid();
+        timingSetText(timingSetFeel, (g.key === 'halftime' ? 'Half-time' : g.name) + ' \u00b7');
+        timingSetText(timingSetVals, Math.round(timingLatencyMs) + ' ms \u00b7 S' + timingSensitivity);
+        timingSetEst.hidden = !timingLatencyEst;
+        const busy = !!(typeof timingLoop !== 'undefined' && timingLoop && timingLoop.running);
+        if (timingSetBusy.hidden === busy) timingSetBusy.hidden = !busy;
+    }
+    function timingPopoverOpen() { return !timingPopover.hidden; }
+    function timingClosePopover() {
+        if (timingPopover.hidden) return;
+        timingPopover.hidden = true;
+        timingPopover.style.right = '';
+        timingSetBtn.setAttribute('aria-expanded', 'false');
+    }
+    function timingOpenPopover() {
+        // follow the existing menu pattern: opening this closes the other app menus
+        rhythmMenu.classList.add('hidden');
+        timerMenu.classList.add('hidden');
+        volumeMenu.classList.add('hidden');
+        closeAccelOverlay();
+        timingPopover.hidden = false;
+        timingSetBtn.setAttribute('aria-expanded', 'true');
+        timingPopover.style.right = '0px';
+        const r = timingPopover.getBoundingClientRect();
+        let dx = 0;
+        if (r.left < 8) dx = 8 - r.left;
+        else if (r.right > window.innerWidth - 8) dx = window.innerWidth - 8 - r.right;
+        if (dx) timingPopover.style.right = (-dx) + 'px'; // keep the popover inside the viewport
+    }
+    timingSetBtn.addEventListener('click', () => { if (timingPopoverOpen()) timingClosePopover(); else timingOpenPopover(); });
+    // capture phase: also fires for the menu triggers that stop propagation
+    document.addEventListener('click', (e) => {
+        if (!timingPopoverOpen()) return;
+        if (timingPopover.contains(e.target) || timingSetBtn.contains(e.target)) return;
+        timingClosePopover();
+    }, true);
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && timingPopoverOpen()) { timingClosePopover(); timingSetBtn.focus(); }
+    });
+
+    // ---------------------------------------------------------------
+    // Optional loopback latency measurement (Measure button in the LATENCY row)
+    // 60 clicks, 0.5 s apart, from a dedicated click synth (own GainNode, independent of app volume/mute).
+    // ---------------------------------------------------------------
+    const TIMING_LOOP_CLICKS = 60, TIMING_LOOP_STEP = 0.5, TIMING_LOOP_WINDOW = 0.4;
+    let timingLoop = null; // { clicks, oscs, gain, samples, timer, running }
+
+    function timingLoopLoadLast() {
+        const raw = timingLsGet('wm.timing.loopback.' + timingDeviceId);
+        if (!raw) return null;
+        try {
+            const o = JSON.parse(raw);
+            return o && isFinite(o.median) && isFinite(o.sd) ? o : null;
+        } catch (e) { return null; }
+    }
+
+    function timingLoopStats(samples) {
+        // samples: [{ ts, ms }]
+        const v = samples.map(x => x.ms), n = v.length;
+        if (!n) return null;
+        const mean = v.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(v.reduce((a, b) => a + (b - mean) * (b - mean), 0) / n);
+        let drift = 0;
+        if (n >= 3) { // linear regression of sample vs time, in ms per minute
+            const t0 = samples[0].ts, xs = samples.map(x => (x.ts - t0) / 60);
+            const mx = xs.reduce((a, b) => a + b, 0) / n;
+            let num = 0, den = 0;
+            for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (v[i] - mean); den += (xs[i] - mx) * (xs[i] - mx); }
+            drift = den > 0 ? num / den : 0;
+        }
+        return { n, median: median(v), sd, mad: mad(v), min: Math.min.apply(null, v), max: Math.max.apply(null, v), drift, misses: TIMING_LOOP_CLICKS - n };
+    }
+
+    function timingLoopRender() {
+        const running = !!(timingLoop && timingLoop.running);
+        timingRenderSettingsBtn();
+        timingLoopStartBtn.disabled = running || isPlaying || !timingStream;
+        timingLoopStartBtn.title = isPlaying ? 'Stop the metronome to measure.' : '';
+        timingLoopStopBtn.disabled = !running;
+    }
+
+    function timingLoopShowLive() {
+        const st = timingLoop && timingLoopStats(timingLoop.samples);
+        if (!st) { timingSetText(timingLoopLive, timingLoop ? '0/' + TIMING_LOOP_CLICKS : ''); return; }
+        timingSetText(timingLoopLive, st.n + '/' + TIMING_LOOP_CLICKS + ' \u00b7 median ' + st.median.toFixed(1) + ' ms \u00b7 \u00b1' + st.sd.toFixed(1) + ' ms (SD) \u00b7 range ' + st.min.toFixed(1) + '\u2013' + st.max.toFixed(1));
+    }
+
+    function timingLoopSetResult(text, q) {
+        timingSetText(timingLoopResult, text);
+        timingSetQ(timingLoopResult, q);
+    }
+
+    function timingLoopStart() {
+        if (!timingOn || !timingStream || isPlaying || (timingLoop && timingLoop.running)) return;
+        initAudioContext();
+        const t0 = audioCtx.currentTime + 0.3;
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.5; // fixed level: independent of the app volume and mute
+        gain.connect(audioCtx.destination);
+        const clicks = [], oscs = [];
+        for (let i = 0; i < TIMING_LOOP_CLICKS; i++) {
+            const ts = t0 + i * TIMING_LOOP_STEP;
+            const osc = audioCtx.createOscillator(), env = audioCtx.createGain();
+            osc.frequency.value = 1200;
+            env.gain.setValueAtTime(1, ts);
+            env.gain.exponentialRampToValueAtTime(0.001, ts + 0.005);
+            osc.connect(env); env.connect(gain);
+            osc.start(ts); osc.stop(ts + 0.005);
+            clicks.push(ts); oscs.push(osc);
+        }
+        const waitMs = (clicks[clicks.length - 1] + TIMING_LOOP_WINDOW - audioCtx.currentTime) * 1000 + 100;
+        timingLoop = { clicks, oscs, gain, samples: [], running: true, timer: setTimeout(timingLoopFinish, waitMs) };
+        timingLoopApplyBtn.hidden = true;
+        timingLoopSetResult('Measuring\u2026', '');
+        timingLoopShowLive();
+        timingLoopRender();
+    }
+
+    function timingLoopOnset(time) {
+        const L = timingLoop;
+        for (let i = 0; i < L.clicks.length; i++) {
+            const ts = L.clicks[i];
+            if (time >= ts && time < ts + TIMING_LOOP_WINDOW) {
+                if (!L.samples.some(x => x.ts === ts)) { L.samples.push({ ts, ms: (time - ts) * 1000 }); timingLoopShowLive(); }
+                return;
+            }
+        }
+    }
+
+    function timingLoopTeardown() {
+        const L = timingLoop;
+        if (!L) return;
+        clearTimeout(L.timer);
+        L.oscs.forEach(o => { try { o.stop(); } catch (e) { /* already stopped */ } });
+        try { L.gain.disconnect(); } catch (e) { /* ignore */ }
+        L.running = false;
+    }
+
+    // Abort a running measurement (START pressed, device switch, Timing off, Stop)
+    function timingLoopCancel(message) {
+        if (!timingLoop) return;
+        const wasRunning = timingLoop.running;
+        timingLoopTeardown();
+        timingLoop = null;
+        if (wasRunning) { timingLoopSetResult(message || '', ''); timingSetText(timingLoopLive, ''); }
+        timingLoopRender();
+    }
+
+    function timingLoopFinish() {
+        const L = timingLoop;
+        if (!L || !L.running) return;
+        timingLoopTeardown();
+        const st = timingLoopStats(L.samples);
+        timingLoopRender();
+        timingLoop.result = st;
+        if (!st || st.n < 40) {
+            timingLoopSetResult('Could not hear the clicks. Check the cable and levels.', 'bad');
+            timingLoopApplyBtn.hidden = true;
+            return;
+        }
+        timingLsSet('wm.timing.loopback.' + timingDeviceId, JSON.stringify({ median: st.median, sd: st.sd, mad: st.mad, drift: st.drift, n: st.n, at: new Date().toISOString() }));
+        timingRenderLatency();
+        timingSetText(timingLoopLive, st.n + '/' + TIMING_LOOP_CLICKS + ' \u00b7 median ' + st.median.toFixed(1) + ' ms \u00b7 SD ' + st.sd.toFixed(1) + ' \u00b7 MAD ' + st.mad.toFixed(1) +
+            ' \u00b7 range ' + st.min.toFixed(1) + '\u2013' + st.max.toFixed(1) + ' \u00b7 drift ' + st.drift.toFixed(1) + ' ms/min \u00b7 misses ' + st.misses);
+        if (st.sd > 2 || Math.abs(st.drift) > 1 || st.mad > 2) {
+            timingLoopSetResult('Latency is unstable. Use the same interface for input and output, and match sample rates.', 'warn');
+            timingLoopApplyBtn.hidden = true;
+        } else {
+            timingLoopSetResult('System latency ' + Math.round(st.median) + ' ms \u00b1 ' + st.sd.toFixed(1) + ' ms', 'good');
+            timingLoopApplyBtn.hidden = false;
+        }
+    }
+
+    timingLoopOpen.addEventListener('click', () => { timingLoopPanel.hidden = !timingLoopPanel.hidden; timingLoopRender(); });
+    timingLoopStartBtn.addEventListener('click', timingLoopStart);
+    timingLoopStopBtn.addEventListener('click', () => timingLoopCancel('Stopped.'));
+    timingLoopCloseBtn.addEventListener('click', () => { timingLoopCancel(''); timingLoopPanel.hidden = true; });
+    timingLoopApplyBtn.addEventListener('click', () => {
+        const r = timingLoop && timingLoop.result;
+        if (r) { timingSetLatency(Math.round(r.median)); timingLoopApplyBtn.hidden = true; timingLoopSetResult('Applied: LATENCY ' + Math.round(r.median) + ' ms', 'good'); }
+    });
+
+    // ---------------------------------------------------------------
+    // Developer-only debug recorder (console): timingDebugRecord(seconds = 20) / timingDebugStop()
+    // Records raw samples of the selected channel plus every beat, onset, match result and near miss,
+    // then downloads timing-debug-<timestamp>.wav (32-bit float mono) and .json. Inert unless started.
+    // ---------------------------------------------------------------
+    let timingDbg = null;
+
+    function timingDebugRecord(seconds) {
+        seconds = Number(seconds) > 0 ? Number(seconds) : 20;
+        if (!timingOn || !timingNode || !audioCtx) { console.warn('timingDebugRecord: turn Timing on first (and let the mic start).'); return false; }
+        if (timingDbg) { console.warn('timingDebugRecord: already recording; call timingDebugStop() to finish.'); return false; }
+        const track = timingStream && timingStream.getAudioTracks()[0];
+        const g = getTimingGrid();
+        timingDbg = {
+            seconds, chunks: [], beats: timingBeats.map(b => ({ time: b.time, beatInMeasure: b.beatInMeasure, n: b.n, bpm, subdivision, grid: g.key, preexisting: true })),
+            onsets: [], matches: [], near: [], ending: false, timer: 0, fallback: 0,
+            meta: {
+                startedAt: new Date().toISOString(), requestedSeconds: seconds,
+                sampleRate: audioCtx.sampleRate, ctxTimeAtStart: audioCtx.currentTime,
+                baseLatency: audioCtx.baseLatency || 0, outputLatency: audioCtx.outputLatency || 0,
+                latencyMs: timingLatencyMs, latencyIsEstimate: timingLatencyEst,
+                channel: timingChannel, channels: timingChannels,
+                bpm, subdivision, beatsPerMeasure, feel: timingFeel, isPlaying,
+                grid: { key: g.key, name: g.name, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
+                trackLabel: track ? track.label : '', trackSettings: track && track.getSettings ? track.getSettings() : {},
+                sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity), userAgent: navigator.userAgent
+            }
+        };
+        timingNode.port.postMessage({ type: 'config', record: true });
+        timingDbg.timer = setTimeout(timingDebugStop, seconds * 1000);
+        console.log('[timing-debug] recording for ' + seconds + ' s. Play now; files download automatically at the end (timingDebugStop() ends early).');
+        return true;
+    }
+
+    function timingDebugStop() {
+        const d = timingDbg;
+        if (!d || d.ending) return;
+        d.ending = true;
+        clearTimeout(d.timer);
+        if (timingNode) timingNode.port.postMessage({ type: 'config', record: false }); // worklet flushes, then posts 'recend'
+        d.fallback = setTimeout(() => { if (timingDbg === d) timingDbgFinish(); }, 600);
+    }
+
+    function timingDbgMatch(time, tComp, hit, reason) {
+        timingDbg.matches.push({
+            onsetTime: time, compensatedTime: tComp,
+            accepted: !!hit, reason: hit ? '' : reason,
+            offsetMs: hit ? hit.offsetMs : null, beatGlobal: hit ? hit.beatGlobal : null,
+            beatInMeasure: hit ? hit.beatInMeasure : null, posInBeat: hit ? hit.posInBeat : null
+        });
+    }
+
+    function timingBuildWav(samples, sr) {
+        const n = samples.length, dataBytes = n * 4;
+        const buf = new ArrayBuffer(56 + dataBytes), v = new DataView(buf);
+        const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+        str(0, 'RIFF'); v.setUint32(4, 48 + dataBytes, true); str(8, 'WAVE');
+        str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 3, true); v.setUint16(22, 1, true);
+        v.setUint32(24, sr, true); v.setUint32(28, sr * 4, true); v.setUint16(32, 4, true); v.setUint16(34, 32, true);
+        str(36, 'fact'); v.setUint32(40, 4, true); v.setUint32(44, n, true);
+        str(48, 'data'); v.setUint32(52, dataBytes, true);
+        new Float32Array(buf, 56, n).set(samples);
+        return new Blob([buf], { type: 'audio/wav' });
+    }
+
+    function timingDownloadBlob(name, blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 10000);
+    }
+
+    function timingDbgFinish() {
+        const d = timingDbg;
+        if (!d) return;
+        timingDbg = null;
+        clearTimeout(d.timer); clearTimeout(d.fallback);
+        if (timingNode && !d.ending) timingNode.port.postMessage({ type: 'config', record: false });
+        const sr = d.meta.sampleRate;
+        d.chunks.sort((a, b) => a.frame - b.frame);
+        let startFrame = d.chunks.length ? d.chunks[0].frame : 0, total = 0;
+        d.chunks.forEach(c => { total = Math.max(total, c.frame - startFrame + c.data.length); });
+        const samples = new Float32Array(total);
+        d.chunks.forEach(c => samples.set(c.data, c.frame - startFrame));
+        const idx = t => (t === null || t === undefined) ? null : Math.round((t - startFrame / sr) * sr);
+        const accepted = d.matches.filter(m => m.accepted).length;
+        const rejected = {};
+        d.matches.filter(m => !m.accepted).forEach(m => { rejected[m.reason] = (rejected[m.reason] || 0) + 1; });
+        const summary = { beats: d.beats.length, onsets: d.onsets.length, accepted, rejected, nearMisses: d.near.length, seconds: total / sr };
+        const json = {
+            meta: Object.assign({}, d.meta, { wavStartFrame: startFrame, wavStartContextTime: startFrame / sr, wavSamples: total }),
+            summary,
+            beats: d.beats.map(b => Object.assign({}, b, { sample: idx(b.time) })),
+            onsets: d.onsets.map(o => Object.assign({}, o, { sample: idx(o.time) })),
+            matches: d.matches.map(m => Object.assign({}, m, { onsetSample: idx(m.onsetTime) })),
+            nearMisses: d.near.map(n => Object.assign({}, n, { sample: idx(n.time) }))
+        };
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        if (total > 0) timingDownloadBlob('timing-debug-' + stamp + '.wav', timingBuildWav(samples, sr));
+        setTimeout(() => timingDownloadBlob('timing-debug-' + stamp + '.json', new Blob([JSON.stringify(json, null, 1)], { type: 'application/json' })), 250);
+        console.log('[timing-debug] done: ' + summary.seconds.toFixed(1) + ' s, beats ' + summary.beats + ', onsets ' + summary.onsets +
+            ', accepted ' + accepted + ', rejected ' + JSON.stringify(rejected) + ', near misses ' + summary.nearMisses +
+            '. Files: timing-debug-' + stamp + '.wav / .json (your browser Downloads folder).');
+        timingDebugLast = { summary, json, samples: total };
+    }
+    let timingDebugLast = null; // last finished recording (inspect from the console)
+
+    // --- No-input indicator ---
+    function timingSetNoInput(on) {
+        if (on === timingNoInputOn) return;
+        timingNoInputOn = on;
+        timingNoInputB.classList.toggle('on', on);
+        timingNoInputC.classList.toggle('on', on);
+    }
+
+    // --- Summary (visible window only) ---
+    function timingUpdateSummary() {
+        const bars = timingView === 'timeline' ? 2 : 1;
+        const barDur = timingBarDur();
+        const now = timingNowSec();
+        const keepFrom = now - 4 * barDur;
+        while (timingHits.length && timingHits[0].t < keepFrom) timingHits.shift();
+        while (timingRejects.length && timingRejects[0].t < keepFrom) timingRejects.shift();
+        const from = now - bars * barDur;
+        const vals = [];
+        for (let i = 0; i < timingHits.length; i++) if (timingHits[i].t >= from) vals.push(timingHits[i].offsetMs);
+        timingSetText(timingAvgLabel, 'Avg · last ' + bars + ' bar' + (bars > 1 ? 's' : ''));
+        timingSetText(timingHitCountEl, vals.length ? String(vals.length) : '–');
+        if (!vals.length) {
+            timingSetText(timingAvgEl, '–'); timingSetQ(timingAvgEl, '');
+            timingSetText(timingSpreadEl, '–'); timingSetQ(timingSpreadEl, '');
+            return;
+        }
+        const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+        timingSetText(timingAvgEl, timingFmtMs(mean));
+        timingSetQ(timingAvgEl, timingQuality(mean));
+        if (vals.length < 2) { timingSetText(timingSpreadEl, '–'); timingSetQ(timingSpreadEl, ''); return; }
+        const sd = Math.sqrt(vals.reduce((a, b) => a + (b - mean) * (b - mean), 0) / vals.length);
+        timingSetText(timingSpreadEl, '±' + Math.round(sd) + ' ms');
+        timingSetQ(timingSpreadEl, timingSpreadQuality(sd));
+    }
+
+    // ---------------------------------------------------------------
+    // Timeline view (scrolling 2 bars, fixed NOW line)
+    // ---------------------------------------------------------------
+    const timingTl = { w: 380, playX: 342, pps: 1, t0: 0, items: [], pred: [], drawnN: -1, predDirty: true, layoutBpm: 0, layoutBeats: 0, lastLastN: -1 };
+
+    function timingTlY(ms) { return timingClamp(ms, TIMING_RANGE_MS) * (TIMING_TL_H / 2 - 8) / TIMING_RANGE_MS; }
+    function timingTlPlace(it) { it.el.style.transform = 'translate(' + ((it.t - timingTl.t0) * timingTl.pps).toFixed(2) + 'px, ' + it.y + 'px)'; }
+
+    function timingTlLayout() {
+        const tl = timingTl;
+        const w = timingTimeline.clientWidth;
+        if (w > 0) tl.w = w;
+        tl.playX = tl.w * 0.9;
+        tl.pps = tl.playX / (2 * timingBarDur()); // exactly 2 bars between the left edge and NOW
+        tl.layoutBpm = bpm;
+        tl.layoutBeats = beatsPerMeasure;
+        timingNow.style.transform = 'translateX(' + tl.playX + 'px)';
+        tl.items.forEach(timingTlPlace);
+        tl.pred.forEach(timingTlPlace);
+    }
+    // Recompute pixels-per-second after a BPM change (hook in updateBpm)
+    function timingRelayoutTimeline() {
+        if (!timingOn) return;
+        timingTlLayout();
+        timingTl.predDirty = true;
+    }
+    function timingTlReset(now) {
+        const tl = timingTl;
+        timingTrack.textContent = '';
+        tl.items = []; tl.pred = []; tl.drawnN = -1; tl.predDirty = true;
+        tl.t0 = now;
+        timingTrack.style.transform = '';
+        timingTlLayout();
+    }
+    function timingTlAdd(el, t, y, pred) {
+        const it = { el, t, y: y || 0 };
+        timingTlPlace(it);
+        timingTrack.appendChild(el);
+        (pred ? timingTl.pred : timingTl.items).push(it);
+        return it;
+    }
+    function timingTlAddDot(hit) {
+        const el = document.createElement('div');
+        const out = Math.abs(hit.offsetMs) > TIMING_RANGE_MS;
+        if (out) {
+            el.className = 'tm-tri ' + (hit.offsetMs < 0 ? 'up' : 'down'); // early = top edge, late = bottom edge
+            el.title = timingFmtMs(hit.offsetMs);
+        } else {
+            el.className = 'tm-dot d' + hit.role;
+            el.dataset.q = timingQuality(hit.offsetMs);
+        }
+        timingTlAdd(el, hit.t, out ? 0 : timingTlY(hit.offsetMs), false);
+    }
+    function timingTlAddRing(rej) {
+        const el = document.createElement('div');
+        el.className = 'tm-ring';
+        timingTlAdd(el, rej.t, 0, false);
+    }
+    function timingTlLines(t, dur, bim, pred) {
+        const g = getTimingGrid();
+        for (let j = 0; j < g.pos.length; j++) {
+            const el = document.createElement('div');
+            el.className = 'tm-gl' + (j ? ' sub' : bim === 0 ? ' bar' : '');
+            timingTlAdd(el, t + g.pos[j] * dur, 0, pred);
+        }
+    }
+    function timingTlClearPred() {
+        timingTl.pred.forEach(it => it.el.remove());
+        timingTl.pred = [];
+    }
+    // Per-frame work: draw grid lines for finished beats, then predicted lines up to the right edge
+    function timingTlFrame(now) {
+        const tl = timingTl;
+        if (tl.layoutBpm !== bpm || tl.layoutBeats !== beatsPerMeasure) timingRelayoutTimeline();
+        let changed = false;
+        for (let i = 0; i < timingBeats.length; i++) {
+            const b = timingBeats[i];
+            if (b.n <= tl.drawnN) continue;
+            if (!(b.dur > 0)) break; // newest beat: its length is not known yet
+            timingTlLines(b.time, b.dur, b.beatInMeasure, false);
+            tl.drawnN = b.n;
+            changed = true;
+        }
+        const last = timingBeats[timingBeats.length - 1];
+        if (last && (changed || tl.predDirty || tl.lastLastN !== last.n)) {
+            timingTlClearPred();
+            if (last.n > tl.drawnN) {
+                const d = 60 / bpm;
+                const futureSecs = (tl.w - tl.playX) / tl.pps;
+                const iMax = Math.max(0, Math.floor((now + futureSecs - last.time) / d)) + 2;
+                for (let i = 0; i <= iMax; i++) {
+                    timingTlLines(last.time + i * d, d, (last.beatInMeasure + i) % beatsPerMeasure, true);
+                }
+            }
+            tl.predDirty = false;
+            tl.lastLastN = last.n;
+        }
+        const shift = tl.playX - (now - tl.t0) * tl.pps;
+        timingTrack.style.transform = 'translate3d(' + shift.toFixed(2) + 'px,0,0)';
+    }
+    function timingTlPrune(now) {
+        const tl = timingTl;
+        const shift = tl.playX - (now - tl.t0) * tl.pps;
+        const keep = [];
+        tl.items.forEach(it => {
+            if ((it.t - tl.t0) * tl.pps + shift < -20) it.el.remove(); else keep.push(it);
+        });
+        tl.items = keep;
+    }
+    // Rebuild from the beat ring buffer and hit log (view switch, feel change)
+    function timingTlRebuild() {
+        const now = timingNowSec();
+        timingTlReset(timingTl.t0);
+        const from = now - 2.2 * timingBarDur();
+        for (let i = 0; i < timingBeats.length; i++) {
+            const b = timingBeats[i];
+            if (!(b.dur > 0)) break;
+            if (b.time + b.dur >= from) timingTlLines(b.time, b.dur, b.beatInMeasure, false);
+            timingTl.drawnN = b.n;
+        }
+        timingHits.forEach(h => { if (h.t >= from) timingTlAddDot(h); });
+        timingRejects.forEach(r => { if (r.t >= from) timingTlAddRing(r); });
+        const shift = timingTl.playX - (now - timingTl.t0) * timingTl.pps;
+        timingTrack.style.transform = 'translate3d(' + shift.toFixed(2) + 'px,0,0)';
+    }
+
+    // ---------------------------------------------------------------
+    // On beats view (1 bar under the beat circles, sweeping position bar)
+    // ---------------------------------------------------------------
+    const timingC = { sp: 52, n: 4, cells: [], cur: -1 };
+
+    function timingCX(p) { return (p + 0.25) * timingC.sp; }
+    function timingCY(ms) { return timingClamp(ms, TIMING_RANGE_MS) * (TIMING_C_H / 2 - 7) / TIMING_RANGE_MS; }
+
+    function timingCClearMarks() {
+        timingBeatsMarks.textContent = '';
+        timingC.cells = Array.from({ length: timingC.n }, () => []);
+        timingC.cur = -1;
+    }
+    function timingCBuildGrid() {
+        timingBeatsGrid.textContent = '';
+        const g = getTimingGrid();
+        for (let k = 0; k < timingC.n; k++) {
+            for (let j = 0; j < g.pos.length; j++) {
+                const el = document.createElement('div');
+                el.className = 'tm-gl' + (j ? ' sub' : '');
+                el.style.transform = 'translateX(' + timingCX(k + g.pos[j]).toFixed(2) + 'px)';
+                timingBeatsGrid.appendChild(el);
+            }
+        }
+    }
+    function timingCCell(bim, pos) {
+        return timingMod(Math.floor(bim + pos + 0.125), timingC.n);
+    }
+    function timingCAddMark(hit) {
+        if (timingBeatsStrip.hidden) return;
+        const bim = timingMod(hit.beatInMeasure, timingC.n);
+        const el = document.createElement('div');
+        const out = Math.abs(hit.offsetMs) > TIMING_RANGE_MS;
+        if (out) {
+            el.className = 'tm-tri ' + (hit.offsetMs < 0 ? 'up' : 'down');
+            el.title = timingFmtMs(hit.offsetMs);
+        } else {
+            el.className = 'tm-dot d' + hit.role;
+            el.dataset.q = timingQuality(hit.offsetMs);
+        }
+        el.style.transform = 'translate(' + timingCX(bim + hit.posInBeat).toFixed(2) + 'px, ' + (out ? 0 : timingCY(hit.offsetMs)).toFixed(2) + 'px)';
+        timingBeatsMarks.appendChild(el);
+        const cell = timingCCell(bim, hit.posInBeat);
+        (timingC.cells[cell] || (timingC.cells[cell] = [])).push(el);
+    }
+    function timingCAddRing(rej) {
+        if (timingBeatsStrip.hidden) return;
+        const bim = timingMod(rej.beatInMeasure, timingC.n);
+        const el = document.createElement('div');
+        el.className = 'tm-ring';
+        el.style.transform = 'translate(' + timingCX(bim + rej.frac).toFixed(2) + 'px, 0px)';
+        timingBeatsMarks.appendChild(el);
+        const cell = timingCCell(bim, rej.frac);
+        (timingC.cells[cell] || (timingC.cells[cell] = [])).push(el);
+    }
+    function timingCWipe(cell) {
+        const els = timingC.cells[cell] || [];
+        const durMs = (60 / bpm) * 1000 * 0.7;
+        els.forEach(el => {
+            if (timingReduceMotion || !el.animate) { el.remove(); return; }
+            const a = el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: durMs, fill: 'forwards' });
+            a.onfinish = () => el.remove();
+        });
+        timingC.cells[cell] = [];
+    }
+    function timingCFrame(now) {
+        const n = timingC.n;
+        let i = timingBeats.length - 1;
+        while (i >= 0 && timingBeats[i].time > now) i--;
+        let cp = -0.125;
+        if (i >= 0) {
+            const b = timingBeats[i];
+            const dur = b.dur > 0 ? b.dur : 60 / bpm;
+            const p = b.beatInMeasure + Math.min((now - b.time) / dur, 1);
+            cp = timingMod(p + 0.125, n) - 0.125;
+        }
+        timingSweep.style.transform = 'translateX(' + timingCX(cp).toFixed(2) + 'px)';
+        const cell = Math.floor(cp + 0.125);
+        if (cell !== timingC.cur) { timingC.cur = cell; timingCWipe(cell); }
+    }
+
+    // Measure the beat circles and position the strip under them (also detects wrapped circles)
+    function timingLayoutBeatsStrip() {
+        if (!timingOn) return;
+        const circles = beatContainer.children;
+        const n = circles.length;
+        let wrapped = false;
+        if (n > 1) {
+            const top0 = circles[0].offsetTop;
+            for (let i = 1; i < n; i++) if (Math.abs(circles[i].offsetTop - top0) > 4) { wrapped = true; break; }
+        }
+        timingBeatsWrapped = wrapped;
+        const beatsBtn = timingViewSeg.querySelector('button[data-v="beats"]');
+        beatsBtn.disabled = wrapped;
+        beatsBtn.title = wrapped ? 'Not available when the beat circles wrap onto several lines.' : '';
+        if (wrapped && timingView === 'beats') { timingSetView('timeline', false); return; }
+        const show = timingView === 'beats' && !wrapped && n > 0;
+        if (timingBeatsStrip.hidden !== !show) timingBeatsStrip.hidden = !show;
+        if (!show) return;
+        const sp = n > 1 ? circles[1].offsetLeft - circles[0].offsetLeft : 52;
+        const x0 = circles[0].offsetLeft + circles[0].offsetWidth / 2 - timingBeatsStrip.offsetLeft;
+        timingC.sp = sp;
+        timingC.n = n;
+        timingBeatsChart.style.left = (x0 - 0.25 * sp) + 'px';
+        timingBeatsChart.style.width = ((n + 0.125) * sp) + 'px';
+        timingCBuildGrid();
+        timingCClearMarks();
+        const from = timingNowSec() - timingBarDur();
+        timingHits.forEach(h => { if (h.t >= from) timingCAddMark(h); });
+        timingRejects.forEach(r => { if (r.t >= from) timingCAddRing(r); });
+        timingCFrame(timingNowSec());
+    }
+
+    // ---------------------------------------------------------------
+    // Frame loop (active only while timingOn && isPlaying)
+    // ---------------------------------------------------------------
+    function timingFrame(ts) {
+        timingRaf = 0;
+        if (!timingOn || !isPlaying || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        if (timingView === 'timeline') {
+            timingTlFrame(now);
+            if (ts - timingLastPruneTs > 500) { timingLastPruneTs = ts; timingTlPrune(now); }
+        } else {
+            timingCFrame(now);
+        }
+        timingRenderMeter();
+        const idle = now - Math.max(timingLastHitTime, timingPlayStart);
+        timingSetNoInput(idle > Math.max(timingBarDur(), 1.5));
+        if (ts - timingLastSummaryTs > 100) { timingLastSummaryTs = ts; timingUpdateSummary(); }
+        timingRaf = requestAnimationFrame(timingFrame);
+    }
+
+    // ---------------------------------------------------------------
+    // View / Feel controls
+    // ---------------------------------------------------------------
+    function timingSetView(v, persist) {
+        timingView = v === 'beats' ? 'beats' : 'timeline';
+        if (persist !== false) timingLsSet('wm.timing.view', timingView);
+        timingViewSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === timingView)));
+        timingTimeline.hidden = timingView !== 'timeline';
+        if (timingOn) {
+            if (timingView === 'timeline') {
+                timingBeatsStrip.hidden = true;
+                timingTlLayout();
+                timingTlRebuild();
+            } else {
+                timingLayoutBeatsStrip();
+            }
+            timingUpdateSummary();
+        }
+    }
+
+    // Reflect the effective feel (locked by the rhythm menu or chosen) in the segment; rebuild grid lines
+    function timingApplyFeel() {
+        if (!timingOn) return;
+        const g = getTimingGrid();
+        const inSegment = g.key === 'straight' || g.key === 'shuffle' || g.key === 'halftime';
+        timingFeelSeg.querySelectorAll('button').forEach(b => {
+            b.setAttribute('aria-pressed', String(inSegment && b.dataset.v === g.key));
+            b.disabled = g.locked && b.dataset.v !== g.key;
+        });
+        timingFeelHint.hidden = !g.locked;
+        timingSetText(timingFeelHint, inSegment ? 'Set by rhythm' : 'Set by rhythm: ' + g.name);
+        timingRenderSettingsBtn();
+        timingTl.predDirty = true;
+        if (timingView === 'timeline') timingTlRebuild(); else timingLayoutBeatsStrip();
+    }
+
+    // ---------------------------------------------------------------
+    // Microphone, devices, start / stop
+    // ---------------------------------------------------------------
+    function timingShowError(msg) {
+        timingError = msg;
+        timingErrorEl.textContent = msg;
+        timingErrorEl.hidden = !msg;
+        timingBody.hidden = !!msg;
+        timingLiveDot.hidden = !timingStream;
+    }
+    function timingErrorMessage(e) {
+        const name = e && e.name;
+        if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+            return "Microphone access is blocked. Allow it in your browser's site settings.";
+        }
+        if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No microphone was found.';
+        if (e && e.message === 'nomedia') return 'Microphone input is not available here. Open this page over HTTPS or localhost.';
+        if (e && e.message === 'noworklet') return 'This browser does not support the audio features Timing needs.';
+        return 'Could not start the microphone.';
+    }
+
+    async function timingGetStream(id) {
+        const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } };
+        const gum = c => navigator.mediaDevices.getUserMedia({ audio: c });
+        if (!id) return gum(base);
+        try {
+            return await gum(Object.assign({ deviceId: { exact: id } }, base));
+        } catch (e) {
+            if (e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) return gum(base);
+            throw e;
+        }
+    }
+
+    function timingReleaseStream() {
+        if (timingSource) { try { timingSource.disconnect(); } catch (e) { /* ignore */ } timingSource = null; }
+        if (timingStream) { timingStream.getTracks().forEach(t => t.stop()); timingStream = null; }
+    }
+
+    function timingAttachStream(stream) {
+        timingStream = stream;
+        timingSource = audioCtx.createMediaStreamSource(stream);
+        timingSource.connect(timingNode);
+        const track = stream.getAudioTracks()[0];
+        timingDeviceId = (track && track.getSettings && track.getSettings().deviceId) || '';
+        if (timingDeviceId) timingLsSet('wm.timing.deviceId', timingDeviceId);
+        if (track) track.addEventListener('ended', () => {
+            if (timingOn && timingStream === stream) timingSwitchDevice('');
+        });
+        timingTrackLatency = (track && track.getSettings && track.getSettings().latency) || 0;
+        timingChannels = (track && track.getSettings && track.getSettings().channelCount) || 1;
+        timingLoadChannel();
+        timingLoadSensitivity();
+        timingLoadQuiet();
+        timingLoadLatency();
+        timingPostConfig();
+        timingLiveDot.hidden = false;
+    }
+
+    async function timingRefreshDevices() {
+        let list = [];
+        try {
+            list = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput');
+        } catch (e) { /* ignore */ }
+        timingDeviceSelect.textContent = '';
+        list.forEach((d, i) => {
+            const opt = document.createElement('option');
+            opt.value = d.deviceId;
+            opt.textContent = d.label || ('Microphone ' + (i + 1));
+            timingDeviceSelect.appendChild(opt);
+        });
+        if (timingDeviceId && !list.some(d => d.deviceId === timingDeviceId)) {
+            const opt = document.createElement('option');
+            opt.value = timingDeviceId;
+            opt.textContent = 'Microphone';
+            timingDeviceSelect.appendChild(opt);
+        }
+        timingDeviceSelect.value = timingDeviceId;
+        return list;
+    }
+
+    async function timingStart() {
+        if (timingOn) return;
+        timingOn = true;
+        const tok = ++timingToken;
+        timingRenderButton();
+        timingShowError('');
+        timingAddon.hidden = false;
+        timingSetView(timingView, false);
+        timingApplyFeel();
+        timingRenderLatency();
+        timingTlLayout();
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('nomedia');
+            initAudioContext(); // inside the click handler: user gesture
+            await timingEnsureWorklet();
+            const saved = timingLsGet('wm.timing.deviceId') || '';
+            const stream = await timingGetStream(saved);
+            if (tok !== timingToken) { stream.getTracks().forEach(t => t.stop()); return; }
+            timingNode = new AudioWorkletNode(audioCtx, 'onset-detector', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'max' });
+            timingNode.port.onmessage = timingOnWorkletMessage;
+            timingSink = audioCtx.createGain();
+            timingSink.gain.value = 0; // zero-gain connection only keeps the processing graph alive
+            timingNode.connect(timingSink);
+            timingSink.connect(audioCtx.destination);
+            timingAttachStream(stream);
+            await timingRefreshDevices();
+            if (tok !== timingToken) return;
+            timingShowError('');
+            if (isPlaying) { timingResetSession(); timingStartLoop(); }
+            timingRenderLatency();
+        } catch (e) {
+            if (tok !== timingToken) return;
+            timingReleaseStream();
+            timingDisconnectNodes();
+            timingShowError(timingErrorMessage(e));
+            timingRenderLatency();
+        }
+    }
+
+    function timingDisconnectNodes() {
+        if (timingNode) {
+            timingNode.port.onmessage = null;
+            try { timingNode.disconnect(); } catch (e) { /* ignore */ }
+            timingNode = null;
+        }
+        if (timingSink) { try { timingSink.disconnect(); } catch (e) { /* ignore */ } timingSink = null; }
+    }
+
+    function timingStop() {
+        if (!timingOn) return;
+        if (timingDbg) timingDbgFinish();
+        timingOn = false;
+        timingToken++;
+        timingStopLoop();
+        timingReleaseStream();
+        timingDisconnectNodes();
+        timingAddon.hidden = true;
+        timingBeatsStrip.hidden = true;
+        timingLiveDot.hidden = true;
+        timingSetNoInput(false);
+        timingLoopCancel('');
+        timingLoopPanel.hidden = true;
+        timingClosePopover();
+        timingBeats = []; timingHits = []; timingRejects = [];
+        timingTrack.textContent = '';
+        timingTl.items = []; timingTl.pred = [];
+        timingCClearMarks();
+        timingLevelDb = -120;
+        timingHotUntil = 0; timingHotShown = false; timingHotEl.classList.remove('on'); timingMeterFill.classList.remove('hot');
+        timingRenderButton();
+    }
+
+    async function timingSwitchDevice(id) {
+        if (!timingOn) return;
+        const tok = ++timingToken;
+        timingLoopCancel('');
+        timingReleaseStream(); // stop current tracks first, then reopen
+        timingLiveDot.hidden = true;
+        try {
+            const stream = await timingGetStream(id);
+            if (tok !== timingToken) { stream.getTracks().forEach(t => t.stop()); return; }
+            if (!timingNode) throw new Error('nonode');
+            timingAttachStream(stream);
+            await timingRefreshDevices();
+            timingShowError('');
+        } catch (e) {
+            if (tok !== timingToken) return;
+            timingShowError(timingErrorMessage(e));
+        }
+        timingRenderLatency();
+    }
+
+    function timingRenderButton() {
+        timingBtn.setAttribute('aria-pressed', String(timingOn));
+        timingBtn.classList.toggle('bg-indigo-100', timingOn);
+        timingBtn.classList.toggle('text-indigo-600', timingOn);
+        timingBtn.classList.toggle('bg-slate-100', !timingOn);
+        timingBtn.classList.toggle('text-slate-700', !timingOn);
+    }
+
+    // --- Timing event wiring ---
+    timingBtn.addEventListener('click', () => { if (timingOn) timingStop(); else timingStart(); });
+    timingViewSeg.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-v]');
+        if (!b || b.disabled) return;
+        timingSetView(b.dataset.v);
+    });
+    timingFeelSeg.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-v]');
+        if (!b || b.disabled || TIMING_LOCK[subdivision]) return;
+        timingFeel = b.dataset.v;
+        timingLsSet('wm.timing.feel', timingFeel);
+        timingApplyFeel();
+    });
+    timingDeviceSelect.addEventListener('change', () => timingSwitchDevice(timingDeviceSelect.value));
+    timingChSeg.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-v]');
+        if (b) timingSetChannel(parseInt(b.dataset.v, 10));
+    });
+    timingWireStepper({ minus: timingLatMinus, plus: timingLatPlus, value: timingLatValue, input: timingLatInput, get: () => timingLatencyMs, set: timingSetLatency });
+    timingLatReset.addEventListener('click', timingResetLatency);
+    timingWireStepper({ minus: timingQuietMinus, plus: timingQuietPlus, value: timingQuietValue, input: timingQuietInput, get: () => timingQuietDb, set: timingSetQuiet });
+    timingWireStepper({ minus: timingSensMinus, plus: timingSensPlus, value: timingSensValue, input: timingSensInput, get: () => timingSensitivity, set: timingSetSensitivity });
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+        navigator.mediaDevices.addEventListener('devicechange', async () => {
+            if (!timingOn || !timingStream) return;
+            const list = await timingRefreshDevices();
+            if (timingOn && timingDeviceId && list.length && !list.some(d => d.deviceId === timingDeviceId)) timingSwitchDevice('');
+        });
+    }
+    window.addEventListener('resize', timingLayoutBeatsStrip);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (timingOn && !timingTimeline.hidden) timingRelayoutTimeline(); }).observe(timingTimeline);
+
+    // Restore saved preferences
+    (function timingRestorePrefs() {
+        const v = timingLsGet('wm.timing.view');
+        if (v === 'timeline' || v === 'beats') timingView = v;
+        const f = timingLsGet('wm.timing.feel');
+        if (f === 'straight' || f === 'shuffle' || f === 'halftime') timingFeel = f;
+        timingViewSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === timingView)));
+        timingTimeline.hidden = timingView !== 'timeline';
+    })();
 
     // Init
     initBeats();

@@ -12,7 +12,12 @@ module.exports = defineConfig({
     baseURL: 'http://localhost:3456',
     headless: true,
     launchOptions: {
-      args: ['--autoplay-policy=no-user-gesture-required'],
+      args: [
+        '--autoplay-policy=no-user-gesture-required',
+        // Timing Check: auto-grant the mic prompt and feed a synthetic capture device
+        '--use-fake-ui-for-media-stream',
+        '--use-fake-device-for-media-stream',
+      ],
     },
   },
   webServer: {
