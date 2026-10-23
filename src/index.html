@@ -297,16 +297,21 @@
         .tm-text-btn { border: 0; background: transparent; color: #6366f1; font-weight: 700; font-size: 0.72rem; padding: 4px 6px; cursor: pointer; font-family: inherit; }
         .tm-meter-wrap { display: flex; align-items: center; gap: 8px; width: 100%; }
         .tm-mic-ico { width: 16px; height: 16px; color: #94a3b8; flex: none; }
-        .tm-meter { position: relative; flex: 1; height: 8px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+        .tm-meter-area { position: relative; flex: 1; height: 20px; overflow: hidden; } /* reserves room for the quiet triangle below the track */
+        .tm-meter { position: absolute; left: 0; right: 0; top: 6px; height: 8px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
         .tm-meter-fill { position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(0); background: #cbd5e1; will-change: transform; }
         .tm-meter-fill.hit { background: #6366f1; }
         .tm-meter-fill.hot { background: #e11d48; }
         .tm-hot { font-size: 0.72rem; font-weight: 700; color: #e11d48; margin-top: -4px; line-height: 1.1rem; height: 1.1rem; visibility: hidden; } /* space is reserved so the warning never shifts the layout */
         .tm-hot.on { visibility: visible; }
-        .tm-meter-th { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; will-change: transform; pointer-events: none; }
+        /* detection threshold: solid dark 2 px line, taller than the track (12 px) */
+        .tm-meter-th { position: absolute; top: 4px; height: 12px; left: 0; width: 100%; will-change: transform; pointer-events: none; z-index: 2; }
         .tm-meter-th::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #334155; }
+        /* quiet level: dotted grey line inside the track plus a small triangle below it */
         .tm-meter-q { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; will-change: transform; pointer-events: none; }
-        .tm-meter-q::after { content: ""; position: absolute; top: 2px; bottom: 2px; left: 0; width: 1px; background: rgb(100 116 139 / 0.5); }
+        .tm-meter-q::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, #94a3b8 0 1.5px, transparent 1.5px 3px); }
+        .tm-meter-triwrap { position: absolute; top: 15px; left: 0; width: 100%; height: 4px; will-change: transform; pointer-events: none; }
+        .tm-meter-tri { position: absolute; left: 0; top: 0; width: 0; height: 0; margin-left: -3px; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #94a3b8; }
         [data-q="listen"] { --q: #64748b; }
         .tm-status { font-size: 0.68rem; font-weight: 700; color: var(--q, #94a3b8); width: 9ch; text-align: right; white-space: nowrap; flex: none; }
         .tm-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
@@ -777,9 +782,13 @@
                         </div>
                     </div>
                 </div>
-                <div class="tm-meter-wrap" title="Input level. Sounds below the line are ignored; the faint tick marks the quiet level.">
+                <div class="tm-meter-wrap" title="Detection threshold − dB · Quiet below -60 dB">
                     <svg class="tm-mic-ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>
-                    <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterTh" class="tm-meter-th"></div><div id="timingMeterQuiet" class="tm-meter-q"></div></div>
+                    <div class="tm-meter-area">
+                        <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterQuiet" class="tm-meter-q"></div></div>
+                        <div id="timingMeterTh" class="tm-meter-th"></div>
+                        <div id="timingMeterQuietTri" class="tm-meter-triwrap"><span class="tm-meter-tri"></span></div>
+                    </div>
                     <span id="timingStatus" class="tm-status">Quiet</span>
                 </div>
                 <div id="timingTimeline" class="tm-chart tm-timeline">
@@ -2208,6 +2217,9 @@
     const timingChSeg = document.getElementById('timingChSeg');
     const timingHotEl = document.getElementById('timingHot');
     const timingMeterQuiet = document.getElementById('timingMeterQuiet');
+    const timingMeterTri = document.getElementById('timingMeterQuietTri');
+    const timingMeterWrap = document.querySelector('.tm-meter-wrap');
+    let timingMeterTitle = '';
     const timingQuietMinus = document.getElementById('timingQuietMinus');
     const timingQuietPlus = document.getElementById('timingQuietPlus');
     const timingQuietValue = document.getElementById('timingQuietValue');
@@ -2696,10 +2708,13 @@ registerProcessor('onset-detector', OnsetDetector);
             timingSetText(timingStatusEl, text);
             timingSetQ(timingStatusEl, q);
         }
+        const title = 'Detection threshold ' + Math.round(timingThDb).toString().replace('-', '\u2212') + ' dB \u00b7 Quiet below ' + String(timingQuietDb).replace('-', '\u2212') + ' dB';
+        if (title !== timingMeterTitle) { timingMeterTitle = title; timingMeterWrap.title = title; }
         if (timingQuietShown !== timingQuietDb) {
             timingQuietShown = timingQuietDb;
             const qf = Math.max(0, Math.min(1, (timingQuietDb + 80) / 80));
             timingMeterQuiet.style.transform = 'translateX(' + (qf * 100).toFixed(2) + '%)';
+            timingMeterTri.style.transform = 'translateX(' + (qf * 100).toFixed(2) + '%)';
         }
         if (live) timingQueueMeterLater(s.until - performance.now());
     }

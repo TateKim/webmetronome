@@ -1141,3 +1141,47 @@ test.describe('Timing Check - quiet level and meter row', () => {
     });
   }
 });
+
+// Meter markers ----------------------------------------------------------------------
+
+test.describe('Timing Check - meter markers', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingNode.port.onmessage = null; });
+  });
+
+  test('quiet marker (triangle below the track + dotted line) is visible and moves; threshold line is taller than the track', async ({ page }) => {
+    await page.evaluate(() => { timingSetQuiet(-60); timingOnWorkletMessage({ data: { type: 'level', db: -50, thDb: -52, rawDb: -50, clip: false } }); });
+    const geo = () => page.evaluate(() => {
+      const r = el => el.getBoundingClientRect();
+      const tri = r(document.querySelector('.tm-meter-tri')), track = r(document.querySelector('.tm-meter')), th = r(document.getElementById('timingMeterTh'));
+      const q = r(document.getElementById('timingMeterQuiet')), wrap = r(document.querySelector('.tm-meter-wrap'));
+      const dotted = getComputedStyle(document.getElementById('timingMeterQuiet'), '::after');
+      return { triW: tri.width, triH: tri.height, triCx: tri.left + tri.width / 2, triTop: tri.top, trackBottom: track.bottom, trackTop: track.top, trackLeft: track.left, trackW: track.width,
+               thH: th.height, wrapH: wrap.height, wrapBottom: wrap.bottom, triBottom: tri.bottom, color: getComputedStyle(document.querySelector('.tm-meter-tri')).borderBottomColor,
+               dottedW: dotted.width, dottedBg: dotted.backgroundImage.slice(0, 40), qLeft: q.left };
+    });
+    await expect.poll(async () => (await geo()).triCx).toBeGreaterThan(0);
+    const a = await geo();
+    expect(a.triW).toBeGreaterThanOrEqual(4);
+    expect(a.triH).toBeGreaterThanOrEqual(4);
+    expect(a.triTop).toBeGreaterThanOrEqual(a.trackBottom - 1);        // below the track
+    expect(a.triBottom).toBeLessThanOrEqual(a.wrapBottom + 0.5);        // inside the reserved row height
+    expect(a.color).toBe('rgb(148, 163, 184)');
+    expect(a.dottedBg).toContain('repeating-linear-gradient');
+    expect(a.thH).toBeGreaterThan(10);                                   // threshold line taller than the 8 px track
+    expect(a.wrapH).toBeGreaterThanOrEqual(20);
+    expect(a.triCx - a.trackLeft).toBeCloseTo(a.trackW * 0.25, 0);       // -60 dBFS on a -80..0 scale
+    await page.evaluate(() => timingSetQuiet(-40));
+    await expect.poll(async () => Math.round(((await geo()).triCx - a.trackLeft) / a.trackW * 100)).toBe(50);
+  });
+
+  test('the meter row title shows the live threshold and quiet level', async ({ page }) => {
+    await page.evaluate(() => { timingSetQuiet(-60); timingOnWorkletMessage({ data: { type: 'level', db: -50, thDb: -52, rawDb: -50, clip: false } }); });
+    await expect(page.locator('.tm-meter-wrap')).toHaveAttribute('title', 'Detection threshold \u221252 dB \u00b7 Quiet below \u221260 dB');
+    await page.evaluate(() => { timingSetQuiet(-45); timingOnWorkletMessage({ data: { type: 'level', db: -50, thDb: -58.4, rawDb: -50, clip: false } }); });
+    await expect(page.locator('.tm-meter-wrap')).toHaveAttribute('title', 'Detection threshold \u221258 dB \u00b7 Quiet below \u221245 dB');
+  });
+});
