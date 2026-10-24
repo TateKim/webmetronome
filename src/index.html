@@ -305,10 +305,19 @@
         @keyframes tm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
         @media (prefers-reduced-motion: reduce) { .tm-pulse { animation: none; } }
         .tm-popover { position: absolute; right: 0; top: calc(100% + 6px); width: 280px; max-width: calc(100vw - 16px); z-index: 50; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #fff; border: 1px solid #f1f5f9; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); text-align: left; }
+        .tm-lab { display: flex; align-items: center; gap: 6px; }
+        .tm-help { position: relative; flex: none; margin-left: auto; width: 16px; height: 16px; padding: 0; border: 1px solid #cbd5e1; border-radius: 50%; background: transparent; color: #94a3b8; font: 700 0.62rem/1 'Noto Sans KR', sans-serif; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; touch-action: manipulation; }
+        .tm-pair + .tm-help { margin-left: 6px; }
+        .tm-help[hidden] { display: none; }
+        .tm-help::after { content: ''; position: absolute; inset: -7px; } /* larger touch target */
+        .tm-help:hover, .tm-help[aria-expanded="true"] { color: #4f46e5; border-color: #a5b4fc; background: #eef2ff; }
+        .tm-help-tip { position: absolute; left: 12px; right: 12px; max-width: calc(100% - 24px); z-index: 5; cursor: pointer; box-sizing: border-box; padding: 8px 10px; border-radius: 10px; background: #1e293b; color: #f8fafc; font-size: 0.72rem; font-weight: 500; line-height: 1.4; text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s ease, visibility 0s linear 0.12s; }
+        .tm-help-tip[data-open] { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 0.12s ease; }
         .tm-remeasure-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; flex: none; }
         .tm-lat-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
         .tm-remeasure { font-size: 0.66rem; font-weight: 700; color: #b45309; background: #fef3c7; border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
         .tm-comp { font-size: 0.66rem; font-weight: 700; color: #b45309; white-space: nowrap; }
+        .tm-lat-head .tm-comp { white-space: normal; min-width: 0; } /* may wrap so the "?" stays on the line */
         .tm-est { font-size: 0.68rem; font-weight: 700; color: #94a3b8; }
         .tm-text-btn { border: 0; background: transparent; color: #6366f1; font-weight: 700; font-size: 0.72rem; padding: 4px 6px; cursor: pointer; font-family: inherit; }
         .tm-meter-wrap { display: flex; align-items: center; gap: 8px; width: 100%; }
@@ -338,6 +347,9 @@
 
         .tm-chart { position: relative; overflow: hidden; background: #f8fafc; border: 1px solid #f1f5f9; }
         .tm-band { position: absolute; left: 0; right: 0; background: rgb(16 185 129 / 0.14); }
+        .tm-band { top: calc(50% - var(--bh, 24px) / 2); height: var(--bh, 24px); } /* --bh = the +/-10 ms band in px, set from JS for the current range */
+        .tm-rg { position: absolute; left: 0; right: 0; top: 50%; height: 0; border-top: 1px dashed rgb(148 163 184 / 0.3); } /* range guide lines, placed from JS */
+        .tm-scale { font-weight: 600; letter-spacing: 0.04em; color: #a8b3c4; }
         .tm-mid { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgb(16 185 129 / 0.55); }
         .tm-side { position: absolute; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.1em; color: #94a3b8; z-index: 3; }
         .tm-gl { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: #e2e8f0; }
@@ -364,9 +376,8 @@
 
         /* Timeline view: fixed NOW line, last 2 bars scroll left */
         .tm-timeline { height: 132px; border-radius: 16px; }
-        .tm-timeline .tm-band { top: calc(50% - 12px); height: 24px; }
         .tm-timeline .tm-side { left: 8px; }
-        .tm-timeline .tm-side.t { top: 5px; } .tm-timeline .tm-side.b { bottom: 5px; }
+        .tm-timeline .tm-side.t { top: 5px; } .tm-timeline .tm-side.b { bottom: 5px; } .tm-timeline .tm-scale { top: 19px; }
         .tm-track { position: absolute; inset: 0; will-change: transform; }
         .tm-now { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: #6366f1; z-index: 4; will-change: transform; }
         .tm-now::after { content: "NOW"; position: absolute; top: 4px; right: 5px; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.08em; color: #6366f1; }
@@ -374,9 +385,8 @@
         /* On beats view: attached under the beat circles, 1 bar, sweeping position bar */
         .tm-strip { position: relative; height: 96px; margin-top: 14px; text-align: left; }
         .tm-cstrip { position: absolute; top: 0; height: 100%; border-radius: 12px; }
-        .tm-cstrip .tm-band { top: calc(50% - 9px); height: 18px; }
         .tm-cstrip .tm-side { right: 5px; }
-        .tm-cstrip .tm-side.t { top: 3px; } .tm-cstrip .tm-side.b { bottom: 3px; }
+        .tm-cstrip .tm-side.t { top: 3px; } .tm-cstrip .tm-side.b { bottom: 3px; } .tm-cstrip .tm-scale { top: 17px; }
         .tm-sweep { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: #6366f1; z-index: 4; will-change: transform; }
         .tm-sweep::before { content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 18px; background: linear-gradient(to right, rgb(99 102 241 / 0.18), transparent); }
         /* narrow phones: tighter page/card padding and a compact header so nothing scrolls sideways (desktop unchanged) */
@@ -701,7 +711,7 @@
             <div id="timingBeatsStrip" class="tm-strip" hidden>
                 <div id="timingBeatsChart" class="tm-chart tm-cstrip">
                     <div class="tm-band"></div><div class="tm-mid"></div>
-                    <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span>
+                    <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span><span class="tm-side tm-scale">±50 ms</span>
                     <div id="timingBeatsGrid"></div>
                     <div id="timingBeatsMarks"></div>
                     <div id="timingSweep" class="tm-sweep"></div>
@@ -730,7 +740,7 @@
                         </button>
                         <div id="timingPopover" class="tm-popover dropdown-menu" role="dialog" aria-label="Timing settings" hidden>
                             <div class="tm-sec">
-                                <label class="tm-label" for="timingDeviceSelect">Input</label>
+                                <div class="tm-lab"><label class="tm-label" for="timingDeviceSelect">Input</label><button type="button" class="tm-help" data-help="input">?</button></div>
                                 <div class="tm-row">
                                     <select id="timingDeviceSelect" class="tm-select"></select>
                                     <div id="timingChSeg" class="tm-seg" role="group" aria-label="Input channel" hidden>
@@ -738,14 +748,14 @@
                                         <button type="button" data-v="1" aria-pressed="false">Ch 2</button>
                                     </div>
                                 </div>
-                                <div id="timingRefRowSel" class="tm-row tm-nowrap" title="Channel that carries the metronome itself (e.g. an interface loopback). Timing is then measured against the actual clicks, so latency is tracked automatically." hidden>
+                                <div id="timingRefRowSel" class="tm-row tm-nowrap" hidden>
                                     <span class="tm-label">Click</span>
-                                    <div id="timingRefSeg" class="tm-seg" role="group" aria-label="Click reference channel"></div>
+                                    <div id="timingRefSeg" class="tm-seg" role="group" aria-label="Click reference channel"></div><button type="button" class="tm-help" data-help="click">?</button>
                                 </div>
                             </div>
                             <div class="tm-sec">
-                                <span class="tm-label">Detect</span>
-                                <div class="tm-row tm-nowrap" title="Which notes to check. Hits between grid points are shown as rejected.">
+                                <div class="tm-lab"><span class="tm-label">Detect</span><button type="button" class="tm-help" data-help="detect">?</button></div>
+                                <div class="tm-row tm-nowrap">
                                     <div id="timingResSeg" class="tm-seg" role="group" aria-label="Detection resolution">
                                         <button type="button" data-v="4" aria-pressed="false" aria-label="Quarter notes">4</button>
                                         <button type="button" data-v="8" aria-pressed="false" aria-label="8th notes">8</button>
@@ -759,7 +769,17 @@
                                 <span id="timingDetectHint" class="tm-hint-ind" hidden>Locked to Triplet</span>
                             </div>
                             <div class="tm-sec">
-                                <span class="tm-lat-head"><span class="tm-label">Latency</span><span id="timingLatRemeasure" class="tm-remeasure" tabindex="0" title="The input stream was reopened. Latency can shift by up to ~10 ms per reopen; measure again." hidden>Re-measure</span><span id="timingLatComp" class="tm-comp" title="Chrome's input buffer slipped; the extra delay is added automatically." hidden></span></span>
+                                <div class="tm-lab"><span class="tm-label">View range</span><button type="button" class="tm-help" data-help="range">?</button></div>
+                                <div class="tm-row tm-nowrap">
+                                    <div id="timingRangeSeg" class="tm-seg" role="group" aria-label="View range">
+                                        <button type="button" data-v="50" aria-pressed="true" aria-label="Plus or minus 50 milliseconds">±50</button>
+                                        <button type="button" data-v="100" aria-pressed="false" aria-label="Plus or minus 100 milliseconds">±100</button>
+                                        <button type="button" data-v="200" aria-pressed="false" aria-label="Plus or minus 200 milliseconds">±200</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tm-sec">
+                                <span class="tm-lat-head"><span class="tm-label">Latency</span><span id="timingLatRemeasure" class="tm-remeasure" tabindex="0" title="The input stream was reopened. Latency can shift by up to ~10 ms per reopen; measure again." hidden>Re-measure</span><span id="timingLatComp" class="tm-comp" title="Chrome's input buffer slipped; the extra delay is added automatically." hidden></span><button type="button" class="tm-help" data-help="latency">?</button></span>
                                 <div id="timingLatRow" class="tm-row tm-nowrap">
                                     <div class="tm-step">
                                         <button id="timingLatMinus" type="button" class="tm-step-btn" aria-label="Decrease latency">−</button>
@@ -775,19 +795,19 @@
                                 </div>
                                 <div id="timingRefRow" class="tm-ref" hidden>
                                     <div class="tm-row tm-nowrap">
-                                        <span id="timingRefLive" class="tm-live" title="Round-trip latency measured against the actual clicks on the Click channel.">Live —</span>
+                                        <span id="timingRefLive" class="tm-live">Live —</span>
                                         <span class="tm-pair">
                                             <button id="timingRefMeasureOff" type="button" class="tm-text-btn" disabled title="Not needed with a click ref channel">Measure</button>
-                                        </span>
+                                        </span><button type="button" class="tm-help" data-help="live">?</button>
                                     </div>
                                     <div class="tm-row tm-nowrap">
-                                        <span class="tm-label" title="Small difference between the headphone path and the loopback path.">Trim</span>
+                                        <span class="tm-label">Trim</span>
                                         <div class="tm-step">
                                             <button id="timingRefTrimMinus" type="button" class="tm-step-btn" aria-label="Decrease trim">−</button>
                                             <span id="timingRefTrimValue" class="tm-step-val" tabindex="0" role="button" title="Small difference between the headphone path and the loopback path (−20 to +20 ms).">0 ms</span>
                                             <input id="timingRefTrimInput" class="tm-step-input" type="number" min="-20" max="20" step="1" hidden>
                                             <button id="timingRefTrimPlus" type="button" class="tm-step-btn" aria-label="Increase trim">+</button>
-                                        </div>
+                                        </div><button type="button" class="tm-help" data-help="trim">?</button>
                                     </div>
                                 </div>
                                 <div id="timingLoopPanel" class="tm-loop" hidden>
@@ -815,22 +835,22 @@
                                 </div>
                             </div>
                             <div class="tm-sec">
-                                <span class="tm-label">Sensitivity</span>
+                                <div class="tm-lab"><span class="tm-label">Sensitivity</span><button type="button" class="tm-help" data-help="sens">?</button></div>
                                 <div class="tm-row">
                                     <div class="tm-step">
                                         <button id="timingSensMinus" type="button" class="tm-step-btn" aria-label="Decrease sensitivity">−</button>
-                                        <span id="timingSensValue" class="tm-step-val" tabindex="0" role="button" title="Higher catches softer attacks. Lower it if one note shows up as several dots.">5</span>
+                                        <span id="timingSensValue" class="tm-step-val" tabindex="0" role="button">5</span>
                                         <input id="timingSensInput" class="tm-step-input" type="number" min="1" max="10" step="1" hidden>
                                         <button id="timingSensPlus" type="button" class="tm-step-btn" aria-label="Increase sensitivity">+</button>
                                     </div>
                                 </div>
                             </div>
                             <div class="tm-sec">
-                                <span class="tm-label">Quiet below</span>
+                                <div class="tm-lab"><span class="tm-label">Quiet below</span><button type="button" class="tm-help" data-help="quiet">?</button></div>
                                 <div class="tm-row">
                                     <div class="tm-step">
                                         <button id="timingQuietMinus" type="button" class="tm-step-btn" aria-label="Lower the quiet level">−</button>
-                                        <span id="timingQuietValue" class="tm-step-val" tabindex="0" role="button" title="Input below this level counts as silence.">-60 dB</span>
+                                        <span id="timingQuietValue" class="tm-step-val" tabindex="0" role="button">-60 dB</span>
                                         <input id="timingQuietInput" class="tm-step-input" type="number" min="-80" max="-30" step="1" hidden>
                                         <button id="timingQuietPlus" type="button" class="tm-step-btn" aria-label="Raise the quiet level">+</button>
                                     </div>
@@ -849,7 +869,7 @@
                 </div>
                 <div id="timingTimeline" class="tm-chart tm-timeline">
                     <div class="tm-band"></div><div class="tm-mid"></div>
-                    <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span>
+                    <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span><span class="tm-side tm-scale">±50 ms</span>
                     <div id="timingTrack" class="tm-track"></div>
                     <div id="timingNow" class="tm-now"></div>
                     <div id="timingNoInputB" class="tm-noinput"><span>No input</span></div>
@@ -2242,7 +2262,7 @@
     let timingSensitivity = 5;            // 1..10, 5 = reference tuning
     let timingBeats = [];                 // ring buffer (64) of { time, beatInMeasure, n, dur }
     let timingHits = [];                  // accepted hits log
-    let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac }
+    let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac, peakDb, cbg, cpos }
     let timingLastHitTime = 0;            // context time of last accepted hit
     let timingBeatSeq = 0;
     let timingToken = 0;                  // invalidates async start/switch when Timing is toggled
@@ -2280,9 +2300,14 @@
     let timingLastPruneTs = 0;
 
     const TIMING_BEAT_BUFFER = 64;
-    const TIMING_RANGE_MS = 50;           // +/- range mapped to the top/bottom edge of the views
+    const TIMING_RANGES = [50, 100, 200]; // selectable +/- ms mapped to the top/bottom edge of both views
+    let timingRangeMs = 50;               // current range (persisted as wm.timing.range)
+    const TIMING_GOOD_MS = 10;            // +/- ms of the green "good" band (quality threshold; independent of the range)
+    const TIMING_RANGE_GUIDES = { 50: [25], 100: [25, 50], 200: [50, 100] }; // light guide lines at these +/- ms
     const TIMING_TL_H = 132;
     const TIMING_C_H = 96;
+    const TIMING_TL_HALF = TIMING_TL_H / 2 - 8; // px from the centre line to the top/bottom edge of the Timeline
+    const TIMING_C_HALF = TIMING_C_H / 2 - 7;   // same for On beats
 
     // --- Timing DOM ---
     const timingBtn = document.getElementById('timingBtn');
@@ -2318,6 +2343,7 @@
     const timingRefRowSel = document.getElementById('timingRefRowSel');
     const timingRefSeg = document.getElementById('timingRefSeg');
     const timingLatRow = document.getElementById('timingLatRow');
+    const timingLatHelp = document.querySelector('#timingPopover .tm-help[data-help="latency"]');
     const timingRefRow = document.getElementById('timingRefRow');
     const timingRefLive = document.getElementById('timingRefLive');
     const timingRefTrimMinus = document.getElementById('timingRefTrimMinus');
@@ -2442,7 +2468,7 @@
     }
     function timingQuality(ms) {
         const a = Math.abs(ms);
-        return a <= 10 ? 'good' : a <= 25 ? 'warn' : 'bad';
+        return a <= TIMING_GOOD_MS ? 'good' : a <= 25 ? 'warn' : 'bad';
     }
     function timingSpreadQuality(sd) {
         return sd <= 8 ? 'good' : sd <= 16 ? 'warn' : 'bad';
@@ -2452,6 +2478,27 @@
     // beats: [{ time, beatInMeasure, n? }] in scheduling order. fallbackDur: duration of the newest beat (60/bpm).
     // Returns { offsetMs, beatGlobal, beatInMeasure, pos, role, gridTime } or null when it must be ignored.
     let timingLastMatchReason = ''; // why the last matchOnsetToGrid() returned null (debug recorder)
+    // Beat k of the ring buffer with its successor, duration and global number
+    function timingBeatAt(beats, k, fallbackDur) {
+        const cur = beats[k], nxt = beats[k + 1];
+        return { cur, nxt, dur: nxt ? nxt.time - cur.time : fallbackDur, curN: cur.n !== undefined ? cur.n : k };
+    }
+    // Grid cell of an onset: the grid slot (beatGlobal, pos) nearest in time, i.e. slot +- half the gap to its neighbours
+    // (unweighted, unlike the matcher's role-weighted capture). Returns null before the first beat.
+    function timingNearestCell(tComp, beats, grid, fallbackDur) {
+        let k = beats.length - 1;
+        while (k >= 0 && beats[k].time > tComp) k--;
+        if (k < 0) return null;
+        const { cur, nxt, dur, curN } = timingBeatAt(beats, k, fallbackDur);
+        if (!(dur > 0)) return null;
+        let best = null, bd = Infinity;
+        for (let j = 0; j < grid.pos.length; j++) {
+            const d = Math.abs(tComp - (cur.time + grid.pos[j] * dur));
+            if (d < bd) { bd = d; best = { bg: curN, pos: grid.pos[j] }; }
+        }
+        if (Math.abs(tComp - (cur.time + dur)) < bd) best = { bg: nxt && nxt.n !== undefined ? nxt.n : curN + 1, pos: 0 };
+        return best;
+    }
     function matchOnsetToGrid(tComp, beats, grid, fallbackDur) {
         timingLastMatchReason = 'before-first-beat';
         if (!beats || !beats.length) return null;
@@ -2460,11 +2507,8 @@
             if (beats[i].time <= tComp) { k = i; break; }
         }
         if (k < 0) return null; // before the first beat
-        const cur = beats[k];
-        const nxt = beats[k + 1];
-        const dur = nxt ? nxt.time - cur.time : fallbackDur;
+        const { cur, nxt, dur, curN } = timingBeatAt(beats, k, fallbackDur);
         if (!(dur > 0)) return null;
-        const curN = cur.n !== undefined ? cur.n : k;
         // Role-weighted capture: every grid point scores |offset| / weight (beat 1.0, main off-beat 0.85, other 0.6,
         // finest 0.5); the lowest score wins. Reject when the runner-up is within 8 % (ambiguous) or the hit is
         // beyond the capture radius: 0.42 x the widest gap (so a 16th hit on a coarse 8 grid is 'too-far'),
@@ -3476,6 +3520,7 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingRenderRef() {
         const on = timingRefOn;
         timingLatRow.hidden = on;
+        timingLatHelp.hidden = on; // its tip is about the manual latency / Measure; Live and Trim have their own
         timingRefRow.hidden = !on;
         if (on) {
             timingLoopPanel.hidden = true;
@@ -3582,6 +3627,24 @@ registerProcessor('onset-detector', OnsetDetector);
     }
 
     // --- Onset handling ---
+    // The single marker (hit or ring) already in grid cell `c` ({bg, pos}), newest first (a cell can only be recent), else null
+    function timingFindCellMark(c) {
+        const same = (o) => o.cbg === c.bg && Math.abs(o.cpos - c.pos) < 1e-6;
+        for (let i = timingHits.length - 1; i >= 0; i--) {
+            if (timingHits[i].cbg < c.bg - 1) break;
+            if (same(timingHits[i])) return { hit: timingHits[i] };
+        }
+        for (let i = timingRejects.length - 1; i >= 0; i--) {
+            if (timingRejects[i].cbg < c.bg - 1) break;
+            if (same(timingRejects[i])) return { rej: timingRejects[i] };
+        }
+        return null;
+    }
+    function timingRemoveCellMark(ex) {
+        if (ex.hit) { const k = timingHits.indexOf(ex.hit); if (k >= 0) timingHits.splice(k, 1); timingRemoveHitMark(ex.hit); }
+        else { const k = timingRejects.indexOf(ex.rej); if (k >= 0) timingRejects.splice(k, 1); timingRemoveRingMark(ex.rej); }
+        timingUpdateSummary();
+    }
     // Entry point for detected hits (the worklet message handler calls this; tests inject synthetic onsets here).
     function timingHandleOnset(time, peakDb) {
         if (!timingOn || !audioCtx) return null;
@@ -3589,6 +3652,11 @@ registerProcessor('onset-detector', OnsetDetector);
         // click ref mode: nothing is judged before the ref is locked (2 agreeing clicks); the fallback latency could be wrong
         if (timingRefOn && !timingRef.confirmed) { if (timingDbg) timingDbgMatch(time, null, null, 'syncing'); return null; }
         const tComp = time - timingMatchLatencyMs() / 1000;
+        // One marker per detect-grid cell: only the loudest sound (hit or ring) in a cell is shown
+        const cell = timingNearestCell(tComp, timingBeats, getTimingGrid(), 60 / bpm);
+        const ex = cell && timingFindCellMark(cell);
+        if (ex && !(peakDb > (ex.hit || ex.rej).peakDb)) { if (timingDbg) timingDbgMatch(time, tComp, null, 'merged'); return null; }
+        if (ex) timingRemoveCellMark(ex);
         const m = matchOnsetToGrid(tComp, timingBeats, getTimingGrid(), 60 / bpm);
         if (!m) {
             const reason = timingLastMatchReason;
@@ -3599,7 +3667,7 @@ registerProcessor('onset-detector', OnsetDetector);
                 while (k >= 0 && timingBeats[k].time > tComp) k--;
                 if (k >= 0) {
                     const b = timingBeats[k], dur = b.dur > 0 ? b.dur : 60 / bpm;
-                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)) };
+                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)), peakDb, cbg: cell.bg, cpos: cell.pos };
                     timingRejects.push(rej);
                     if (timingView === 'timeline') timingTlAddRing(rej); else timingCAddRing(rej);
                 }
@@ -3607,7 +3675,7 @@ registerProcessor('onset-detector', OnsetDetector);
             timingSetStatus('Off grid', '', 2);
             return null;
         }
-        const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb };
+        const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb, cbg: cell.bg, cpos: cell.pos };
         timingHits.push(hit);
         if (timingDbg) timingDbgMatch(time, tComp, hit, '');
         timingLastHitTime = audioCtx.currentTime;
@@ -3720,8 +3788,63 @@ registerProcessor('onset-detector', OnsetDetector);
         if (timingSetBusy.hidden === busy) timingSetBusy.hidden = !busy;
     }
     function timingPopoverOpen() { return !timingPopover.hidden; }
+    // ---- Reusable "?" help tips for the settings popover: <button class="tm-help" data-help="key"> + one bubble each ----
+    const TIMING_HELP = {
+        input: ['Input', 'The audio input to listen to — pick your audio interface. Ch 1 / Ch 2 chooses the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
+        click: ['Click', "Optional. A channel that carries the metronome itself, e.g. an interface loopback. Timing is then measured against the actual clicks, so latency is tracked automatically and Measure isn't needed. Leave Off if you don't have one."],
+        detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey rings (Off grid). Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
+        latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
+        live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
+        trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
+        sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks.'],
+        range: ['View range', "How far early or late the chart's top and bottom edges are. Hits beyond it are drawn as red triangles at the edge. Widen it to see big misses; narrow it to see small differences."],
+        quiet: ['Quiet below', 'Below this input level the status shows Quiet. Lower it if your signal is soft but fine.'],
+    };
+    let timingHelpOpen = null;
+    function timingHelpClose() {
+        if (!timingHelpOpen) return;
+        timingHelpOpen.btn.setAttribute('aria-expanded', 'false');
+        timingHelpOpen.tip.removeAttribute('data-open');
+        timingHelpOpen = null;
+    }
+    function timingHelpToggle(btn, tip) {
+        if (timingHelpOpen && timingHelpOpen.btn === btn) { timingHelpClose(); return; }
+        timingHelpClose();
+        const pr = timingPopover.getBoundingClientRect(), br = btn.getBoundingClientRect();
+        tip.style.top = (br.bottom - pr.top + 6) + 'px';
+        tip.setAttribute('data-open', '');
+        btn.setAttribute('aria-expanded', 'true');
+        timingHelpOpen = { btn, tip };
+    }
+    document.querySelectorAll('#timingPopover .tm-help').forEach(btn => {
+        const [name, text] = TIMING_HELP[btn.dataset.help];
+        const tip = document.createElement('div');
+        tip.id = 'timingHelp-' + btn.dataset.help;
+        tip.className = 'tm-help-tip';
+        tip.setAttribute('role', 'tooltip');
+        tip.textContent = text;
+        timingPopover.appendChild(tip);
+        btn.setAttribute('aria-label', 'Help: ' + name);
+        btn.setAttribute('aria-expanded', 'false');
+        btn.setAttribute('aria-controls', tip.id);
+        btn.addEventListener('click', () => timingHelpToggle(btn, tip));
+        tip.addEventListener('click', timingHelpClose); // tap the bubble to dismiss it (the popover stays open)
+    });
+    // outside click ("?" buttons and bubbles live inside the popover, so the popover's own outside-click close ignores them)
+    document.addEventListener('click', (e) => {
+        if (timingHelpOpen && !timingHelpOpen.btn.contains(e.target) && !timingHelpOpen.tip.contains(e.target)) timingHelpClose();
+    }, true);
+    // Escape closes an open bubble first and leaves the popover open (capture: runs before the popover's own Escape handler)
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !timingHelpOpen) return;
+        const b = timingHelpOpen.btn;
+        timingHelpClose();
+        b.focus();
+        e.stopImmediatePropagation();
+    }, true);
     function timingClosePopover() {
         if (timingPopover.hidden) return;
+        timingHelpClose();
         timingPopover.hidden = true;
         timingPopover.style.right = '';
         timingSetBtn.setAttribute('aria-expanded', 'false');
@@ -4189,7 +4312,23 @@ registerProcessor('onset-detector', OnsetDetector);
     // ---------------------------------------------------------------
     const timingTl = { w: 380, playX: 342, pps: 1, t0: 0, items: [], pred: [], drawnN: -1, predDirty: true, layoutBpm: 0, layoutBeats: 0, lastLastN: -1 };
 
-    function timingTlY(ms) { return timingClamp(ms, TIMING_RANGE_MS) * (TIMING_TL_H / 2 - 8) / TIMING_RANGE_MS; }
+    // ms -> px from the centre line for a view whose edge (half px) is +/- timingRangeMs (shared by both views, the band and the guides)
+    function timingRangeY(ms, half) { return timingClamp(ms, timingRangeMs) * half / timingRangeMs; }
+    function timingTlY(ms) { return timingRangeY(ms, TIMING_TL_HALF); }
+    // Shape/colour of an accepted hit's marker for the current range (in range: quality dot; beyond it: red edge triangle). Returns true when out of range.
+    function timingMarkSetup(el, hit) {
+        const out = Math.abs(hit.offsetMs) > timingRangeMs;
+        if (out) {
+            el.className = 'tm-tri ' + (hit.offsetMs < 0 ? 'up' : 'down'); // early = top edge, late = bottom edge
+            el.title = timingFmtMs(hit.offsetMs);
+            delete el.dataset.q;
+        } else {
+            el.className = 'tm-dot d' + hit.role;
+            el.dataset.q = timingQuality(hit.offsetMs);
+            el.removeAttribute('title');
+        }
+        return out;
+    }
     function timingTlPlace(it) { it.el.style.transform = 'translate(' + ((it.t - timingTl.t0) * timingTl.pps).toFixed(2) + 'px, ' + it.y + 'px)'; }
 
     function timingTlLayout() {
@@ -4227,20 +4366,31 @@ registerProcessor('onset-detector', OnsetDetector);
     }
     function timingTlAddDot(hit) {
         const el = document.createElement('div');
-        const out = Math.abs(hit.offsetMs) > TIMING_RANGE_MS;
-        if (out) {
-            el.className = 'tm-tri ' + (hit.offsetMs < 0 ? 'up' : 'down'); // early = top edge, late = bottom edge
-            el.title = timingFmtMs(hit.offsetMs);
-        } else {
-            el.className = 'tm-dot d' + hit.role;
-            el.dataset.q = timingQuality(hit.offsetMs);
-        }
-        timingTlAdd(el, hit.t, out ? 0 : timingTlY(hit.offsetMs), false);
+        const out = timingMarkSetup(el, hit);
+        timingTlAdd(el, hit.t, out ? 0 : timingTlY(hit.offsetMs), false).hit = hit;
+    }
+    // Remove a replaced hit's marker from whichever view holds it
+    function timingRemoveHitMark(hit) {
+        timingTl.items = timingTl.items.filter(it => { if (it.hit !== hit) return true; it.el.remove(); return false; });
+        timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => {
+            if (el._hit !== hit) return;
+            timingC.cells.forEach(c => { const k = c.indexOf(el); if (k >= 0) c.splice(k, 1); });
+            el.remove();
+        });
     }
     function timingTlAddRing(rej) {
         const el = document.createElement('div');
         el.className = 'tm-ring';
-        timingTlAdd(el, rej.t, 0, false);
+        timingTlAdd(el, rej.t, 0, false).rej = rej;
+    }
+    // Remove a dropped reject ring from whichever view holds it
+    function timingRemoveRingMark(rej) {
+        timingTl.items = timingTl.items.filter(it => { if (it.rej !== rej) return true; it.el.remove(); return false; });
+        timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => {
+            if (el._rej !== rej) return;
+            timingC.cells.forEach(c => { const k = c.indexOf(el); if (k >= 0) c.splice(k, 1); });
+            el.remove();
+        });
     }
     function timingTlLines(t, dur, bim, pred) {
         const g = getTimingGrid();
@@ -4316,7 +4466,11 @@ registerProcessor('onset-detector', OnsetDetector);
     const timingC = { sp: 52, n: 4, cells: [], cur: -1 };
 
     function timingCX(p) { return (p + 0.25) * timingC.sp; }
-    function timingCY(ms) { return timingClamp(ms, TIMING_RANGE_MS) * (TIMING_C_H / 2 - 7) / TIMING_RANGE_MS; }
+    function timingCY(ms) { return timingRangeY(ms, TIMING_C_HALF); }
+    function timingCPlace(el, hit) {
+        const out = timingMarkSetup(el, hit);
+        el.style.transform = 'translate(' + timingCX(timingMod(hit.beatInMeasure, timingC.n) + hit.posInBeat).toFixed(2) + 'px, ' + (out ? 0 : timingCY(hit.offsetMs)).toFixed(2) + 'px)';
+    }
 
     function timingCClearMarks() {
         timingBeatsMarks.textContent = '';
@@ -4342,15 +4496,8 @@ registerProcessor('onset-detector', OnsetDetector);
         if (timingBeatsStrip.hidden) return;
         const bim = timingMod(hit.beatInMeasure, timingC.n);
         const el = document.createElement('div');
-        const out = Math.abs(hit.offsetMs) > TIMING_RANGE_MS;
-        if (out) {
-            el.className = 'tm-tri ' + (hit.offsetMs < 0 ? 'up' : 'down');
-            el.title = timingFmtMs(hit.offsetMs);
-        } else {
-            el.className = 'tm-dot d' + hit.role;
-            el.dataset.q = timingQuality(hit.offsetMs);
-        }
-        el.style.transform = 'translate(' + timingCX(bim + hit.posInBeat).toFixed(2) + 'px, ' + (out ? 0 : timingCY(hit.offsetMs)).toFixed(2) + 'px)';
+        el._hit = hit;
+        timingCPlace(el, hit);
         timingBeatsMarks.appendChild(el);
         const cell = timingCCell(bim, hit.posInBeat);
         (timingC.cells[cell] || (timingC.cells[cell] = [])).push(el);
@@ -4360,6 +4507,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const bim = timingMod(rej.beatInMeasure, timingC.n);
         const el = document.createElement('div');
         el.className = 'tm-ring';
+        el._rej = rej;
         el.style.transform = 'translate(' + timingCX(bim + rej.frac).toFixed(2) + 'px, 0px)';
         timingBeatsMarks.appendChild(el);
         const cell = timingCCell(bim, rej.frac);
@@ -4682,7 +4830,41 @@ registerProcessor('onset-detector', OnsetDetector);
         timingBtn.classList.toggle('text-slate-700', !timingOn);
     }
 
+    // --- View range: one setting scales both views; existing markers are re-placed immediately ---
+    const timingRangeSeg = document.getElementById('timingRangeSeg');
+    function timingApplyRange() {
+        timingRangeSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === timingRangeMs)));
+        [[timingTimeline, TIMING_TL_HALF], [timingBeatsChart, TIMING_C_HALF]].forEach(([chart, half]) => {
+            chart.style.setProperty('--bh', (2 * timingRangeY(TIMING_GOOD_MS, half)).toFixed(2) + 'px'); // good band keeps its true +/-10 ms
+            chart.querySelectorAll('.tm-rg').forEach(g => g.remove());
+            const mid = chart.querySelector('.tm-mid');
+            TIMING_RANGE_GUIDES[timingRangeMs].forEach(ms => [-ms, ms].forEach(v => {
+                const g = document.createElement('div');
+                g.className = 'tm-rg';
+                g.style.transform = 'translateY(' + timingRangeY(v, half).toFixed(2) + 'px)';
+                mid.after(g);
+            }));
+            timingSetText(chart.querySelector('.tm-scale'), '±' + timingRangeMs + ' ms');
+        });
+        timingTl.items.forEach(it => {
+            if (!it.hit) return;
+            it.y = timingMarkSetup(it.el, it.hit) ? 0 : timingTlY(it.hit.offsetMs);
+            timingTlPlace(it);
+        });
+        timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => { if (el._hit) timingCPlace(el, el._hit); });
+    }
+    function timingSetRange(ms) {
+        if (!TIMING_RANGES.includes(ms)) return;
+        timingRangeMs = ms;
+        timingLsSet('wm.timing.range', ms);
+        timingApplyRange();
+    }
+
     // --- Timing event wiring ---
+    timingRangeSeg.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-v]');
+        if (b && !b.disabled) timingSetRange(parseInt(b.dataset.v, 10));
+    });
     timingBtn.addEventListener('click', () => { if (timingOn) timingStop(); else timingStart(); });
     timingViewSeg.addEventListener('click', (e) => {
         const b = e.target.closest('button[data-v]');
@@ -4734,6 +4916,9 @@ registerProcessor('onset-detector', OnsetDetector);
         const r = timingLsGet('wm.timing.res'), sh = timingLsGet('wm.timing.shuffle');
         if (r === '4' || r === '8' || r === '16' || r === '32') timingRes = r;
         if (sh === 'true' || sh === 'false') timingShuffle = sh === 'true';
+        const rg = parseInt(timingLsGet('wm.timing.range'), 10);
+        if (TIMING_RANGES.includes(rg)) timingRangeMs = rg;
+        timingApplyRange();
         // One-time migration of the old Feel setting (straight -> 16, shuffle -> 8 + Shuffle, half-time -> 16 + Shuffle)
         const f = timingLsGet('wm.timing.feel');
         if (f !== null) {

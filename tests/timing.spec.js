@@ -241,8 +241,6 @@ test.describe('Timing Check - UI', () => {
     expect(await page.evaluate(() => [...document.querySelectorAll('#timingResSeg button')].map(b => [b.textContent, b.getAttribute('aria-label')])))
       .toEqual([['4', 'Quarter notes'], ['8', '8th notes'], ['16', '16th notes'], ['32', '32nd notes']]);
     expect(await page.evaluate(() => document.getElementById('timingShuffleBtn').textContent)).toBe('Shuffle');
-    expect(await page.evaluate(() => document.getElementById('timingResSeg').parentElement.title))
-      .toBe('Which notes to check. Hits between grid points are shown as rejected.');
     let f = await detect();
     expect(f.hint).toBe('');
     expect(f.pressed).toEqual(['false', 'false', 'true', 'false']);
@@ -682,7 +680,6 @@ test.describe('Timing Check - sensitivity', () => {
     await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
     await page.click('#timingSetBtn');
     await expect(page.locator('#timingSensValue')).toHaveText('5');
-    await expect(page.locator('#timingSensValue')).toHaveAttribute('title', 'Higher catches softer attacks. Lower it if one note shows up as several dots.');
     const sent = await page.evaluate(() => {
       window.__sent = [];
       const orig = timingNode.port.postMessage.bind(timingNode.port);
@@ -1350,7 +1347,6 @@ test.describe('Timing Check - quiet level and meter row', () => {
   test('the quiet level moves the tick, persists per device, and is clamped to -80..-30', async ({ page }) => {
     await page.click('#timingSetBtn');
     await expect(page.locator('#timingQuietValue')).toHaveText('-60 dB');
-    await expect(page.locator('#timingQuietValue')).toHaveAttribute('title', 'Input below this level counts as silence.');
     const tick = () => page.evaluate(() => document.getElementById('timingMeterQuiet').style.transform);
     await page.evaluate(() => timingQueueMeter());
     await expect.poll(tick).toBe('translateX(25%)'); // (-60 + 80) / 80
@@ -2455,9 +2451,9 @@ test.describe('Timing Check - click ref flow', () => {
     expect(await hitBeats(page, 95, 12)).toBe(3);
     expect(await page.evaluate(() => timingHits.length)).toBe(3);
     // a later loss keeps judging with the held liveL
-    await page.evaluate(() => { timingRefTick(audioCtx.currentTime + 5); });
+    await page.evaluate(() => { timingRefTick(audioCtx.currentTime + 5); timingHits = []; }); // same slots again would be merged (equal level)
     expect(await hitBeats(page, 95, 12)).toBe(3);
-    expect(await page.evaluate(() => timingHits.length)).toBeGreaterThanOrEqual(6);
+    expect(await page.evaluate(() => timingHits.length)).toBe(3);
     await page.keyboard.press('Escape');
     await clickPlay(page);
   });
@@ -2572,7 +2568,6 @@ test.describe('Timing Check - click ref UI', () => {
   test('the Click options are Off plus every channel except the instrument channel, with the tooltip', async ({ page }) => {
     await page.click('#timingSetBtn');
     expect(await segTexts(page)).toEqual(['Off', 'Ch 2']);
-    await expect(page.locator('#timingRefRowSel')).toHaveAttribute('title', 'Channel that carries the metronome itself (e.g. an interface loopback). Timing is then measured against the actual clicks, so latency is tracked automatically.');
     await page.evaluate(() => { timingSetChannel(1); });
     expect(await segTexts(page)).toEqual(['Off', 'Ch 1']);
     await page.evaluate(() => { timingChannels = 4; timingSetChannel(2); });
@@ -2849,5 +2844,472 @@ test.describe('Timing Check - worklet frame clock', () => {
     const gap = await run(page, 'gap');
     expect(gap.onsets.length).toBe(1);
     expect(Math.abs(gap.onsets[0] - ok.onsets[0])).toBeLessThan(1e-9);
+  });
+});
+
+// "?" help tips in the settings popover ------------------------------------------------------
+test.describe('Timing Check - help tips', () => {
+  const TIPS = {
+    input: ['Input', 'The audio input to listen to — pick your audio interface. Ch 1 / Ch 2 chooses the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
+    click: ['Click', "Optional. A channel that carries the metronome itself, e.g. an interface loopback. Timing is then measured against the actual clicks, so latency is tracked automatically and Measure isn't needed. Leave Off if you don't have one."],
+    detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey rings (Off grid). Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
+    latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
+    live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
+    trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
+    sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks.'],
+    quiet: ['Quiet below', 'Below this input level the status shows Quiet. Lower it if your signal is soft but fine.'],
+  };
+  const btn = (page, k) => page.locator(`#timingPopover .tm-help[data-help="${k}"]`);
+  const tip = (page, k) => page.locator('#timingHelp-' + k);
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    // two channels so the Click row exists; classic mode by default
+    await page.evaluate(() => { timingChannels = 2; timingChannel = 0; timingLoadChannel(); timingRenderRefSeg(); });
+    await page.click('#timingSetBtn');
+  });
+
+  for (const k of ['input', 'click', 'detect', 'latency', 'sens', 'quiet']) {
+    test(`${k}: "?" has the right label and its bubble shows the exact text`, async ({ page }) => {
+      await expect(btn(page, k)).toHaveAttribute('aria-label', 'Help: ' + TIPS[k][0]);
+      await expect(btn(page, k)).toHaveAttribute('aria-expanded', 'false');
+      await expect(btn(page, k)).toHaveAttribute('aria-controls', 'timingHelp-' + k);
+      await expect(tip(page, k)).toBeHidden();
+      await btn(page, k).click();
+      await expect(tip(page, k)).toBeVisible();
+      await expect(tip(page, k)).toHaveAttribute('role', 'tooltip');
+      await expect(tip(page, k)).toHaveText(TIPS[k][1]);
+      await expect(btn(page, k)).toHaveAttribute('aria-expanded', 'true');
+      const inside = await page.evaluate((id) => {
+        const t = document.getElementById(id).getBoundingClientRect(), p = document.getElementById('timingPopover').getBoundingClientRect();
+        return t.left >= p.left && t.right <= p.right && t.right <= window.innerWidth && t.left >= 0;
+      }, 'timingHelp-' + k);
+      expect(inside).toBe(true);
+    });
+  }
+
+  test('LIVE and TRIM tips exist only in click-ref mode; LATENCY only in classic mode', async ({ page }) => {
+    await expect(btn(page, 'latency')).toBeVisible();
+    await expect(btn(page, 'live')).toBeHidden();
+    await expect(btn(page, 'trim')).toBeHidden();
+    await page.click('#timingRefSeg [data-v="1"]');
+    await expect(btn(page, 'latency')).toBeHidden();
+    for (const k of ['live', 'trim']) {
+      await expect(btn(page, k)).toBeVisible();
+      await expect(btn(page, k)).toHaveAttribute('aria-label', 'Help: ' + TIPS[k][0]);
+      await btn(page, k).focus(); // keyboard: the previous bubble may cover the next "?"
+      await page.keyboard.press('Enter');
+      await expect(tip(page, k)).toHaveText(TIPS[k][1]);
+      await expect(tip(page, k)).toBeVisible();
+    }
+    await expect(tip(page, 'live')).toBeHidden(); // only one open at a time
+  });
+
+  test('only one bubble is open at a time', async ({ page }) => {
+    await btn(page, 'input').click();
+    await btn(page, 'sens').click();
+    await expect(tip(page, 'sens')).toBeVisible();
+    await expect(tip(page, 'input')).toBeHidden();
+    await expect(btn(page, 'input')).toHaveAttribute('aria-expanded', 'false');
+    expect(await page.locator('.tm-help-tip[data-open]').count()).toBe(1);
+  });
+
+  test('pressing "?" again, Escape and an outside click each close the bubble; the popover stays open', async ({ page }) => {
+    await btn(page, 'detect').click();
+    await expect(tip(page, 'detect')).toBeVisible();
+    await btn(page, 'detect').click();
+    await expect(tip(page, 'detect')).toBeHidden();
+    await expect(page.locator('#timingPopover')).toBeVisible();
+    await btn(page, 'detect').click();
+    await tip(page, 'detect').click(); // tapping the bubble dismisses it; the popover stays open
+    await expect(tip(page, 'detect')).toBeHidden();
+    await expect(page.locator('#timingPopover')).toBeVisible();
+    await btn(page, 'detect').click();
+    await expect(tip(page, 'detect')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(tip(page, 'detect')).toBeHidden();
+    await expect(page.locator('#timingPopover')).toBeVisible();
+    await expect(btn(page, 'detect')).toBeFocused();
+    await btn(page, 'quiet').click();
+    await page.click('#timingDeviceSelect'); // outside the bubble, inside the popover
+    await expect(tip(page, 'quiet')).toBeHidden();
+    await expect(page.locator('#timingPopover')).toBeVisible();
+    await btn(page, 'quiet').click();
+    await page.click('#bpmDisplay'); // outside the popover
+    await expect(page.locator('#timingPopover')).toBeHidden();
+    await expect(tip(page, 'quiet')).toBeHidden();
+    // Escape with no bubble open still closes the popover
+    await page.click('#timingSetBtn');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#timingPopover')).toBeHidden();
+  });
+
+  test('"?" buttons are keyboard reachable and toggle with Enter', async ({ page }) => {
+    await btn(page, 'input').focus();
+    await page.keyboard.press('Enter');
+    await expect(tip(page, 'input')).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(tip(page, 'input')).toBeHidden();
+  });
+
+  test('no horizontal overflow at 375 px with the widest bubble open', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    const widest = await page.evaluate(() => [...document.querySelectorAll('.tm-help-tip')].sort((a, b) => b.textContent.length - a.textContent.length)[0].id.replace('timingHelp-', ''));
+    expect(widest).toBe('latency');
+    await page.click('#timingSetBtn'); // close
+    await page.click('#timingSetBtn'); // reopen so it is re-fitted to the new viewport
+    await btn(page, widest).click();
+    await expect(tip(page, widest)).toBeVisible();
+    const m = await page.evaluate((id) => {
+      const t = document.getElementById(id).getBoundingClientRect(), p = document.getElementById('timingPopover').getBoundingClientRect();
+      return { sw: document.documentElement.scrollWidth, vw: window.innerWidth, l: t.left, r: t.right, pl: p.left, pr: p.right };
+    }, 'timingHelp-' + widest);
+    expect(m.sw).toBeLessThanOrEqual(m.vw);
+    expect(m.l).toBeGreaterThanOrEqual(0);
+    expect(m.r).toBeLessThanOrEqual(m.vw);
+    expect(m.l).toBeGreaterThanOrEqual(m.pl);
+    expect(m.r).toBeLessThanOrEqual(m.pr);
+  });
+});
+
+test.describe('Timing Check - help tips layout', () => {
+  const rightMost = (page, keys) => page.evaluate((keys) => keys.map(k => {
+    const b = document.querySelector(`#timingPopover .tm-help[data-help="${k}"]`);
+    const row = b.closest('.tm-lab, .tm-lat-head, .tm-row');
+    const rr = row.getBoundingClientRect(), br = b.getBoundingClientRect();
+    const cs = getComputedStyle(row);
+    const contentRight = rr.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+    const cy = (br.top + br.bottom) / 2;
+    // every other visible child of the row must sit on the button's line and to its left
+    const sibs = [...row.children].filter(c => c !== b && c.getBoundingClientRect().width > 0);
+    return {
+      k, dRight: Math.abs(br.right - contentRight), hasLabel: sibs.length > 0,
+      sameLine: sibs.every(c => { const r = c.getBoundingClientRect(); return cy >= r.top - 1 && cy <= r.bottom + 1 && r.right <= br.left + 1; }),
+    };
+  }), keys);
+
+  for (const width of [900, 375]) {
+    test(`every "?" is the right-most element of its row, on the label's line, at ${width} px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await navigateAndWait(page);
+      await page.click('#timingBtn');
+      await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+      await page.evaluate(() => { timingChannels = 2; timingChannel = 0; timingLoadChannel(); timingRenderRefSeg(); });
+      await page.click('#timingSetBtn');
+      // show the optional "Re-measure" pill and the "+N ms auto" note too: the "?" stays right-most
+      await page.evaluate(() => { document.getElementById('timingLatRemeasure').hidden = false; const c = document.getElementById('timingLatComp'); c.hidden = false; c.textContent = '+20 ms auto (1 glitch)'; });
+      for (const r of await rightMost(page, ['input', 'click', 'detect', 'latency', 'sens', 'quiet'])) {
+        expect(r.dRight, r.k + ' right edge').toBeLessThanOrEqual(1);
+        expect(r.sameLine, r.k + ' same line').toBe(true);
+      }
+      await page.click('#timingRefSeg [data-v="1"]');
+      for (const r of await rightMost(page, ['live', 'trim'])) {
+        expect(r.dRight, r.k + ' right edge').toBeLessThanOrEqual(1);
+        expect(r.hasLabel).toBe(true);
+        expect(r.sameLine, r.k + ' same line').toBe(true);
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    });
+  }
+});
+
+// Selectable vertical range (View range) ---------------------------------------------------------
+test.describe('Timing Check - view range', () => {
+  const TIP = "How far early or late the chart's top and bottom edges are. Hits beyond it are drawn as red triangles at the edge. Widen it to see big misses; narrow it to see small differences.";
+  const open = async (page, view) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingMuteOnsets = true; timingNode.port.onmessage = null; });
+    if (view === 'beats') await page.click('#timingViewSeg [data-v="beats"]');
+  };
+  // synthetic accepted hits (role 0) at the given offsets
+  const inject = (page, view, offs) => page.evaluate(([view, offs]) => {
+    offs.forEach((ms, i) => {
+      const hit = { t: timingNowSec() - 0.05 * i, offsetMs: ms, beatGlobal: i, beatInMeasure: i % 4, posInBeat: 0, role: 0, peakDb: -20 };
+      timingHits.push(hit);
+      if (view === 'timeline') timingTlAddDot(hit); else timingCAddMark(hit);
+    });
+  }, [view, offs]);
+  const geo = (page, host) => page.evaluate((h) => [...document.querySelectorAll(h + ' > *')].filter(e => /^tm-(dot|tri)/.test(e.className)).map(e => {
+    const c = e.closest('.tm-chart').getBoundingClientRect(), r = e.getBoundingClientRect();
+    return { cls: e.className, q: e.dataset.q || '', dy: (r.top + r.bottom) / 2 - (c.top + c.bottom) / 2 };
+  }), host);
+
+  test('defaults to 50, persists across reload, ignores junk', async ({ page }) => {
+    await open(page);
+    expect(await page.evaluate(() => timingRangeMs)).toBe(50);
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingRangeSeg [aria-pressed="true"]')).toHaveText('±50');
+    await page.click('#timingRangeSeg [data-v="200"]');
+    expect(await page.evaluate(() => localStorage.getItem('wm.timing.range'))).toBe('200');
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => timingRangeMs)).toBe(200);
+    await page.evaluate(() => localStorage.setItem('wm.timing.range', '77'));
+    await page.reload();
+    expect(await page.evaluate(() => timingRangeMs)).toBe(50);
+  });
+
+  test('View range item sits below Detect with the exact help text and a right-edge "?"', async ({ page }) => {
+    await open(page);
+    await page.click('#timingSetBtn');
+    const order = await page.evaluate(() => {
+      const y = (id) => document.getElementById(id).getBoundingClientRect().top;
+      return [y('timingResSeg') < y('timingRangeSeg'), y('timingRangeSeg') < y('timingSensValue')];
+    });
+    expect(order).toEqual([true, true]);
+    await expect(page.locator('#timingRangeSeg button')).toHaveText(['±50', '±100', '±200']);
+    const b = page.locator('#timingPopover .tm-help[data-help="range"]');
+    await expect(b).toHaveAttribute('aria-label', 'Help: View range');
+    await b.click();
+    await expect(page.locator('#timingHelp-range')).toHaveText(TIP);
+    await expect(page.locator('#timingHelp-range')).toBeVisible();
+    const d = await page.evaluate(() => {
+      const bt = document.querySelector('#timingPopover .tm-help[data-help="range"]'), row = bt.closest('.tm-lab');
+      const rr = row.getBoundingClientRect(), br = bt.getBoundingClientRect();
+      const lab = row.querySelector('.tm-label').getBoundingClientRect();
+      return { dRight: Math.abs(rr.right - br.right), same: Math.abs((lab.top + lab.bottom) / 2 - (br.top + br.bottom) / 2) < 3, text: row.querySelector('.tm-label').textContent, up: getComputedStyle(row.querySelector('.tm-label')).textTransform };
+    });
+    expect(d.dRight).toBeLessThanOrEqual(1);
+    expect(d.same).toBe(true);
+    expect(d.text + '|' + d.up).toBe('View range|uppercase');
+  });
+
+  for (const view of ['timeline', 'beats']) {
+    const host = view === 'timeline' ? '#timingTrack' : '#timingBeatsMarks';
+    const chart = view === 'timeline' ? '#timingTimeline' : '#timingBeatsChart';
+    const half = view === 'timeline' ? 132 / 2 - 8 : 96 / 2 - 7;
+
+    test(`${view}: +80 ms is a triangle at 50 and an in-range dot at the correct y at 100; markers re-place on switching`, async ({ page }) => {
+      await open(page, view);
+      await inject(page, view, [80, -30, 5]);
+      let g = await geo(page, host);
+      expect(g.length).toBe(3);
+      expect(g.filter(x => x.cls.startsWith('tm-tri')).length).toBe(1);
+      await page.click('#timingSetBtn');
+      await page.click('#timingRangeSeg [data-v="100"]');
+      g = await geo(page, host);
+      expect(g.filter(x => x.cls.startsWith('tm-tri')).length).toBe(0);
+      const dy = (ms, r) => ms * half / r;
+      const pos80 = g.find(x => Math.abs(x.dy - dy(80, 100)) < 1.2), neg30 = g.find(x => Math.abs(x.dy - dy(-30, 100)) < 1.2), p5 = g.find(x => Math.abs(x.dy - dy(5, 100)) < 1.2);
+      expect(pos80 && pos80.q).toBe('bad');   // quality is ms based: 80 ms stays red
+      expect(neg30 && neg30.q).toBe('bad');
+      expect(p5 && p5.q).toBe('good');
+      expect(g.every(x => x.cls.startsWith('tm-dot d0'))).toBe(true);
+      // back to 50: +80 is a triangle again, pinned to the bottom edge
+      await page.click('#timingRangeSeg [data-v="50"]');
+      g = await geo(page, host);
+      expect(g.filter(x => x.cls === 'tm-tri down').length).toBe(1);
+      expect(g.filter(x => x.cls.startsWith('tm-dot')).length).toBe(2);
+      // 200: all in range, scaled
+      await page.click('#timingRangeSeg [data-v="200"]');
+      g = await geo(page, host);
+      expect(g.filter(x => x.cls.startsWith('tm-tri')).length).toBe(0);
+      expect(g.some(x => Math.abs(x.dy - dy(80, 200)) < 1.2)).toBe(true);
+      // beyond 200 is still a triangle
+      await inject(page, view, [-250]);
+      await expect(page.locator(host + ' .tm-tri.up')).toHaveCount(1);
+      await expect(page.locator(host + ' .tm-tri.up')).toHaveAttribute('title', '−250 ms');
+      await page.click('#timingRangeSeg [data-v="50"]');
+      await expect(page.locator(host + ' .tm-dot')).toHaveCount(2);
+      await expect(page.locator(host + ' .tm-tri')).toHaveCount(2);
+    });
+
+    test(`${view}: the good band keeps its true +/-10 ms height, the scale label and guides follow the range`, async ({ page }) => {
+      await open(page, view);
+      await page.click('#timingSetBtn');
+      const band = () => page.evaluate((c) => document.querySelector(c + ' .tm-band').getBoundingClientRect().height, chart);
+      const label = () => page.locator(chart + ' .tm-scale').innerText();
+      const guides = () => page.evaluate((c) => document.querySelectorAll(c + ' .tm-rg').length, chart);
+      const res = {};
+      for (const r of [50, 100, 200]) {
+        await page.click(`#timingRangeSeg [data-v="${r}"]`);
+        res[r] = { h: await band(), label: await label(), g: await guides() };
+      }
+      expect([res[50].label, res[100].label, res[200].label]).toEqual(['±50 ms', '±100 ms', '±200 ms']);
+      for (const r of [50, 100, 200]) expect(Math.abs(res[r].h - 20 * half / r)).toBeLessThan(0.6);
+      expect(Math.abs(res[100].h - res[50].h / 2)).toBeLessThan(0.6);
+      expect([res[50].g, res[100].g, res[200].g]).toEqual([2, 4, 4]);
+      // guides sit at the true ms: at range 100 they are +/-25 and +/-50
+      await page.click('#timingRangeSeg [data-v="100"]');
+      const ys = await page.evaluate((c) => {
+        const ch = document.querySelector(c).getBoundingClientRect();
+        return [...document.querySelectorAll(c + ' .tm-rg')].map(g => g.getBoundingClientRect().top - (ch.top + ch.height / 2)).sort((a, b) => a - b);
+      }, chart);
+      [-50, -25, 25, 50].forEach((ms, i) => expect(Math.abs(ys[i] - ms * half / 100)).toBeLessThan(1.2));
+    });
+  }
+
+  test('fits at 375 px with no horizontal overflow, scale labels visible in both views', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    await open(page);
+    await page.click('#timingSetBtn');
+    await page.click('#timingRangeSeg [data-v="200"]');
+    await page.click('#timingPopover .tm-help[data-help="range"]');
+    await expect(page.locator('#timingHelp-range')).toBeVisible();
+    const m = await page.evaluate(() => {
+      const t = document.getElementById('timingHelp-range').getBoundingClientRect(), p = document.getElementById('timingPopover').getBoundingClientRect();
+      return { sw: document.documentElement.scrollWidth, vw: window.innerWidth, ok: t.left >= p.left && t.right <= p.right };
+    });
+    expect(m.sw).toBeLessThanOrEqual(m.vw);
+    expect(m.ok).toBe(true);
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingTimeline .tm-scale')).toBeVisible();
+    await page.click('#timingViewSeg [data-v="beats"]');
+    await expect(page.locator('#timingBeatsChart .tm-scale')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const r = await page.evaluate(() => {
+      const q = (s) => document.querySelector(s).getBoundingClientRect();
+      const s = q('#timingBeatsChart .tm-scale'), e = q('#timingBeatsChart .tm-side.t'), l = q('#timingBeatsChart .tm-side.b'), c = q('#timingBeatsChart');
+      return { overE: s.top < e.bottom, overL: s.bottom > l.top, within: s.left >= c.left && s.right <= c.right };
+    });
+    expect(r.overE).toBe(false);
+    expect(r.overL).toBe(false);
+    expect(r.within).toBe(true);
+  });
+});
+
+// Same-slot merge and nearby-noise merge ---------------------------------------------------------
+test.describe('Timing Check - same-slot merge and nearby-noise merge', () => {
+  const open = async (page, view) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingMuteOnsets = true; timingNode.port.onmessage = null; updateBpm(60); });
+    if (view === 'beats') await page.click('#timingViewSeg [data-v="beats"]');
+    await clickPlay(page);
+    await expect.poll(() => page.evaluate(() => timingBeats.filter(b => b.dur > 0).length), { timeout: 12000 }).toBeGreaterThan(6);
+  };
+  // inject on completed beat `k` (counted from the newest completed one), `p` = position inside the beat, offset in ms
+  const hitAt = (page, k, p, db, offMs = 0) => page.evaluate(([k, p, db, offMs]) => {
+    const done = timingBeats.filter(b => b.dur > 0), b = done[done.length - 1 - k];
+    const r = timingHandleOnset(b.time + timingLatencyMs / 1000 + p * b.dur + offMs / 1000, db);
+    return r && { offsetMs: r.offsetMs, peakDb: r.peakDb };
+  }, [k, p, db, offMs]);
+  const host = (view) => view === 'timeline' ? '#timingTrack .tm-dot' : '#timingBeatsMarks .tm-dot';
+
+  for (const view of ['timeline', 'beats']) {
+    test(`${view}: a louder sound on the same slot replaces the dot; a quieter one is dropped`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      const a = await hitAt(page, 1, 0, -30, 3);
+      expect(a).not.toBeNull();
+      await expect(page.locator(host(view))).toHaveCount(1);
+      // quieter and equal: dropped
+      expect(await hitAt(page, 1, 0, -40, 5)).toBeNull();
+      expect(await hitAt(page, 1, 0, -30, 6)).toBeNull();
+      await expect(page.locator(host(view))).toHaveCount(1);
+      expect(await page.evaluate(() => timingHits.length)).toBe(1);
+      expect(await page.evaluate(() => timingHits[0].offsetMs)).toBeCloseTo(3, 0);
+      // louder: replaces (still one dot, one hit, new offset)
+      const c = await hitAt(page, 1, 0, -20, -8);
+      expect(c).not.toBeNull();
+      await expect(page.locator(host(view))).toHaveCount(1);
+      expect(await page.evaluate(() => timingHits.length)).toBe(1);
+      expect(await page.evaluate(() => timingHits[0].peakDb)).toBe(-20);
+      expect(await page.evaluate(() => timingHits[0].offsetMs)).toBeCloseTo(-8, 0);
+      // a different slot still adds a dot
+      expect(await hitAt(page, 1, 0.5, -20)).not.toBeNull();
+      await expect(page.locator(host(view))).toHaveCount(2);
+      // summary counts one hit per slot
+      await page.evaluate(() => timingUpdateSummary());
+      await expect(page.locator('#timingHitCount')).toHaveText('2');
+    });
+  }
+
+  test('the merged dot survives a view switch and a range change', async ({ page }) => {
+    test.setTimeout(40000);
+    await open(page, 'timeline');
+    await hitAt(page, 1, 0, -30, 3);
+    await hitAt(page, 1, 0, -20, -8);
+    await page.click('#timingViewSeg [data-v="beats"]');
+    await expect(page.locator(host('beats'))).toHaveCount(1);
+    await page.evaluate(() => timingSetRange(100));
+    await expect(page.locator(host('beats'))).toHaveCount(1);
+    await page.click('#timingViewSeg [data-v="timeline"]');
+    await expect(page.locator(host('timeline'))).toHaveCount(1);
+  });
+
+  const res = (page, r) => page.evaluate((r) => { timingRes = r; }, r);
+  const rings = (view) => view === 'timeline' ? '#timingTrack .tm-ring' : '#timingBeatsMarks .tm-ring';
+  const marks = (page) => page.evaluate(() => [timingHits.length, timingRejects.length]);
+
+  for (const view of ['timeline', 'beats']) {
+    test(`${view}: several onsets in one cell leave one dot at the loudest one's offset`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      // 16 grid: the cell of slot 0.25 spans 0.125..0.375 of the beat
+      expect(await hitAt(page, 1, 0.25, -30, 10)).not.toBeNull();
+      expect(await hitAt(page, 1, 0.25, -20, -20)).not.toBeNull(); // louder: replaces
+      expect(await hitAt(page, 1, 0.25, -25, 30)).toBeNull();      // quieter: dropped
+      expect(await hitAt(page, 1, 0.25, -20, 40)).toBeNull();      // equal: dropped
+      await expect(page.locator(host(view))).toHaveCount(1);
+      expect(await page.evaluate(() => timingHits.map(h => [h.peakDb, Math.round(h.offsetMs)]))).toEqual([[-20, -20]]);
+      await page.evaluate(() => timingUpdateSummary());
+      await expect(page.locator('#timingHitCount')).toHaveText('1');
+    });
+
+    test(`${view}: a louder ring is kept against a quieter hit; a louder hit removes a quieter ring`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      await res(page, '4'); // one slot per beat; p = 0.45 is beyond the capture radius (ring) but still in that beat's cell
+      expect(await hitAt(page, 1, 0.45, -20)).toBeNull();
+      expect(await marks(page)).toEqual([0, 1]);
+      await expect(page.locator(rings(view))).toHaveCount(1);
+      expect(await hitAt(page, 1, 0.02, -30)).toBeNull(); // quieter on-grid hit in the same cell
+      expect(await marks(page)).toEqual([0, 1]);
+      await expect(page.locator(rings(view))).toHaveCount(1);
+      await expect(page.locator(host(view))).toHaveCount(0);
+      // louder hit replaces the ring
+      expect(await hitAt(page, 1, 0.02, -10)).not.toBeNull();
+      expect(await marks(page)).toEqual([1, 0]);
+      await expect(page.locator(rings(view))).toHaveCount(0);
+      await expect(page.locator(host(view))).toHaveCount(1);
+      await page.evaluate(() => timingUpdateSummary());
+      await expect(page.locator('#timingHitCount')).toHaveText('1');
+    });
+
+    test(`${view}: a quieter ring first, then a louder hit in the same cell removes the ring`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      await res(page, '4');
+      expect(await hitAt(page, 1, 0.45, -30)).toBeNull();
+      await expect(page.locator(rings(view))).toHaveCount(1);
+      expect(await hitAt(page, 1, 0.02, -20)).not.toBeNull();
+      await expect(page.locator(rings(view))).toHaveCount(0);
+      await expect(page.locator(host(view))).toHaveCount(1);
+    });
+
+    test(`${view}: onsets in adjacent cells are both kept even if one is much quieter`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      expect(await hitAt(page, 1, 0.25, -20)).not.toBeNull();
+      expect(await hitAt(page, 1, 0.5, -60)).not.toBeNull();
+      await expect(page.locator(host(view))).toHaveCount(2);
+    });
+  }
+
+  test('a lone quiet onset after several loud hits is still shown (no global filtering)', async ({ page }) => {
+    test.setTimeout(40000);
+    await open(page, 'timeline');
+    for (let k = 2; k <= 5; k++) expect(await hitAt(page, k, 0, -20)).not.toBeNull();
+    expect(await hitAt(page, 1, 0, -60)).not.toBeNull();
+    await expect(page.locator('#timingTrack .tm-dot')).toHaveCount(5);
+  });
+
+  test('cell boundaries follow the detect grid: 8 merges onsets 0.25 beat apart, 16 keeps them apart', async ({ page }) => {
+    test.setTimeout(40000);
+    await open(page, 'timeline');
+    await res(page, '8');
+    await hitAt(page, 2, 0.3, -20);
+    await hitAt(page, 2, 0.55, -10);
+    const a = await marks(page);
+    expect(a[0] + a[1]).toBe(1);
+    await res(page, '16');
+    await hitAt(page, 1, 0.3, -20);
+    await hitAt(page, 1, 0.55, -10);
+    const b = await marks(page);
+    expect(b[0] + b[1]).toBe(3);
   });
 });
