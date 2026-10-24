@@ -14,37 +14,74 @@ test.describe('Timing Check - grid and matching', () => {
       for (const s of ['1', '2', '4', '4e', 'shuffle', '16shuffle', '3', '5', '6']) {
         subdivision = s;
         const g = getTimingGrid();
-        out[s] = { key: g.key, name: g.name, locked: g.locked, pos: g.pos.map(p => +p.toFixed(4)) };
+        out[s] = { key: g.key, name: g.name, locked: g.locked, res: g.res, shuffle: g.shuffle, role: g.role, pos: g.pos.map(p => +p.toFixed(4)) };
       }
-      subdivision = '1';
-      timingFeel = 'shuffle';
-      const chosen = getTimingGrid();
+      // user-chosen resolution and shuffle on a plain rhythm
       subdivision = '2';
-      const chosen2 = getTimingGrid();
-      timingFeel = 'straight';
-      return { out, chosen: chosen.key, chosen2: [chosen2.key, chosen2.locked] };
+      const combos = {};
+      for (const r of ['4', '8', '16', '32']) {
+        for (const sh of [false, true]) {
+          timingRes = r; timingShuffle = sh;
+          const g = getTimingGrid();
+          combos[r + (sh ? '+S' : '')] = { key: g.key, name: g.name, res: g.res, shuffle: g.shuffle, locked: g.locked, pos: g.pos.map(p => +p.toFixed(4)), role: g.role, gap: +g.gap.toFixed(4) };
+        }
+      }
+      // locked rhythms with a chosen resolution
+      const forced = {};
+      for (const s of ['shuffle', '16shuffle']) {
+        subdivision = s;
+        for (const r of ['4', '8', '16', '32']) {
+          timingRes = r; timingShuffle = false;
+          const g = getTimingGrid();
+          forced[s + '/' + r] = [g.key, g.name, g.res, g.shuffle];
+        }
+      }
+      subdivision = '3'; timingRes = '32';
+      const tup = getTimingGrid();
+      timingRes = '16'; timingShuffle = false; subdivision = '1';
+      return { out, combos, forced, tup: [tup.key, tup.res, tup.shuffle] };
     });
     for (const s of ['1', '2', '4', '4e']) {
-      expect(res.out[s].locked).toBe(false);
-      expect(res.out[s].key).toBe('straight');
+      expect(res.out[s]).toMatchObject({ locked: false, key: '16', name: '16', res: '16', shuffle: false });
       expect(res.out[s].pos).toEqual([0, 0.25, 0.5, 0.75]);
     }
-    expect(res.out.shuffle).toMatchObject({ key: 'shuffle', name: 'Shuffle', locked: true });
-    expect(res.out['16shuffle']).toMatchObject({ key: 'halftime', name: 'Half-time shuffle', locked: true });
+    expect(res.out.shuffle).toMatchObject({ key: '8triplet', name: '8 Triplet', locked: true, res: '16', shuffle: true }); // 8th shuffle at Detect 16 = 8th-triplet grid
+    expect(res.out['16shuffle']).toMatchObject({ key: '16shuffle', name: '16 Shuffle', locked: true, res: '16', shuffle: true });
     expect(res.out['3']).toMatchObject({ name: 'Triplet', locked: true });
     expect(res.out['5']).toMatchObject({ name: 'Quintuplet', locked: true });
     expect(res.out['6']).toMatchObject({ name: 'Sextuplet', locked: true });
     expect(res.out['16shuffle'].pos).toEqual([0, 0.3333, 0.5, 0.8333]);
-    expect(res.chosen).toBe('shuffle');
-    expect(res.chosen2).toEqual(['shuffle', false]);
+    expect(res.out.shuffle.pos).toEqual([0, 0.3333, 0.6667]);
+    expect(res.out.shuffle.role).toEqual([0, 1, 2]);
+    expect(res.forced['shuffle/4'][0]).toBe('4');
+    expect(res.forced['shuffle/8'][0]).toBe('8shuffle');
+    const c = res.combos;
+    expect(c['4']).toMatchObject({ key: '4', name: '4', pos: [0], role: [0] });
+    expect(c['4+S']).toMatchObject({ key: '4', name: '4', shuffle: false }); // shuffle has no effect at 4
+    expect(c['8']).toMatchObject({ key: '8', name: '8', pos: [0, 0.5], role: [0, 2], shuffle: false });
+    expect(c['8+S']).toMatchObject({ key: '8shuffle', name: '8 Shuffle', pos: [0, 0.6667], role: [0, 2], shuffle: true, res: '8' });
+    expect(c['16']).toMatchObject({ key: '16', name: '16', pos: [0, 0.25, 0.5, 0.75], role: [0, 1, 2, 1] });
+    expect(c['16+S']).toMatchObject({ key: '16shuffle', name: '16 Shuffle', pos: [0, 0.3333, 0.5, 0.8333], role: [0, 1, 2, 1], shuffle: true });
+    expect(c['32']).toMatchObject({ key: '32', name: '32', pos: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875], role: [0, 3, 1, 3, 2, 3, 1, 3], gap: 0.125 });
+    expect(c['32+S']).toMatchObject({ key: '32', shuffle: false }); // no shuffle at 32
+    for (const k of Object.keys(c)) expect(c[k].locked).toBe(false);
+    // shuffle rhythms force Shuffle; 32 falls back to the rhythm's default resolution; 4 stays 4
+    expect(res.forced['shuffle/4'].slice(0, 1)).toEqual(['4']);
+    expect(res.forced['shuffle/8']).toEqual(['8shuffle', '8 Shuffle', '8', true]);
+    expect(res.forced['shuffle/16']).toEqual(['8triplet', '8 Triplet', '16', true]);
+    expect(res.forced['shuffle/32']).toEqual(['8shuffle', '8 Shuffle', '8', true]);
+    expect(res.forced['16shuffle/32']).toEqual(['16shuffle', '16 Shuffle', '16', true]);
+    expect(res.tup).toEqual(['triplet', null, false]);
   });
 
   test('matchOnsetToGrid: role-weighted capture (straight, shuffle, half-time), next beat, rejections', async ({ page }) => {
     const r = await page.evaluate(() => {
       const beats = [0, 1, 2, 3].map(i => ({ time: 10 + i * 0.5, beatInMeasure: i, n: i }));
       const grids = {};
-      for (const k of ['straight', 'shuffle', 'halftime']) { timingFeel = k; grids[k] = getTimingGrid(); }
-      timingFeel = 'straight';
+      for (const [k, r, sh] of [['straight', '16', false], ['shuffle', '8', true], ['halftime', '16', true], ['g4', '4', false], ['g8', '8', false], ['g32', '32', false]]) {
+        timingRes = r; timingShuffle = sh; subdivision = '1'; grids[k] = getTimingGrid();
+      }
+      timingRes = '16'; timingShuffle = false;
       const m = (t, g) => matchOnsetToGrid(t, beats, grids[g] || g, 0.5);
       const reason = () => timingLastMatchReason;
       // weighted midpoint between a role-1 point (w 0.6) and a role-2 point (w 0.85): scores are equal there
@@ -56,7 +93,7 @@ test.describe('Timing Check - grid and matching', () => {
         ambiguousStraight: m(mid(10.5 + 0.125, 10.5 + 0.25), 'straight'), reasonStraight: null,
         shuffleEarly: m(10.5 + (2 / 3) * 0.5 - 0.008, 'shuffle'),
         shuffleEighthEarly60: m(10.5 + (2 / 3) * 0.5 - 0.060, 'shuffle'),
-        ambiguousShuffle: m(mid(10.5 + 0.5 / 3, 10.5 + (2 / 3) * 0.5), 'shuffle'),
+        ambiguousShuffle: m((10.5 * 0.85 + (10.5 + (2 / 3) * 0.5)) / 1.85, 'shuffle'), // 8 Shuffle: weighted midpoint of beat and 2/3
         halftime: m(10 + (5 / 6) * 0.5 + 0.005, 'halftime'),
         halftimeEighthEarly30: m(10.5 + 0.25 - 0.030, 'halftime'),
         ambiguousHalftime: m(mid(10.5 + 0.5 / 3, 10.5 + 0.25), 'halftime'),
@@ -65,6 +102,17 @@ test.describe('Timing Check - grid and matching', () => {
         empty: matchOnsetToGrid(10, [], grids.straight, 0.5),
       };
       out.reasonStraight = (m(mid(10.5 + 0.125, 10.5 + 0.25), 'straight'), reason());
+      // coarse grid 8: a 16th-note hit (1/4) is rejected, a hit on the 8th (1/2) is accepted
+      out.g8Sixteenth = m(10.5 + 0.25 * 0.5, 'g8'); out.g8SixteenthReason = reason();
+      out.g8SixteenthNear = m(10.5 + 0.25 * 0.5 + 0.004, 'g8'); out.g8SixteenthNearReason = reason();
+      out.g8Eighth = m(10.5 + 0.5 * 0.5 + 0.010, 'g8');
+      out.g8Beat = m(10.5 + 0.012, 'g8');
+      out.g4Eighth = m(10.5 + 0.5 * 0.5, 'g4'); out.g4EighthReason = reason();
+      // 8 Shuffle: a hit at 1/3 is equidistant from the beat and 2/3 and is rejected
+      out.s8Straight = m(10.5 + 0.5 / 3, 'shuffle'); out.s8StraightReason = reason();
+      // fine grid 32: a hit on 1/8 is accepted with the finest role
+      out.g32Fine = m(10.5 + 0.125 * 0.5 + 0.006, 'g32');
+      out.g32Sixteenth = m(10.5 + 0.25 * 0.5, 'g32');
       const beatOnly = { pos: [0], role: [0], gap: 1 };
       out.tooFar = m(10.5 + 0.46 * 0.5, beatOnly); out.tooFarReason = reason();
       out.farButClear = m(10.5 + 0.4 * 0.5, beatOnly);
@@ -85,7 +133,7 @@ test.describe('Timing Check - grid and matching', () => {
     expect(r.shuffleEarly.role).toBe(2);
     expect(r.shuffleEighthEarly60.role).toBe(2);
     expect(r.shuffleEighthEarly60.offsetMs).toBeCloseTo(-60, 3);
-    expect(r.ambiguousShuffle).toBeNull();
+    expect(r.ambiguousShuffle).toBeNull(); // 0.36 beat from both: beyond the 8 Shuffle capture radius
     expect(r.halftime.pos).toBeCloseTo(5 / 6, 6);
     expect(r.halftime.offsetMs).toBeCloseTo(5, 3);
     expect(r.halftimeEighthEarly30.pos).toBe(0.5);
@@ -99,6 +147,24 @@ test.describe('Timing Check - grid and matching', () => {
     expect(r.tooFar).toBeNull();
     expect(r.tooFarReason).toBe('too-far');
     expect(r.farButClear.offsetMs).toBeCloseTo(200, 3); // no fixed 60 ms cap any more
+    expect(r.g8Sixteenth).toBeNull();
+    expect(r.g8SixteenthReason).toBe('too-far');
+    expect(r.g8SixteenthNear).toBeNull();
+    expect(r.g8SixteenthNearReason).toBe('too-far');
+    expect(r.g8Eighth.pos).toBe(0.5);
+    expect(r.g8Eighth.role).toBe(2);
+    expect(r.g8Eighth.offsetMs).toBeCloseTo(10, 3);
+    expect(r.g8Beat.pos).toBe(0);
+    expect(r.g8Beat.offsetMs).toBeCloseTo(12, 3);
+    expect(r.g4Eighth).toBeNull();
+    expect(r.g4EighthReason).toBe('too-far');
+    expect(r.s8Straight).toBeNull();
+    expect(r.s8StraightReason).toBe('too-far');
+    expect(r.g32Fine.pos).toBe(0.125);
+    expect(r.g32Fine.role).toBe(3);
+    expect(r.g32Fine.offsetMs).toBeCloseTo(6, 3);
+    expect(r.g32Sixteenth.pos).toBe(0.25);
+    expect(r.g32Sixteenth.role).toBe(1);
   });
 
   test('timingQuality / median / mad', async ({ page }) => {
@@ -127,7 +193,7 @@ test.describe('Timing Check - UI', () => {
     expect(await page.locator('#beatContainer > *').count()).toBe(4);
     // hooks are no-ops while Timing is off
     const r = await page.evaluate(() => {
-      timingRecordBeat(1, 0); timingRelayoutTimeline(); timingLayoutBeatsStrip(); timingApplyFeel();
+      timingRecordBeat(1, 0); timingRelayoutTimeline(); timingLayoutBeatsStrip(); timingApplyDetect();
       return { beats: timingBeats.length, on: timingOn };
     });
     expect(r).toEqual({ beats: 0, on: false });
@@ -159,46 +225,120 @@ test.describe('Timing Check - UI', () => {
     expect(errors).toEqual([]);
   });
 
-  test('Feel segment (in the settings popover) is locked by the rhythm menu', async ({ page }) => {
+  test('Detect row (in the settings popover) follows the rhythm menu locks', async ({ page }) => {
     await page.click('#timingBtn');
     const pick = async v => {
       await page.click('#rhythmTrigger');
       await page.click(`#rhythmMenu [data-value="${v}"]`);
     };
-    const feel = async () => page.evaluate(() => ({
-      pressed: [...document.querySelectorAll('#timingFeelSeg button')].map(b => b.getAttribute('aria-pressed')),
-      disabled: [...document.querySelectorAll('#timingFeelSeg button')].map(b => b.disabled),
-      hint: document.getElementById('timingFeelHint').hidden ? '' : document.getElementById('timingFeelHint').textContent,
+    const detect = async () => page.evaluate(() => ({
+      pressed: [...document.querySelectorAll('#timingResSeg button')].map(b => b.getAttribute('aria-pressed')),
+      disabled: [...document.querySelectorAll('#timingResSeg button')].map(b => b.disabled),
+      shuffle: [document.getElementById('timingShuffleBtn').getAttribute('aria-pressed'), document.getElementById('timingShuffleBtn').disabled],
+      hint: document.getElementById('timingDetectHint').hidden ? '' : document.getElementById('timingDetectHint').textContent,
     }));
-    let f = await feel();
+    // labels, accessible names and the row tooltip
+    expect(await page.evaluate(() => [...document.querySelectorAll('#timingResSeg button')].map(b => [b.textContent, b.getAttribute('aria-label')])))
+      .toEqual([['4', 'Quarter notes'], ['8', '8th notes'], ['16', '16th notes'], ['32', '32nd notes']]);
+    expect(await page.evaluate(() => document.getElementById('timingShuffleBtn').textContent)).toBe('Shuffle');
+    expect(await page.evaluate(() => document.getElementById('timingResSeg').parentElement.title))
+      .toBe('Which notes to check. Hits between grid points are shown as rejected.');
+    let f = await detect();
     expect(f.hint).toBe('');
-    expect(f.disabled).toEqual([false, false, false]);
+    expect(f.pressed).toEqual(['false', 'false', 'true', 'false']);
+    expect(f.disabled).toEqual([false, false, false, false]);
+    expect(f.shuffle).toEqual(['false', false]);
 
+    // shuffle rhythms: Shuffle forced on and locked, 32 disabled, 4/8/16 stay available
     await pick('shuffle');
-    f = await feel();
-    expect(f.pressed).toEqual(['false', 'true', 'false']);
-    expect(f.disabled).toEqual([true, false, true]);
-    expect(f.hint).toBe('Set by rhythm');
-
+    f = await detect();
+    expect(f.pressed).toEqual(['false', 'false', 'true', 'false']); // the user's 16 is kept
+    expect(f.disabled).toEqual([false, false, false, true]);
+    expect(f.shuffle).toEqual(['true', true]);
+    expect(f.hint).toBe('');
+    expect(await page.evaluate(() => getTimingGrid().key)).toBe('8triplet');
+    await pick('2');
+    await page.click('#timingSetBtn');
+    await page.click('#timingResSeg [data-v="32"]');
+    await pick('shuffle'); // user chose 32: the rhythm's default (8) is used
+    f = await detect();
+    expect(f.pressed).toEqual(['false', 'true', 'false', 'false']);
+    expect(f.disabled).toEqual([false, false, false, true]);
+    expect(await page.evaluate(() => [getTimingGrid().key, timingRes])).toEqual(['8shuffle', '32']);
     await pick('16shuffle');
-    f = await feel();
-    expect(f.pressed).toEqual(['false', 'false', 'true']);
-    expect(f.hint).toBe('Set by rhythm');
+    f = await detect();
+    expect(f.pressed).toEqual(['false', 'false', 'true', 'false']);
+    expect(await page.evaluate(() => getTimingGrid().key)).toBe('16shuffle');
 
+    // tuplets: the whole row is disabled and the hint names the tuplet
     await pick('3');
-    f = await feel();
-    expect(f.pressed).toEqual(['false', 'false', 'false']);
-    expect(f.disabled).toEqual([true, true, true]);
-    expect(f.hint).toBe('Set by rhythm: Triplet');
+    f = await detect();
+    expect(f.pressed).toEqual(['false', 'false', 'false', 'false']);
+    expect(f.disabled).toEqual([true, true, true, true]);
+    expect(f.shuffle).toEqual(['false', true]);
+    expect(f.hint).toBe('Locked to Triplet');
+    await pick('5');
+    expect((await detect()).hint).toBe('Locked to Quintuplet');
 
     await pick('2');
-    f = await feel();
-    expect(f.disabled).toEqual([false, false, false]);
+    f = await detect();
+    expect(f.disabled).toEqual([false, false, false, false]);
+    expect(f.pressed).toEqual(['false', 'false', 'false', 'true']); // 32 chosen earlier
+    expect(f.hint).toBe('');
     await page.click('#timingSetBtn');
-    await expect(page.locator('#timingFeelSeg')).toBeVisible();
-    await page.click('#timingFeelSeg [data-v="shuffle"]');
-    expect((await feel()).pressed).toEqual(['false', 'true', 'false']);
-    expect(await page.evaluate(() => getTimingGrid().key)).toBe('shuffle');
+    await expect(page.locator('#timingResSeg')).toBeVisible();
+    await page.click('#timingResSeg [data-v="8"]');
+    await page.click('#timingShuffleBtn');
+    expect((await detect()).shuffle).toEqual(['true', false]);
+    expect(await page.evaluate(() => getTimingGrid().key)).toBe('8shuffle');
+  });
+
+  test('Shuffle is disabled at 4 and 32 and the preference is restored at 8 and 16', async ({ page }) => {
+    await page.click('#timingBtn');
+    await page.click('#timingSetBtn');
+    const shuf = () => page.evaluate(() => [document.getElementById('timingShuffleBtn').getAttribute('aria-pressed'), document.getElementById('timingShuffleBtn').disabled, getTimingGrid().key]);
+    await page.click('#timingResSeg [data-v="8"]');
+    await page.click('#timingShuffleBtn');
+    expect(await shuf()).toEqual(['true', false, '8shuffle']);
+    await page.click('#timingResSeg [data-v="4"]');
+    expect(await shuf()).toEqual(['false', true, '4']);
+    await page.click('#timingShuffleBtn', { force: true }); // disabled: no effect
+    expect(await page.evaluate(() => timingShuffle)).toBe(true);
+    await page.click('#timingResSeg [data-v="32"]');
+    expect(await shuf()).toEqual(['false', true, '32']);
+    await page.click('#timingResSeg [data-v="8"]');
+    expect(await shuf()).toEqual(['true', false, '8shuffle']);
+    await page.click('#timingResSeg [data-v="16"]');
+    expect(await shuf()).toEqual(['true', false, '16shuffle']);
+    await page.click('#timingShuffleBtn');
+    expect(await shuf()).toEqual(['false', false, '16']);
+  });
+
+  test('Detect settings persist across a reload and the old Feel keys migrate once', async ({ page }) => {
+    await page.click('#timingBtn');
+    await page.click('#timingSetBtn');
+    await page.click('#timingResSeg [data-v="8"]');
+    await page.click('#timingShuffleBtn');
+    expect(await page.evaluate(() => [localStorage.getItem('wm.timing.res'), localStorage.getItem('wm.timing.shuffle')])).toEqual(['8', 'true']);
+    await page.reload();
+    await page.waitForSelector('#playBtn');
+    expect(await page.evaluate(() => [timingRes, timingShuffle, getTimingGrid().key])).toEqual(['8', true, '8shuffle']);
+
+    for (const [feel, res, sh] of [['straight', '16', false], ['shuffle', '8', true], ['halftime', '16', true]]) {
+      await page.evaluate((f) => {
+        localStorage.removeItem('wm.timing.res'); localStorage.removeItem('wm.timing.shuffle');
+        localStorage.setItem('wm.timing.feel', f);
+      }, feel);
+      await page.reload();
+      await page.waitForSelector('#playBtn');
+      const r = await page.evaluate(() => ({ res: timingRes, sh: timingShuffle, s: [localStorage.getItem('wm.timing.res'), localStorage.getItem('wm.timing.shuffle')], feel: localStorage.getItem('wm.timing.feel') }));
+      expect(r).toEqual({ res, sh, s: [res, String(sh)], feel: null });
+    }
+    // existing new keys win over a stale feel key, which is still removed
+    await page.evaluate(() => { localStorage.setItem('wm.timing.res', '32'); localStorage.setItem('wm.timing.feel', 'shuffle'); });
+    await page.reload();
+    await page.waitForSelector('#playBtn');
+    expect(await page.evaluate(() => [timingRes, localStorage.getItem('wm.timing.feel')])).toEqual(['32', null]);
   });
 
   test('On beats strip attaches under the circles and is disabled when circles wrap', async ({ page }) => {
@@ -589,7 +729,7 @@ test.describe('Timing Check - sensitivity', () => {
     await expect(page.locator('#timingSensValue')).toHaveText('8');
   });
 
-  test('mapping: 5 is the reference tuning; f = 1.5 at 1, 1.0 at 5, 0.55 at 10', async ({ page }) => {
+  test('mapping: 5 is the reference tuning; f = 1.5 at 1, 1.0 at 5, 0.35 at 10', async ({ page }) => {
     await navigateAndWait(page);
     const p = await page.evaluate(() => [1, 5, 10].map(v => timingMakeOnsetCore(48000, { sensitivity: v }).params()));
     const [p1, p5, p10] = p;
@@ -603,11 +743,11 @@ test.describe('Timing Check - sensitivity', () => {
     expect(p1.combDb).toBeCloseTo(15, 9);
     expect(p1.minGateDbfs).toBeCloseTo(-47, 6);
     expect(p1.dropRatio).toBeCloseTo(0.6, 9);
-    expect(p10.f).toBeCloseTo(0.55, 9);
-    expect(p10.combDb).toBeCloseTo(5.5, 9);
+    expect(p10.f).toBeCloseTo(0.35, 9);
+    expect(p10.combDb).toBeCloseTo(3.5, 9);
     expect(p10.minGateDbfs).toBeCloseTo(-65, 6);
-    expect(p10.dropRatio).toBeCloseTo(0.8, 9);
-    expect(p10.jumpDb[0]).toBeCloseTo(p5.jumpDb[0] * 0.55, 6);
+    expect(p10.dropRatio).toBeCloseTo(0.85, 9);
+    expect(p10.jumpDb[0]).toBeCloseTo(p5.jumpDb[0] * 0.35, 6);
   });
 
   test('detection: 10 catches more weak attacks than 5; 1 keeps noise at zero; 5 passes everything', async ({ page }) => {
@@ -642,7 +782,7 @@ test.describe('Timing Check - input too hot warning', () => {
     test.setTimeout(30000);
     await navigateAndWait(page);
     await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'signals.js') });
-    // the core flags clipping when any raw sample reaches full scale (>= 0.999)
+    // the core flags clipping only for a run of >= 4 consecutive samples at >= 0.998 (a flat top)
     const flags = await page.evaluate(() => {
       const run = fill => {
         const core = timingMakeOnsetCore(sig.SR);
@@ -656,20 +796,41 @@ test.describe('Timing Check - input too hot warning', () => {
       // a full-scale sample in the second of two blocks still counts
       const core = timingMakeOnsetCore(sig.SR);
       const a = new Float32Array(128), b = new Float32Array(128);
-      b[5] = -0.99997;
+      for (let i = 5; i < 9; i++) b[i] = -0.99997;
       core.process(a, 0); core.process(b, 128);
       const second = core.takeLevel().clip;
+      const runOf = (n, v) => run(x => { for (let i = 1000; i < 1000 + n; i++) x[i] = v; });
+      // a run split across two process() calls (2 samples at the end of one, 2 at the start of the next)
+      const sp = timingMakeOnsetCore(sig.SR);
+      const c1 = new Float32Array(128), c2 = new Float32Array(128);
+      c1[126] = c1[127] = 1; c2[0] = c2[1] = -1;
+      sp.process(c1, 0); sp.process(c2, 128);
+      const split4 = sp.takeLevel().clip;
+      const sp3 = timingMakeOnsetCore(sig.SR);
+      const d2 = new Float32Array(128); d2[0] = 1;
+      sp3.process(c1, 0); sp3.process(d2, 128); // 2 + 1 = 3 only
+      const split3 = sp3.takeLevel().clip;
       const after = core.takeLevel().clip; // the flag resets after each level report
       return {
         half: run(x => { sig.addSine(x, 0, 300, dbv(-0.5), 0, 0, 0.1); }),
-        single: run(x => { x[1000] = 0.99997; }),
+        single: run(x => { x[1000] = 1.0; }),
+        run3: runOf(3, 1).clip, run4: runOf(4, 1).clip, run4neg: runOf(4, -0.9985).clip, run4low: runOf(4, 0.9975).clip,
+        gap: run(x => { x[1000] = x[1001] = x[1002] = 1; x[1004] = 1; }).clip,
+        split4, split3,
         sine005: run(x => { sig.addSine(x, 0, 301, dbv(-0.05), 0, 0, 0.1); }),
         run02: run(x => { const v = dbv(-0.2); for (let i = 1000; i < 1010; i++) x[i] = i % 2 ? -v : v; }),
         second, after,
       };
     });
     expect(flags.half.clip).toBe(false);
-    expect(flags.single.clip).toBe(true);
+    expect(flags.single.clip).toBe(false);
+    expect(flags.run3).toBe(false);
+    expect(flags.run4).toBe(true);
+    expect(flags.run4neg).toBe(true);
+    expect(flags.run4low).toBe(false);
+    expect(flags.gap).toBe(false);
+    expect(flags.split4).toBe(true);
+    expect(flags.split3).toBe(false);
     expect(flags.sine005.clip).toBe(false);
     expect(flags.sine005.rawDb).toBeGreaterThan(-0.1);
     expect(flags.run02.clip).toBe(false);
@@ -870,6 +1031,111 @@ test.describe('Timing Check - loopback measurement', () => {
     expect(r.step).toBeCloseTo(0.5, 6);
     expect(r.playSoundSrc).toBe(false);
   });
+
+  test('history: a finished measurement appends a full diagnostic record (good, unstable, failed)', async ({ page }) => {
+    await feed(page, '58', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    await feed(page, '58', 'false'); // no-op: timingLoop already finished
+    await page.click('#timingLoopStart');
+    await feed(page, '58 + i * 0.06', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    await page.click('#timingLoopStart');
+    await feed(page, '58', 'i < 10');
+    await page.evaluate(() => timingLoopFinish());
+    const h = await page.evaluate(() => timingLoopHistory());
+    expect(h.map(r => r.result)).toEqual(['good', 'unstable', 'failed']);
+    const r = h[0];
+    for (const k of ['at', 'n', 'median', 'sd', 'mad', 'min', 'max', 'drift', 'ctxRate', 'baseLatencyMs', 'outputLatencyMs',
+      'trackRate', 'trackLatencyMs', 'channelCount', 'label', 'ctxTimeSec', 'pageAgeSec', 'streamAgeSec', 'streamSeq',
+      'pageLoadId', 'playedSinceLast', 'outTs', 'channel', 'sensitivity']) expect(r).toHaveProperty(k);
+    expect(r.n).toBe(60);
+    expect(r.median).toBeCloseTo(58, 0);
+    expect(r.ctxRate).toBeGreaterThan(0);
+    expect(r.streamSeq).toBeGreaterThanOrEqual(1);
+    expect(r.pageLoadId).toMatch(/^[a-z0-9]+$/);
+    expect(r.playedSinceLast).toBe(false);
+    expect(h[2].n).toBe(10);
+    expect(new Set(h.map(x => x.pageLoadId)).size).toBe(1);
+    // also stored under the per-device key
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('wm.timing.loopHistory.' + timingDeviceId)).length)).toBe(3);
+  });
+
+  test('history: cancelled measurements are not recorded; playedSinceLast tracks play', async ({ page }) => {
+    await page.click('#timingLoopStop');
+    expect(await page.evaluate(() => timingLoopHistory().length)).toBe(0);
+    await page.keyboard.press('Escape');
+    await clickPlay(page);
+    await clickPlay(page);
+    await page.click('#timingSetBtn');
+    await page.click('#timingLoopStart');
+    await feed(page, '58', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    await page.click('#timingLoopStart');
+    await feed(page, '58', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    const h = await page.evaluate(() => timingLoopHistory());
+    expect(h.map(r => r.playedSinceLast)).toEqual([true, false]);
+  });
+
+  test('history: capped at 30, Clear empties it', async ({ page }) => {
+    await page.evaluate(() => {
+      for (let i = 0; i < 33; i++) {
+        timingLoop = { clicks: [], oscs: [], gain: audioCtx.createGain(), samples: [], running: true, timer: 0 };
+        for (let k = 0; k < 60; k++) timingLoop.samples.push({ ts: k * 0.5, ms: 50 + i });
+        timingLoopFinish();
+      }
+    });
+    const h = await page.evaluate(() => timingLoopHistory());
+    expect(h.length).toBe(30);
+    expect(h[0].median).toBeCloseTo(53, 3); // oldest 3 dropped
+    expect(h[29].median).toBeCloseTo(82, 3);
+    await page.click('#timingLoopHist summary');
+    await page.click('#timingLoopHistClear');
+    expect(await page.evaluate(() => timingLoopHistory())).toEqual([]);
+    await expect(page.locator('#timingLoopHistList li')).toHaveCount(0);
+  });
+
+  test('history: streamSeq increments on device switch and the list renders newest first, 10 max, with flags', async ({ page }) => {
+    const seq0 = await page.evaluate(() => timingStreamSeq);
+    await feed(page, '58', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    await page.evaluate(() => timingSwitchDevice(''));
+    await expect.poll(() => page.evaluate(() => timingStreamSeq)).toBe(seq0 + 1);
+    await page.click('#timingLoopStart');
+    await feed(page, '70', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    const h = await page.evaluate(() => timingLoopHistory());
+    expect(h.map(r => r.streamSeq)).toEqual([seq0, seq0 + 1]);
+    await page.click('#timingLoopHist summary');
+    const lis = page.locator('#timingLoopHistList li');
+    await expect(lis).toHaveCount(2);
+    await expect(lis.nth(0)).toContainText('70.0 ms');
+    await expect(lis.nth(0)).toContainText('stream #' + (seq0 + 1));
+    await expect(lis.nth(0)).toHaveAttribute('data-flag', /change/);
+    await expect(lis.nth(1)).toContainText('58.0 ms');
+    await expect(page.locator('#timingLoopHistSummary')).toHaveText('History (2)');
+    // only the newest 10 are listed
+    await page.evaluate(() => {
+      const base = timingLoopHistory()[0];
+      const arr = []; for (let i = 0; i < 15; i++) arr.push(Object.assign({}, base, { median: 100 + i, ctxRate: 48000, trackRate: 44100 }));
+      localStorage.setItem('wm.timing.loopHistory.' + timingDeviceId, JSON.stringify(arr));
+      timingLoopRenderHistory();
+    });
+    await expect(lis).toHaveCount(10);
+    await expect(lis.nth(0)).toContainText('114.0 ms');
+    await expect(lis.nth(0)).toHaveAttribute('data-flag', /rate/);
+  });
+
+  test('history: Copy JSON shows Copied, and the panel does not overflow at 375 px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await feed(page, '58', 'true');
+    await page.evaluate(() => timingLoopFinish());
+    await page.click('#timingLoopHist summary');
+    await page.evaluate(() => { navigator.clipboard.writeText = () => Promise.resolve(); });
+    await page.click('#timingLoopHistCopy');
+    await expect(page.locator('#timingLoopHistCopied')).toHaveText('Copied');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
 });
 
 // Settings popover -------------------------------------------------------------------
@@ -888,8 +1154,8 @@ test.describe('Timing Check - settings popover', () => {
     await page.click('#timingSetBtn');
     await expect(page.locator('#timingPopover')).toBeVisible();
     await expect(page.locator('#timingSetBtn')).toHaveAttribute('aria-expanded', 'true');
-    // sections in order: input, feel, latency, sensitivity
-    const order = await page.evaluate(() => ['timingDeviceSelect', 'timingFeelSeg', 'timingLatValue', 'timingSensValue']
+    // sections in order: input, detect, latency, sensitivity
+    const order = await page.evaluate(() => ['timingDeviceSelect', 'timingResSeg', 'timingLatValue', 'timingSensValue']
       .map(id => document.getElementById(id).getBoundingClientRect().top));
     expect(order).toEqual([...order].sort((a, b) => a - b));
     await page.click('#timingSetBtn');
@@ -914,21 +1180,26 @@ test.describe('Timing Check - settings popover', () => {
     await expect(page.locator('#timingPopover')).toBeVisible();
   });
 
-  test('the button label follows feel, latency and sensitivity', async ({ page }) => {
-    await expect(page.locator('#timingSetBtn')).toContainText('Straight');
+  test('the button label follows the detection grid, latency and sensitivity', async ({ page }) => {
+    await expect(page.locator('#timingSetBtn')).toContainText('16');
+    await expect(page.locator('#timingSetGrid')).toHaveText('16 \u00b7');
     await page.evaluate(() => { timingSetLatency(99); timingSetSensitivity(7); });
+    await expect(page.locator('#timingSetBtn')).toHaveText(/^\s*16 \u00b7\s*99 ms \u00b7 S7/);
     await expect(page.locator('#timingSetVals')).toHaveText('99 ms \u00b7 S7');
     await expect(page.locator('#timingSetEst')).toBeHidden();
     await page.evaluate(() => timingResetLatency());
     await expect(page.locator('#timingSetEst')).toBeVisible();
-    for (const [v, text] of [['shuffle', 'Shuffle'], ['16shuffle', 'Half-time'], ['3', 'Triplet'], ['2', 'Straight']]) {
+    for (const [v, text] of [['shuffle', '8 Triplet'], ['16shuffle', '16 Shuffle'], ['3', 'Triplet'], ['2', '16']]) {
       await page.click('#rhythmTrigger');
       await page.click(`#rhythmMenu [data-value="${v}"]`);
-      await expect(page.locator('#timingSetFeel')).toHaveText(text + ' \u00b7');
+      await expect(page.locator('#timingSetGrid')).toHaveText(text + ' \u00b7');
     }
     await page.click('#timingSetBtn');
-    await page.click('#timingFeelSeg [data-v="halftime"]');
-    await expect(page.locator('#timingSetFeel')).toHaveText('Half-time \u00b7');
+    for (const [r, sh, text] of [['8', false, '8'], ['8', true, '8 Shuffle'], ['4', false, '4'], ['32', false, '32'], ['16', true, '16 Shuffle']]) {
+      await page.click(`#timingResSeg [data-v="${r}"]`);
+      if ((await page.evaluate(() => timingShuffle)) !== sh && !(await page.locator('#timingShuffleBtn').isDisabled())) await page.click('#timingShuffleBtn');
+      await expect(page.locator('#timingSetGrid')).toHaveText(text + ' \u00b7');
+    }
   });
 
   test('input device and channel controls live in the popover', async ({ page }) => {
@@ -976,13 +1247,18 @@ test.describe('Timing Check - settings popover', () => {
       const r = document.getElementById('timingPopover').getBoundingClientRect();
       return { left: r.left, right: r.right, vw: window.innerWidth, scrollW: document.documentElement.scrollWidth,
                addonRight: document.getElementById('timingAddon').getBoundingClientRect().right, cardRight: document.querySelector('.max-w-md').getBoundingClientRect().right,
-               feelShown: getComputedStyle(document.getElementById('timingSetFeel')).display !== 'none' };
+               gridShown: getComputedStyle(document.getElementById('timingSetGrid')).display !== 'none',
+               detect: (() => { const rr = document.getElementById('timingResSeg').parentElement; const kids = [...rr.children].map(e => e.getBoundingClientRect());
+                 return { oneLine: kids.every(k => Math.abs(k.top - kids[0].top) < 1), right: Math.max(...kids.map(k => k.right)), popRight: r.right, sw: rr.scrollWidth, cw: rr.clientWidth }; })() };
     });
     expect(geo.left).toBeGreaterThanOrEqual(0);
     expect(geo.right).toBeLessThanOrEqual(geo.vw);
     expect(geo.scrollW).toBeLessThanOrEqual(baseScrollW); // the popover adds no horizontal overflow
     expect(geo.addonRight).toBeLessThanOrEqual(geo.cardRight + 0.5);
-    expect(geo.feelShown).toBe(false); // the feel word drops out of the button on narrow screens
+    expect(geo.gridShown).toBe(false); // the grid name drops out of the button on narrow screens
+    expect(geo.detect.oneLine).toBe(true); // Detect row (segment + Shuffle) does not wrap
+    expect(geo.detect.right).toBeLessThanOrEqual(geo.detect.popRight);
+    expect(geo.detect.sw).toBeLessThanOrEqual(geo.detect.cw);
     // still usable
     await page.click('#timingLatPlus');
     await expect(page.locator('#timingPopover')).toBeVisible();
@@ -1110,7 +1386,7 @@ test.describe('Timing Check - quiet level and meter row', () => {
   test('meter scale is -80..0 dBFS', async ({ page }) => {
     await page.evaluate(() => { window.clearInterval(window.__iv); timingOnWorkletMessage({ data: { type: 'level', db: -40, thDb: -60, rawDb: -40, clip: false } }); });
     await expect.poll(() => page.evaluate(() => document.getElementById('timingMeterFill').style.transform)).toBe('scaleX(0.5)');
-    expect(await page.evaluate(() => document.getElementById('timingMeterTh').style.transform)).toBe('translateX(25%)');
+    expect(await page.evaluate(() => document.getElementById('timingMeterTh'))).toBeNull();
   });
 
   test('the debug recorder meta carries the quiet level', async ({ page }) => {
@@ -1152,36 +1428,1426 @@ test.describe('Timing Check - meter markers', () => {
     await page.evaluate(() => { timingNode.port.onmessage = null; });
   });
 
-  test('quiet marker (triangle below the track + dotted line) is visible and moves; threshold line is taller than the track', async ({ page }) => {
+  test('quiet marker (triangle below the track + dotted line) is visible and moves; bold dark; no threshold line', async ({ page }) => {
     await page.evaluate(() => { timingSetQuiet(-60); timingOnWorkletMessage({ data: { type: 'level', db: -50, thDb: -52, rawDb: -50, clip: false } }); });
     const geo = () => page.evaluate(() => {
       const r = el => el.getBoundingClientRect();
-      const tri = r(document.querySelector('.tm-meter-tri')), track = r(document.querySelector('.tm-meter')), th = r(document.getElementById('timingMeterTh'));
+      const tri = r(document.querySelector('.tm-meter-tri')), track = r(document.querySelector('.tm-meter'));
       const q = r(document.getElementById('timingMeterQuiet')), wrap = r(document.querySelector('.tm-meter-wrap'));
       const dotted = getComputedStyle(document.getElementById('timingMeterQuiet'), '::after');
       return { triW: tri.width, triH: tri.height, triCx: tri.left + tri.width / 2, triTop: tri.top, trackBottom: track.bottom, trackTop: track.top, trackLeft: track.left, trackW: track.width,
-               thH: th.height, wrapH: wrap.height, wrapBottom: wrap.bottom, triBottom: tri.bottom, color: getComputedStyle(document.querySelector('.tm-meter-tri')).borderBottomColor,
-               dottedW: dotted.width, dottedBg: dotted.backgroundImage.slice(0, 40), qLeft: q.left };
+               wrapH: wrap.height, wrapBottom: wrap.bottom, triBottom: tri.bottom, color: getComputedStyle(document.querySelector('.tm-meter-tri')).borderBottomColor,
+               dottedW: dotted.width, qColor: dotted.backgroundImage, dottedBg: dotted.backgroundImage.slice(0, 40), qLeft: q.left };
     });
     await expect.poll(async () => (await geo()).triCx).toBeGreaterThan(0);
     const a = await geo();
-    expect(a.triW).toBeGreaterThanOrEqual(4);
-    expect(a.triH).toBeGreaterThanOrEqual(4);
+    expect(a.triW).toBeGreaterThanOrEqual(8);
+    expect(a.triH).toBeGreaterThanOrEqual(5);
     expect(a.triTop).toBeGreaterThanOrEqual(a.trackBottom - 1);        // below the track
     expect(a.triBottom).toBeLessThanOrEqual(a.wrapBottom + 0.5);        // inside the reserved row height
-    expect(a.color).toBe('rgb(148, 163, 184)');
+    expect(a.color).toBe('rgb(51, 65, 85)');
+    expect(a.qColor).toContain('rgb(51, 65, 85)');
+    expect(a.dottedW).toBe('2px');
     expect(a.dottedBg).toContain('repeating-linear-gradient');
-    expect(a.thH).toBeGreaterThan(10);                                   // threshold line taller than the 8 px track
     expect(a.wrapH).toBeGreaterThanOrEqual(20);
     expect(a.triCx - a.trackLeft).toBeCloseTo(a.trackW * 0.25, 0);       // -60 dBFS on a -80..0 scale
     await page.evaluate(() => timingSetQuiet(-40));
     await expect.poll(async () => Math.round(((await geo()).triCx - a.trackLeft) / a.trackW * 100)).toBe(50);
   });
 
-  test('the meter row title shows the live threshold and quiet level', async ({ page }) => {
+  test('the meter row title shows only the quiet level (no detection threshold)', async ({ page }) => {
     await page.evaluate(() => { timingSetQuiet(-60); timingOnWorkletMessage({ data: { type: 'level', db: -50, thDb: -52, rawDb: -50, clip: false } }); });
-    await expect(page.locator('.tm-meter-wrap')).toHaveAttribute('title', 'Detection threshold \u221252 dB \u00b7 Quiet below \u221260 dB');
+    await expect(page.locator('.tm-meter-wrap')).toHaveAttribute('title', 'Quiet below −60 dB');
     await page.evaluate(() => { timingSetQuiet(-45); timingOnWorkletMessage({ data: { type: 'level', db: -50, thDb: -58.4, rawDb: -50, clip: false } }); });
-    await expect(page.locator('.tm-meter-wrap')).toHaveAttribute('title', 'Detection threshold \u221258 dB \u00b7 Quiet below \u221245 dB');
+    await expect(page.locator('.tm-meter-wrap')).toHaveAttribute('title', 'Quiet below −45 dB');
+  });
+
+  test('an accepted onset flashes the meter (opacity only) and rapid hits restart it', async ({ page }) => {
+    const n0 = await page.evaluate(() => +document.getElementById('timingMeterFlash').dataset.flash);
+    await page.evaluate(() => { timingOnWorkletMessage({ data: { type: 'onset', time: 1, peakDb: -30, thDb: -55, bands: [] } }); });
+    expect(await page.evaluate(() => +document.getElementById('timingMeterFlash').dataset.flash)).toBe(n0 + 1);
+    const props = await page.evaluate(() => document.getElementById('timingMeterFlash').getAnimations().map(a => a.effect.getKeyframes().flatMap(k => Object.keys(k).filter(x => !['offset', 'easing', 'composite', 'computedOffset'].includes(x)))));
+    expect(props.length).toBe(1);
+    expect(props[0].every(k => k === 'opacity')).toBe(true);
+    await page.evaluate(() => { for (let i = 0; i < 3; i++) timingOnWorkletMessage({ data: { type: 'onset', time: 2 + i, peakDb: -30, thDb: -55, bands: [] } }); });
+    expect(await page.evaluate(() => +document.getElementById('timingMeterFlash').dataset.flash)).toBe(n0 + 4);
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.getElementById('timingMeterFlash')).opacity)).toBe('0');
+  });
+});
+
+// Input glitch compensation + startup ignore window ------------------------------------
+
+test.describe('Timing Check - input glitch compensation', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => {
+      timingNode.port.onmessage = null; // ignore the fake device; messages are injected
+      timingSwapUntil = 0;
+      updateBpm(250);
+      window.__gum = 0;
+      const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = (c) => { window.__gum++; return orig(c); };
+    });
+  });
+
+  // a worklet glitch message starting `afterSec` context seconds after the current stream attached
+  const glitch = (page, afterSec, ms) => page.evaluate(({ afterSec, ms }) => timingOnWorkletMessage({ data: { type: 'glitch', startTime: timingStreamCtxAt + afterSec, lengthSamples: Math.round(ms * 48), lengthMs: ms } }), { afterSec, ms });
+  const comp = (page) => page.evaluate(() => [timingGlitchCompMs, timingGlitchCompN, timingGlitchCount, timingGlitchMsTotal]);
+  const applyMeasurement = (page) => page.evaluate(() => {
+    timingLoop = { running: false, result: { median: 77.4 }, seq: timingStreamSeq };
+    document.getElementById('timingLoopApply').click();
+    timingLoop = null; // the fake measurement must not reach the teardown on a device switch
+  });
+
+  test('a zero run within 1 s of attach is logged as ignored and neither counts nor compensates; a later one does', async ({ page }) => {
+    await page.evaluate(() => { window.__before = timingGlitchLog().length; });
+    await glitch(page, 0.04, 20);
+    expect(await comp(page)).toEqual([0, 0, 0, 0]);
+    const e = await page.evaluate(() => timingGlitchLog().slice(window.__before));
+    expect(e.length).toBe(1);
+    expect(e[0]).toMatchObject({ ignored: 'startup', lengthMs: 20 });
+    await expect(page.locator('#timingLatComp')).toBeHidden();
+    await glitch(page, 0.99, 20);
+    expect((await comp(page))[0]).toBe(0);
+    await glitch(page, 1.0, 20);
+    expect(await comp(page)).toEqual([20, 1, 1, 20]);
+    const all = await page.evaluate(() => timingGlitchLog().slice(window.__before));
+    expect(all.map(x => x.ignored)).toEqual(['startup', 'startup', undefined]);
+  });
+
+  test('the quantum zeroRuns path uses the same startup window', async ({ page }) => {
+    const lvl = (page) => page.evaluate(() => timingOnWorkletMessage({ data: { type: 'level', db: -60, thDb: -50, rawDb: -60, clip: false, zeroRuns: timingZeroRaw + 1 } }));
+    await page.evaluate(() => { timingStreamCtxAt = audioCtx.currentTime; });
+    await lvl(page);
+    expect(await page.evaluate(() => timingZeroRuns)).toBe(0);
+    await page.evaluate(() => { timingStreamCtxAt = audioCtx.currentTime - 2; });
+    await lvl(page);
+    expect(await page.evaluate(() => timingZeroRuns)).toBe(1);
+    // the same running count again is not a new run
+    await page.evaluate(() => timingOnWorkletMessage({ data: { type: 'level', db: -60, thDb: -50, rawDb: -60, clip: false, zeroRuns: timingZeroRaw } }));
+    expect(await page.evaluate(() => timingZeroRuns)).toBe(1);
+  });
+
+  test('a real 20 ms glitch while playing is compensated: Avg +12 ms, button shows the effective latency', async ({ page }) => {
+    await clickPlay(page);
+    await expect.poll(() => page.evaluate(() => timingBeats.length)).toBeGreaterThan(6);
+    const L = await page.evaluate(() => timingLatencyMs);
+    await glitch(page, 5, 20);
+    await expect(page.locator('#timingStatus')).toHaveText('Input glitch — compensated +20 ms');
+    await expect(page.locator('#timingStatus')).toHaveAttribute('data-q', 'warn');
+    await expect(page.locator('#timingSetVals')).toHaveText((L + 20) + ' ms · S5');
+    const n = await page.evaluate(() => {
+      const done = timingBeats.filter(b => b.dur > 0);
+      const picked = done.slice(-4, -1);
+      picked.forEach(b => timingHandleOnset(b.time + (timingLatencyMs + 20) / 1000 + 0.012, -20));
+      return picked.length;
+    });
+    expect(n).toBe(3);
+    await expect(page.locator('#timingAvg')).toHaveText(/^\+12 ms$/);
+    expect(await page.evaluate(() => timingLatencyMs)).toBe(L); // the stored value is untouched
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingLatComp')).toBeVisible();
+    await expect(page.locator('#timingLatComp')).toHaveText('+20 ms auto (1 glitch)');
+    await expect(page.locator('#timingLatComp')).toHaveAttribute('title', "Chrome's input buffer slipped; the extra delay is added automatically.");
+    await glitch(page, 6, 10);
+    await expect(page.locator('#timingLatComp')).toHaveText('+30 ms auto (2 glitches)');
+    await page.evaluate(() => togglePlay());
+  });
+
+  test('Apply, a manual edit and a stream attach each reset the compensation', async ({ page }) => {
+    await glitch(page, 5, 20);
+    expect((await comp(page))[0]).toBe(20);
+    await applyMeasurement(page);
+    expect(await comp(page)).toEqual([0, 0, 1, 20]); // the per-stream totals stay, the compensation resets
+    await expect(page.locator('#timingLatComp')).toBeHidden();
+    await glitch(page, 5, 20);
+    await page.evaluate(() => timingSetLatency(60));
+    expect((await comp(page))[0]).toBe(0);
+    await glitch(page, 5, 20);
+    await page.evaluate(() => timingResetLatency());
+    expect((await comp(page))[0]).toBe(0);
+    await glitch(page, 5, 20);
+    expect((await comp(page))[0]).toBe(20);
+    await page.evaluate(() => timingSwitchDevice(timingDeviceId));
+    await expect.poll(() => page.evaluate(() => timingStreamSeq)).toBe(2);
+    expect((await comp(page))).toEqual([0, 0, 0, 0]);
+    await expect(page.locator('#timingSetVals')).toHaveText(/^\d+ ms · S5$/);
+  });
+
+  test('no reopen happens at START after a glitch: streamSeq is unchanged and no new stream is requested', async ({ page }) => {
+    const seq0 = await page.evaluate(() => timingStreamSeq);
+    await glitch(page, 5, 20);
+    await clickPlay(page);
+    await page.waitForTimeout(400);
+    await clickPlay(page);
+    await clickPlay(page);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => [timingStreamSeq, window.__gum, timingGlitchCompMs])).toEqual([seq0, 0, 20]);
+    await clickPlay(page);
+  });
+
+  test('history records appliedMs, compMs, expectedMs and residualMs; the line shows the residual', async ({ page }) => {
+    const out = await page.evaluate(() => {
+      const st = (median) => ({ n: 60, median, sd: 1, mad: 1, min: 50, max: 60, drift: 0 });
+      timingSetLatency(60, { streamSeq: timingStreamSeq });      // measured on this stream
+      timingGlitchCompMs = 20; timingGlitchCompN = 1;
+      timingLoopHistAppend('good', st(80.1));
+      timingSetLatency(60);                                       // manual: no stream binding
+      timingGlitchCompMs = 20;
+      timingLoopHistAppend('good', st(80.1));
+      timingSetLatency(60, { streamSeq: timingStreamSeq });
+      timingMeasuredPage = 'otherpage';                           // measured on another page load / stream
+      timingLoopHistAppend('good', st(80.1));
+      timingMeasuredPage = timingPageLoadId; timingMeasuredSeq = timingStreamSeq - 1;
+      timingLoopHistAppend('good', st(80.1));
+      const h = timingLoopHistory();
+      return { h, l: h.map(timingLoopHistLine) };
+    });
+    expect(out.h[0]).toMatchObject({ appliedMs: 60, compMs: 20, expectedMs: 80 });
+    expect(out.h[0].residualMs).toBeCloseTo(0.1, 6);
+    expect(out.l[0]).toContain('Δ +0.1');
+    expect(out.h[1]).toMatchObject({ appliedMs: 60, compMs: 20, expectedMs: null, residualMs: null });
+    expect(out.l[1]).not.toContain('Δ');
+    expect(out.h[2]).toMatchObject({ expectedMs: null, residualMs: null });
+    expect(out.h[3]).toMatchObject({ expectedMs: null, residualMs: null });
+    expect(out.h[0]).toHaveProperty('measuredMinusFirst');
+    expect(out.h[0]).not.toHaveProperty('reopenCount');
+  });
+
+  test('the residual is signed and the line is not changed when there are no zero runs', async ({ page }) => {
+    const out = await page.evaluate(() => {
+      timingSetLatency(60, { streamSeq: timingStreamSeq });
+      timingLoopHistAppend('good', { n: 60, median: 59.6, sd: 1, mad: 1, min: 50, max: 60, drift: 0 });
+      const r = timingLoopHistory().pop();
+      return [r, timingLoopHistLine(r)];
+    });
+    expect(out[0].residualMs).toBeCloseTo(-0.4, 6);
+    expect(out[1]).toContain('Δ −0.4');
+    expect(out[1]).not.toContain('zr');
+  });
+
+  test('the glitch log persists across a reload with deviceId and pageLoadId, capped at 200', async ({ page }) => {
+    const first = await page.evaluate(() => {
+      for (let i = 0; i < 205; i++) timingOnWorkletMessage({ data: { type: 'glitch', startTime: timingStreamCtxAt + 2 + i, lengthSamples: 777, lengthMs: 5 } });
+      return { pid: timingPageLoadId, dev: timingDeviceId, ls: JSON.parse(localStorage.getItem('wm.timing.glitchLog')).length };
+    });
+    expect(first.ls).toBe(200);
+    await page.reload();
+    await page.waitForLoadState('load');
+    const log = await page.evaluate(() => timingGlitchLog());
+    expect(log.length).toBe(200);
+    const last = log[log.length - 1];
+    expect(last).toMatchObject({ lengthSamples: 777, lengthMs: 5, pageLoadId: first.pid, deviceId: first.dev });
+    expect(first.dev).not.toBe('');
+    expect(await page.evaluate(() => timingPageLoadId)).not.toBe(first.pid);
+  });
+
+  test('history Clear also clears the persisted glitch log', async ({ page }) => {
+    await glitch(page, 5, 20);
+    expect(await page.evaluate(() => timingGlitchLog().length)).toBeGreaterThan(0);
+    await page.click('#timingSetBtn');
+    await page.click('#timingLoopOpen');
+    await page.click('#timingLoopHist summary');
+    await page.click('#timingLoopHistClear');
+    expect(await page.evaluate(() => [timingGlitchLog().length, localStorage.getItem('wm.timing.glitchLog')])).toEqual([0, null]);
+  });
+
+  test('history and glitch entries keep recording latencyHint default (the AudioContext has no options any more)', async ({ page }) => {
+    const out = await page.evaluate(() => {
+      timingOnWorkletMessage({ data: { type: 'glitch', startTime: timingStreamCtxAt + 3, lengthSamples: 960, lengthMs: 20 } });
+      timingLoopHistAppend('good', { n: 60, median: 58, sd: 1, mad: 1, min: 50, max: 60, drift: 0 });
+      return [timingGlitchLog().pop().latencyHint, timingLoopHistory().pop().latencyHint];
+    });
+    expect(out).toEqual(['default', 'default']);
+  });
+
+  test('no horizontal overflow at 375 px with the compensation note and effective latency shown', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await applyMeasurement(page);
+    await glitch(page, 5, 20);
+    await glitch(page, 6, 20);
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingLatComp')).toBeVisible();
+    const r = await page.evaluate(() => {
+      const pop = document.getElementById('timingPopover').getBoundingClientRect();
+      const b = document.getElementById('timingSetBtn').getBoundingClientRect();
+      const c = document.getElementById('timingLatComp').getBoundingClientRect();
+      return { sw: document.documentElement.scrollWidth, iw: window.innerWidth, popL: pop.left, popR: pop.right, btnR: b.right, cR: c.right };
+    });
+    expect(r.sw).toBeLessThanOrEqual(r.iw);
+    expect(r.popL).toBeGreaterThanOrEqual(0);
+    expect(r.popR).toBeLessThanOrEqual(r.iw);
+    expect(r.btnR).toBeLessThanOrEqual(r.iw);
+    expect(r.cR).toBeLessThanOrEqual(r.popR);
+  });
+
+  test('the worklet core counts each all-zero run once, after non-zero data only', async ({ page }) => {
+    const n = await page.evaluate(() => {
+      const c = timingMakeOnsetCore(48000);
+      const z = new Float32Array(128), v = new Float32Array(128).fill(1e-4);
+      const feed = a => a.forEach(x => c.processChannels([x], 0, 0));
+      feed([z, z, v, v, z, z, z, v, z]);     // leading zeros ignored; runs start at index 4 and 8
+      const first = c.takeLevel().zeroRuns;
+      feed([v, z]);
+      return [first, c.takeLevel().zeroRuns];
+    });
+    expect(n).toEqual([2, 3]);
+  });
+
+  test('history line shows zr N only when N > 0', async ({ page }) => {
+    const st = { n: 60, median: 58, sd: 1, mad: 1, min: 50, max: 60, drift: 0 };
+    const out = await page.evaluate((st) => {
+      timingZeroRuns = 0; timingLoopHistAppend('good', st);
+      timingZeroRuns = 3; timingLoopHistAppend('good', st);
+      const h = timingLoopHistory();
+      return { h: h.map(r => r.zeroRuns), l: h.map(timingLoopHistLine) };
+    }, st);
+    expect(out.h).toEqual([0, 3]);
+    expect(out.l[0]).not.toContain('zr');
+    expect(out.l[1]).toContain('zr 3');
+  });
+});
+
+// Re-measure hint: a measurement is only valid for the stream it was taken on ----------
+
+test.describe('Timing Check - Re-measure hint', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingNode.port.onmessage = null; });
+  });
+  const hint = (page) => page.evaluate(() => [!document.getElementById('timingSetRemeasure').hidden, !document.getElementById('timingLatRemeasure').hidden]);
+  const reopen = (page) => page.evaluate(() => timingSwitchDevice(timingDeviceId));
+  const applyMeasurement = (page) => page.evaluate(() => {
+    timingLoop = { running: false, result: { median: 77.4 }, seq: timingStreamSeq };
+    document.getElementById('timingLoopApply').click();
+    timingLoop = null; // the fake measurement must not reach the teardown on a device switch
+  });
+
+  test('no hint without a measurement; an applied measurement on the current stream shows none', async ({ page }) => {
+    expect(await hint(page)).toEqual([false, false]);
+    await applyMeasurement(page);
+    expect(await hint(page)).toEqual([false, false]);
+    expect(await page.evaluate(() => [timingMeasuredSeq === timingStreamSeq, timingLatencyMs])).toEqual([true, 77]);
+  });
+
+  test('a stream change after an applied measurement shows the hint; a new apply clears it', async ({ page }) => {
+    await applyMeasurement(page);
+    await reopen(page);
+    await expect.poll(() => hint(page)).toEqual([true, true]);
+    expect(await page.locator('#timingLatRemeasure').getAttribute('title')).toContain('Latency can shift by up to ~10 ms per reopen');
+    await applyMeasurement(page);
+    expect(await hint(page)).toEqual([false, false]);
+  });
+
+  test('Timing off then on shows the hint', async ({ page }) => {
+    await applyMeasurement(page);
+    await page.click('#timingBtn');
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await expect.poll(() => hint(page)).toEqual([true, true]);
+  });
+
+  test('a manual latency edit shows no hint and clears an existing one', async ({ page }) => {
+    await page.evaluate(() => timingSetLatency(60));
+    await reopen(page);
+    await expect.poll(() => page.evaluate(() => timingStreamSeq)).toBeGreaterThan(1);
+    expect(await hint(page)).toEqual([false, false]);
+    expect(await page.evaluate(() => localStorage.getItem('wm.timing.latencySrc.' + timingDeviceId))).toBe('{"manual":true}');
+    await applyMeasurement(page);
+    await reopen(page);
+    await expect.poll(() => hint(page)).toEqual([true, true]);
+    await page.evaluate(() => timingSetLatency(61));
+    expect(await hint(page)).toEqual([false, false]);
+  });
+
+  test('after a reload (different pageLoadId in the stored source) the hint shows on the first stream', async ({ page }) => {
+    await applyMeasurement(page);
+    await page.evaluate(() => {
+      localStorage.setItem('wm.timing.latencySrc.' + timingDeviceId, JSON.stringify({ pageLoadId: 'oldpage', streamSeq: timingStreamSeq }));
+    });
+    await page.click('#timingBtn');
+    await page.click('#timingBtn');
+    await expect.poll(() => hint(page)).toEqual([true, true]);
+    await page.reload();
+    await page.waitForLoadState('load');
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await expect.poll(() => hint(page)).toEqual([true, true]);
+  });
+
+  test('the hint does not overflow at 375 px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await applyMeasurement(page);
+    await reopen(page);
+    await expect.poll(() => hint(page)).toEqual([true, true]);
+    await page.click('#timingSetBtn');
+    const r = await page.evaluate(() => {
+      const pop = document.getElementById('timingPopover').getBoundingClientRect();
+      const b = document.getElementById('timingSetBtn').getBoundingClientRect();
+      return { sw: document.documentElement.scrollWidth, iw: window.innerWidth, popL: pop.left, popR: pop.right, btnR: b.right };
+    });
+    expect(r.sw).toBeLessThanOrEqual(r.iw);
+    expect(r.popL).toBeGreaterThanOrEqual(0);
+    expect(r.popR).toBeLessThanOrEqual(r.iw);
+    expect(r.btnR).toBeLessThanOrEqual(r.iw);
+  });
+});
+
+// Glitch log + the removed Audio buffer experiment ----------------------------------------------------
+
+test.describe('Timing Check - glitch log', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__acArgs = [];
+      const Orig = window.AudioContext;
+      window.AudioContext = function (...a) { window.__acArgs.push(a); return new Orig(...a); };
+      window.AudioContext.prototype = Orig.prototype;
+    });
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+  });
+
+  test('worklet core reports one sample-precise run spanning quanta; short and leading runs are ignored', async ({ page }) => {
+    const g = await page.evaluate(() => {
+      const c = timingMakeOnsetCore(48000);
+      const v = new Float32Array(128).fill(1e-4);
+      const z = n => new Float32Array(n);
+      let f = 0;
+      const feed = a => { c.processChannels([a], 0, f); f += a.length; };
+      feed(z(128)); feed(v);              // leading zeros ignored
+      feed(z(20)); feed(v);               // < 32 samples ignored
+      const start = f;
+      feed(z(128)); feed(z(128)); feed(z(128)); feed(z(96)); // 480 zeros
+      feed(v);
+      return { g: c.takeGlitches(), start };
+    });
+    expect(g.g.length).toBe(1);
+    expect(g.g[0]).toMatchObject({ type: 'glitch', lengthSamples: 480 });
+    expect(g.g[0].lengthMs).toBeCloseTo(10, 5);
+    expect(g.g[0].startTime).toBeCloseTo(g.start / 48000, 6);
+  });
+
+  test('a glitch message fills timingGlitchLog and glitchMsTotal accumulates; history records it', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      timingNode.port.onmessage = null;
+      timingLongTaskEnd = 0;
+      const base = timingStreamCtxAt + 2;
+      for (let i = 0; i < 205; i++) timingOnWorkletMessage({ data: { type: 'glitch', startTime: base + i, lengthSamples: 480, lengthMs: 10 } });
+      const log = timingGlitchLog();
+      const first = timingGlitchMsTotal;
+      timingLongTaskEnd = performance.now() - 100;
+      timingOnWorkletMessage({ data: { type: 'glitch', startTime: base + 999, lengthSamples: 480, lengthMs: 10 } });
+      const lt = timingGlitchLog().slice(-2).map(e => e.longTask);
+      timingGlitchMsTotal -= 10; timingGlitchCount--;
+      timingLoopHistAppend('good', { n: 60, median: 58, sd: 1, mad: 1, min: 50, max: 60, drift: 0 });
+      timingLoopHistAppend('good', { n: 60, median: 68, sd: 1, mad: 1, min: 50, max: 60, drift: 0 });
+      const h = timingLoopHistory();
+      return { base, len: log.length, lt, last: log[log.length - 1], first, h, line: timingLoopHistLine(h[1]) };
+    });
+    expect(r.len).toBe(200);
+    expect(r.last).toMatchObject({ ctxTime: r.base + 204, lengthMs: 10, lengthSamples: 480, latencyHint: 'default', playing: false });
+    for (const k of ['at', 'streamSeq', 'streamAgeSec', 'visibility', 'hasFocus']) expect(r.last).toHaveProperty(k);
+    expect(r.lt).toEqual([false, true]);
+    expect(r.first).toBe(2050);
+    expect(r.h[1]).toMatchObject({ glitches: 205, glitchMsTotal: 2050, latencyHint: 'default' });
+    expect(r.h[0].measuredMinusFirst).toBe(0);
+    expect(r.h[1].measuredMinusFirst).toBe(10);
+  });
+
+  test('Copy glitch log copies via the shared helper', async ({ page }) => {
+    await page.evaluate(() => { navigator.clipboard.writeText = (t) => { window.__copied = t; return Promise.resolve(); }; });
+    await page.click('#timingSetBtn');
+    await page.click('#timingLoopOpen');
+    await page.click('#timingLoopHist summary');
+    await page.click('#timingGlitchCopy');
+    await expect(page.locator('#timingLoopHistCopied')).toHaveText('Copied');
+    expect(await page.evaluate(() => JSON.parse(window.__copied))).toEqual([]);
+  });
+
+  test('the Audio buffer setting is gone: no UI, AudioContext built with no options, a stored wm.audio.latencyHint is deleted on load', async ({ page }) => {
+    expect(await page.evaluate(() => window.__acArgs.map(a => a.length))).toEqual([0]);
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingBufSelect')).toHaveCount(0);
+    await expect(page.locator('#timingBufNow')).toHaveCount(0);
+    await expect(page.locator('#timingBufNote')).toHaveCount(0);
+    await expect(page.locator('#timingPopover')).not.toContainText('Audio buffer');
+    // a user who had picked 20 ms: the key is removed on load and the context is built the default way
+    await page.evaluate(() => localStorage.setItem('wm.audio.latencyHint', '0.02'));
+    await page.reload();
+    expect(await page.evaluate(() => localStorage.getItem('wm.audio.latencyHint'))).toBeNull();
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    expect(await page.evaluate(() => window.__acArgs.map(a => a.length))).toEqual([0]);
+  });
+
+  test('no horizontal overflow at 375 px with the loop panel open', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.click('#timingSetBtn');
+    await page.click('#timingLoopOpen');
+    await page.click('#timingLoopHist summary');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const b = await page.evaluate(() => { const p = document.getElementById('timingPopover').getBoundingClientRect(); return [p.left, p.right, innerWidth]; });
+    expect(b[0]).toBeGreaterThanOrEqual(0);
+    expect(b[1]).toBeLessThanOrEqual(b[2]);
+  });
+});
+
+// Click ref channel -------------------------------------------------------------
+
+// In-page synthesis helpers for the template matching tests. A click is built from the formulas of playSound():
+// a sine (phase 0 at the start) times an exponential gain ramp gain -> 0.001 over dur; tone 0 / 1 / 2 = 800 Hz x1.8 / 600 Hz x1.5 / 1200 Hz x3.0.
+// The start may be fractional (a continuous-time click sampled on the grid), so sub-sample precision is really exercised.
+const SYNTH_SRC = `(() => {
+  const S = { sr: 48000 };
+  S.TONES = [[800, 1.8], [600, 1.5], [1200, 3.0]];
+  S.rng = (seed) => { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; };
+  S.gauss = (r) => Math.sqrt(-2 * Math.log(r() + 1e-12)) * Math.cos(2 * Math.PI * r());
+  S.clickInto = (buf, start, tone, dur, amp, sr) => {
+    sr = sr || S.sr;
+    const f = S.TONES[tone][0], g = S.TONES[tone][1], n = Math.round(dur * sr), rate = Math.log(g / 0.001) / (sr * dur);
+    for (let m = Math.ceil(start); m < buf.length && m - start <= n; m++) { const k = m - start; buf[m] += amp * Math.exp(-rate * k) * Math.sin(2 * Math.PI * f * k / sr); }
+  };
+  S.rms = (a) => { let e = 0; for (let i = 0; i < a.length; i++) e += a[i] * a[i]; return Math.sqrt(e / a.length); };
+  // rms of the first 15 ms of a click (the part the matcher sees)
+  S.clickRms = (tone, dur, amp) => { const t = new Float32Array(720); S.clickInto(t, 0, tone, dur, amp); return S.rms(t); };
+  S.pink = (n, r) => {
+    const o = new Float32Array(n); let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+    for (let i = 0; i < n; i++) { const w = S.gauss(r); b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856; b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898; o[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362; b6 = w * 0.115926; }
+    return o;
+  };
+  // music-like: a chord (110-440 Hz), 800 Hz at a random (non-matching) phase, 1.5 k and 2.2 kHz partials, plus random percussive noise bursts
+  S.music = (n, r) => {
+    const o = new Float32Array(n), fr = [110, 165, 220, 330, 440, 800, 1500, 2200], am = [1, 0.8, 0.8, 0.6, 0.5, 0.5, 0.3, 0.2], ph = fr.map(() => r() * 2 * Math.PI);
+    for (let i = 0; i < n; i++) { let v = 0; for (let j = 0; j < fr.length; j++) v += am[j] * Math.sin(2 * Math.PI * fr[j] * i / S.sr + ph[j]); o[i] = v; }
+    for (let t = Math.round(0.1 * S.sr); t < n - 4000; t += Math.round((0.15 + 0.3 * r()) * S.sr)) for (let k = 0; k < 4000; k++) o[t + k] += 2.5 * S.gauss(r) * Math.exp(-k / 600);
+    return o;
+  };
+  // adds noise of the given kind scaled to rel x the rms of an amp-scaled click
+  S.addNoise = (sig, kind, rel, tone, dur, amp, r) => {
+    const n = kind === 'pink' ? S.pink(sig.length, r) : S.music(sig.length, r), sc = rel * S.clickRms(tone, dur, amp) / S.rms(n);
+    for (let i = 0; i < sig.length; i++) sig[i] += n[i] * sc;
+  };
+  // feeds sig through core in 128-frame quanta; onEvent(ev) may react (e.g. set the track). Returns copies of the events.
+  S.run = (core, sig, onEvent) => {
+    const evs = [];
+    for (let f = 0; f + 128 <= sig.length; f += 128) {
+      const o = core.processChannels([sig.subarray(f, f + 128)], 0, f);
+      for (let i = 0; i < o.length; i++) { const e = { time: o[i].time, lagMs: o[i].lagMs, ncc: o[i].ncc, sched: o[i].sched }; evs.push(e); if (onEvent) onEvent(e); }
+    }
+    return evs;
+  };
+  S.click = (sched, tone, dur) => [sched, S.TONES[tone][0], dur, S.TONES[tone][1]];
+  // one noisy trial: a click (random lag 60-120 ms) in noise; track = 'true' (locked on the true lag) or null (unlocked). Returns the error in ms.
+  S.trial = (kind, rel, seed, locked) => {
+    const r = S.rng(seed), tone = seed % 3, lagMs = 60 + 60 * r(), sched = 0.3 + r() * 0.01, start = sched * S.sr + lagMs * S.sr / 1000;
+    const sig = new Float32Array(Math.round(1.2 * S.sr));
+    S.clickInto(sig, start, tone, 0.05, 0.3);
+    S.addNoise(sig, kind, rel, tone, 0.05, 0.3, r);
+    const core = timingMakeRefTemplate(S.sr);
+    core.addClicks(S.click(sched, tone, 0.05));
+    core.setTrack(locked ? (start / S.sr - sched) : null);
+    const evs = S.run(core, sig);
+    return evs.length ? { err: (evs[0].time - start / S.sr) * 1000, ncc: evs[0].ncc, n: evs.length } : { err: null, n: 0 };
+  };
+  window.__S = S;
+})()`;
+
+test.describe('Timing Check - click ref template matching (worklet core)', () => {
+  test.beforeEach(async ({ page }) => { await navigateAndWait(page); await page.evaluate(SYNTH_SRC); });
+
+  test('a clean click at 89.3 ms is found to a few microseconds: every tone, sub-sample start, level, sample rate; unlocked and locked', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, out = [];
+      for (const sr of [48000, 44100]) for (const tone of [0, 1, 2]) for (const [i, amp] of [0.5, 0.01].entries()) for (const track of [null, 0.0893]) {
+        const sched = 0.2 + i * 0.00001234 + tone * 0.000007, sig = new Float32Array(Math.round(0.9 * sr));
+        S.clickInto(sig, sched * sr + 89.3 * sr / 1000, tone, 0.05, amp, sr);
+        const core = timingMakeRefTemplate(sr);
+        core.addClicks(S.click(sched, tone, 0.05));
+        core.setTrack(track);
+        const evs = S.run(core, sig);
+        out.push({ sr, tone, amp, track, n: evs.length, lagMs: evs[0] && evs[0].lagMs, ncc: evs[0] && evs[0].ncc, schedOk: evs[0] && evs[0].sched === sched });
+      }
+      return out;
+    });
+    expect(res.length).toBe(24);
+    for (const r of res) {
+      expect(r.n).toBe(1);
+      expect(Math.abs(r.lagMs - 89.3)).toBeLessThanOrEqual(0.05);
+      expect(r.ncc).toBeGreaterThan(0.99);
+      expect(r.schedOk).toBe(true);
+    }
+    console.log('clean click, worst |error| (ms):', Math.max(...res.map(r => Math.abs(r.lagMs - 89.3))).toFixed(4));
+  });
+
+  test('lag ranges: unlocked 5-400 ms, locked +-4 ms, widened -5..+45 ms (10 / 20 / 40 ms slips); beyond that is a miss', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, out = {};
+      const one = (lagMs, track) => {
+        const sched = 0.1, sig = new Float32Array(Math.round(0.9 * S.sr));
+        S.clickInto(sig, sched * S.sr + lagMs * S.sr / 1000, 0, 0.05, 0.4);
+        const core = timingMakeRefTemplate(S.sr);
+        core.addClicks(S.click(sched, 0, 0.05));
+        core.setTrack(track);
+        const evs = S.run(core, sig);
+        return { n: evs.length, lagMs: evs.length ? evs[0].lagMs : null, wide: core.wide, full: core.full, misses: core.misses };
+      };
+      for (const l of [6, 50, 250, 399]) out['unlocked ' + l] = one(l, null);
+      for (const l of [409]) out['unlocked ' + l] = one(l, null);
+      for (const l of [89.3, 85.4, 93.2]) out['locked ' + l] = one(l, 0.0893);
+      for (const l of [99.3, 109.3, 129.3, 84.4, 133.6]) out['wide ' + l] = one(l, 0.0893);
+      for (const l of [140, 83.9]) out['beyond ' + l] = one(l, 0.0893);
+      return out;
+    });
+    for (const k of Object.keys(res)) {
+      const lag = parseFloat(k.split(' ')[1]);
+      if (k.startsWith('unlocked') || k.startsWith('locked') || k.startsWith('wide')) {
+        if (k === 'unlocked 409') { expect(res[k].n, k).toBe(0); continue; }
+        expect(res[k].n, k).toBe(1);
+        expect(Math.abs(res[k].lagMs - lag), k).toBeLessThanOrEqual(0.05);
+      } else expect(res[k].n, k).toBe(0);
+    }
+    expect(res['unlocked 250'].full).toBe(1);
+    expect(res['locked 85.4'].wide).toBe(0);   // inside +-4 ms: the first search is enough
+    expect(res['wide 109.3'].wide).toBe(1);    // a +20 ms slip needs the widened search
+    expect(res['wide 129.3'].wide).toBe(1);
+  });
+
+  test('same RMS background (pink noise; music with a non-matching 800 Hz plus percussive bursts): lag within 0.1 ms, unlocked and locked', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, out = { pink: [], music: [] };
+      for (const kind of ['pink', 'music']) for (let s = 0; s < 18; s++) for (const locked of [false, true]) out[kind].push(S.trial(kind, 1, 1000 + s, locked));
+      return out;
+    });
+    for (const kind of ['pink', 'music']) {
+      expect(res[kind].length).toBe(36);
+      for (const t of res[kind]) { expect(t.n, kind).toBe(1); expect(Math.abs(t.err), kind).toBeLessThanOrEqual(0.1); expect(t.ncc).toBeGreaterThanOrEqual(0.6); }
+      console.log(kind + ' at +0 dB, worst |error| (ms):', Math.max(...res[kind].map(t => Math.abs(t.err))).toFixed(3));
+    }
+  });
+
+  test('+6 dB louder background: pink noise and music; events are mostly exact, and the tracked live latency stays within 0.1 ms', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, out = {};
+      // single events: how many are accepted and exact (a slip, when it happens, is one carrier period: noise decided for a neighbouring cycle)
+      for (const kind of ['pink', 'music']) {
+        const t = []; for (let s = 0; s < 30; s++) t.push(S.trial(kind, 2, 1000 + s, true));
+        out[kind] = { accepted: t.filter(x => x.n === 1).length, exact: t.filter(x => x.n === 1 && Math.abs(x.err) <= 0.1).length };
+      }
+      // 12 clicks 0.5 s apart in continuous background through the real matcher (median of 5): liveL
+      const chain = (kind, seed) => {
+        const r = S.rng(seed), tone = seed % 3, lag = (60 + 60 * r()) / 1000, clicks = [], sig = new Float32Array(Math.round(6.8 * S.sr));
+        for (let i = 0; i < 12; i++) { const sched = 0.2 + i * 0.5 + r() * 0.001; S.clickInto(sig, sched * S.sr + lag * S.sr, tone, 0.05, 0.3); clicks.push(...S.click(sched, tone, 0.05)); }
+        S.addNoise(sig, kind, 2, tone, 0.05, 0.3, r);
+        const core = timingMakeRefTemplate(S.sr); core.addClicks(clicks);
+        let st = timingRefNewState();
+        const evs = S.run(core, sig, (e) => { st = timingRefMatch(st, e.sched, e.time).state; core.setTrack(st.liveL); });
+        return { err: st.liveL === null ? null : Math.abs(st.liveL - lag) * 1000, n: evs.length };
+      };
+      for (const kind of ['pink', 'music']) out[kind + 'Chain'] = Array.from({ length: 10 }, (_, i) => chain(kind, 2000 + i));
+      return out;
+    });
+    console.log('+6 dB single events accepted / exact of 30: pink', res.pink.accepted, res.pink.exact, ' music', res.music.accepted, res.music.exact);
+    expect(res.pink.exact).toBeGreaterThanOrEqual(26);
+    expect(res.music.exact).toBeGreaterThanOrEqual(15);
+    expect(res.music.accepted - res.music.exact).toBeLessThanOrEqual(4);
+    // the median of 5 absorbs isolated slips: pink always; with the harsher music one run in ten may still end a carrier period off
+    for (const c of res.pinkChain) { expect(c.err).not.toBeNull(); expect(c.err).toBeLessThanOrEqual(0.1); expect(c.n).toBeGreaterThanOrEqual(8); }
+    // loud music (+6 dB, with a strong 800 Hz partial) hides some clicks: most runs still lock (first click needs NCC >= 0.65), and a locked one is not wrong
+    const locked = res.musicChain.filter(c => c.err !== null);
+    expect(locked.length).toBeGreaterThanOrEqual(6);
+    expect(locked.filter(c => c.err > 0.1).length).toBeLessThanOrEqual(1);
+  });
+
+  test('loud bursts at wrong times are not picked; silence, pink noise or music alone give no event', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, out = { withClick: [], silence: 0, music: 0, pink: 0 };
+      for (let s = 0; s < 20; s++) {
+        const r = S.rng(77 + s), tone = s % 3, sched = 0.3, start = sched * S.sr + (60 + 60 * r()) * S.sr / 1000, N = Math.round(1.2 * S.sr);
+        const bursts = new Float32Array(N), cr = S.clickRms(tone, 0.05, 0.3);
+        // six decaying white-noise bursts, 30 x the click rms, before and after the click (and inside the search window)
+        for (const off of [10, 25, 40, 150, 210, 300]) { const b0 = Math.round(sched * S.sr + off * S.sr / 1000); for (let k = 0; k < 1000; k++) bursts[b0 + k] += 30 * cr * S.gauss(r) * Math.exp(-k / 400); }
+        const sig = Float32Array.from(bursts); S.clickInto(sig, start, tone, 0.05, 0.3);
+        const run = (x, locked) => { const core = timingMakeRefTemplate(S.sr); core.addClicks(S.click(sched, tone, 0.05)); core.setTrack(locked ? start / S.sr - sched : null); return S.run(core, x); };
+        for (const locked of [false, true]) { const e = run(sig, locked); out.withClick.push(e.length ? (e[0].time - start / S.sr) * 1000 : null); }
+        out.silence += run(new Float32Array(N), false).length;
+        const m = S.music(N, r), sc = 0.1 / S.rms(m);
+        out.music += run(m.map(v => v * sc), false).length;
+        const p = S.pink(N, r), sp = 0.3 / S.rms(p);
+        out.pink += run(p.map(v => v * sp), false).length;
+      }
+      return out;
+    });
+    for (const e of res.withClick) { expect(e).not.toBeNull(); expect(Math.abs(e)).toBeLessThanOrEqual(0.1); }
+    expect(res.silence).toBe(0);
+    expect(res.music).toBe(0);
+    expect(res.pink).toBe(0);
+  });
+
+  test('unlocked, the first click of a run takes its own (earliest) response although slightly louder clicks of the same tone follow', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, sig = new Float32Array(Math.round(1.2 * S.sr)), clicks = [];
+      [0.5, 0.6, 0.6, 0.6, 0.6].forEach((amp, i) => { const sched = 0.1 + i * 0.06; S.clickInto(sig, sched * S.sr + 0.0893 * S.sr, 0, 0.009, amp); clicks.push(...S.click(sched, 0, 0.009)); });
+      const core = timingMakeRefTemplate(S.sr); core.addClicks(clicks);
+      return S.run(core, sig).map(e => e.lagMs);
+    });
+    expect(res.length).toBe(5);
+    res.forEach(l => expect(Math.abs(l - 89.3)).toBeLessThanOrEqual(0.05));
+  });
+
+  test('16ths at 200 BPM with 89 ms latency: every event is paired with its own scheduled click; a mid-play reset locks on the right click; a +20 ms jump is adopted after 2 events', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, gap = 0.075, n = 44, jumpAt = 30;
+      const sig = new Float32Array(Math.round((n * gap + 0.8) * S.sr)), clicks = [], scheds = [];
+      for (let i = 0; i < n; i++) {
+        const sched = 0.2 + i * gap, tone = i % 4 === 0 ? 2 : 0, lag = i < jumpAt ? 0.089 : 0.109, dur = Math.min(0.05, 0.15 * gap);
+        S.clickInto(sig, sched * S.sr + lag * S.sr, tone, dur, tone === 2 ? 0.5 : 0.2);
+        clicks.push(...S.click(sched, tone, dur)); scheds.push(sched);
+      }
+      const core = timingMakeRefTemplate(S.sr); core.addClicks(clicks);
+      let st = timingRefNewState();
+      const rows = [];
+      const evs = S.run(core, sig, (e) => {
+        if (rows.length === 12) { st = timingRefNewState(); core.setTrack(0.08, false); } // the stream / channel changes mid-play: only the stored latency (80 ms) as a hint, clicks keep coming 75 ms apart
+        const r = timingRefMatch(st, e.sched, e.time);
+        st = r.state; core.setTrack(st.liveL);
+        rows.push({ i: scheds.indexOf(e.sched), kind: r.kind, lagMs: e.lagMs, liveMs: st.liveL * 1000 });
+      });
+      return { rows, n: evs.length, wide: core.wide, misses: core.misses };
+    });
+    expect(res.misses).toBe(0);
+    expect(res.rows.length).toBeGreaterThanOrEqual(38);
+    res.rows.forEach((r, k) => { expect(r.i, 'every event names a distinct scheduled click, in order').toBe(k); });
+    const lagOf = (r) => (r.i < 30 ? 89 : 109);
+    for (const r of res.rows) expect(Math.abs(r.lagMs - lagOf(r))).toBeLessThanOrEqual(0.05);
+    expect(res.rows[0].kind).toBe('lock');
+    expect(res.rows[12].kind).toBe('lock');                 // mid-play reset: locked on its own click, not a neighbour (14 / 164 ms)
+    expect(res.rows[12].liveMs).toBeCloseTo(89, 1);
+    expect(res.rows.slice(1, 12).every(r => r.kind === 'accept')).toBe(true);
+    expect(res.rows.slice(13, 30).every(r => r.kind === 'accept')).toBe(true);
+    expect(res.rows[30].kind).toBe('pending');
+    expect(res.rows[31].kind).toBe('jump');
+    expect(res.rows[31].liveMs).toBeCloseTo(109, 1);
+    expect(res.rows.slice(32).every(r => r.kind === 'accept')).toBe(true);
+    expect(res.wide).toBeGreaterThanOrEqual(1);   // the first click after the jump needs the widened search; the next ones follow the new lag
+  });
+
+  test('tones, accents, ghost notes and the short clicks of fast tempos and subdivisions are all found to 0.05 ms', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, out = [];
+      for (const bpm of [60, 140, 250]) for (const sub of [1, 2, 4]) {
+        const interval = 60 / bpm / sub, dur = Math.min(0.05, 0.15 * interval), n = 14, sig = new Float32Array(Math.round((n * interval + 0.8) * S.sr)), clicks = [];
+        const tones = [2, 0, 1, 0, 0, 1, 0, 2, 0, 0, 1, 0, 0, 0], amps = [1, 0.5, 0.3, 0.05, 0.5, 0.02, 0.9, 1, 0.2, 0.5, 0.01, 0.7, 0.4, 0.5];
+        for (let i = 0; i < n; i++) { const sched = 0.1 + i * interval + 0.000013 * i; S.clickInto(sig, sched * S.sr + 0.0893 * S.sr, tones[i], dur, amps[i]); clicks.push(...S.click(sched, tones[i], dur)); }
+        const core = timingMakeRefTemplate(S.sr); core.addClicks(clicks);
+        let st = timingRefNewState();
+        const evs = S.run(core, sig, (e) => { st = timingRefMatch(st, e.sched, e.time).state; core.setTrack(st.liveL); });
+        out.push({ bpm, sub, n: evs.length, worst: Math.max(...evs.map(e => Math.abs(e.lagMs - 89.3))), dur });
+      }
+      return out;
+    });
+    for (const r of res) { expect(r.n, r.bpm + '/' + r.sub).toBe(14); expect(r.worst, r.bpm + '/' + r.sub).toBeLessThanOrEqual(0.05); }
+  });
+
+  test('CPU cost per 128-frame render quantum with the ref on and locked (16ths at 200 BPM in music at the click level)', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, gap = 0.075, n = 200, sr = S.sr;
+      const sig = new Float32Array(Math.round((n * gap + 0.8) * sr)), clicks = [];
+      for (let i = 0; i < n; i++) { const sched = 0.2 + i * gap, tone = i % 4 === 0 ? 2 : 0; S.clickInto(sig, sched * sr + 0.089 * sr, tone, 0.01125, 0.4); clicks.push(...S.click(sched, tone, 0.01125)); }
+      S.addNoise(sig, 'music', 1, 0, 0.0113, 0.4, S.rng(5));
+      const quantum = (core, f) => core.processChannels([sig.subarray(f, f + 128)], 0, f);
+      // locked and steady: prediction known, clicks pre-queued as the main thread would send them
+      const core = timingMakeRefTemplate(sr); core.setTrack(0.089); core.addClicks(clicks);
+      for (let f = 0; f < 128 * 400; f += 128) quantum(core, f); // warm-up (JIT)
+      const core2 = timingMakeRefTemplate(sr); core2.setTrack(0.089); core2.addClicks(clicks);
+      const q = Math.floor(sig.length / 128), times = new Float64Array(q);
+      let ev = 0;
+      const t0 = performance.now();
+      for (let i = 0; i < q; i++) { const a = performance.now(); ev += quantum(core2, i * 128).length; times[i] = performance.now() - a; }
+      const total = performance.now() - t0;
+      // idle baseline: ref on, no clicks queued (the prefilter only)
+      const core3 = timingMakeRefTemplate(sr); core3.setTrack(0.089);
+      const b0 = performance.now(); for (let i = 0; i < q; i++) quantum(core3, i * 128); const idle = performance.now() - b0;
+      // unlocked: first lock needs the 5-400 ms sweep (time-sliced)
+      const core4 = timingMakeRefTemplate(sr); core4.addClicks(clicks.slice(0, 4));
+      let worstUnlocked = 0, sumUnlocked = 0; const nu = Math.floor(1.2 * sr / 128);
+      for (let i = 0; i < nu; i++) { const a = performance.now(); quantum(core4, i * 128); const d = performance.now() - a; sumUnlocked += d; worstUnlocked = Math.max(worstUnlocked, d); }
+      const sorted = Array.from(times).sort((a, b) => a - b);
+      return { q, ev, avgUs: total / q * 1000, idleUs: idle / q * 1000, p99Us: sorted[Math.floor(q * 0.99)] * 1000, maxMs: sorted[q - 1], worstUnlockedMs: worstUnlocked, unlockedAvgMs: sumUnlocked / nu, budgetMs: 128 / sr * 1000, misses: core2.misses };
+    });
+    console.log('ref cost per 128-frame quantum (budget ' + res.budgetMs.toFixed(2) + ' ms): locked avg ' + res.avgUs.toFixed(1) + ' us, p99 ' + res.p99Us.toFixed(0) + ' us, max ' + res.maxMs.toFixed(2) + ' ms; idle (filter only) ' + res.idleUs.toFixed(1) + ' us; unlocked first-click sweep: avg ' + (res.unlockedAvgMs * 1000).toFixed(1) + ' us, worst ' + res.worstUnlockedMs.toFixed(2) + ' ms');
+    expect(res.ev).toBeGreaterThanOrEqual(190);
+    // averages and the 99th percentile are asserted; the single worst quantum is only reported (an OS hiccup in a parallel test run would make it flaky)
+    expect(res.avgUs).toBeLessThan(50);                   // < 2 % of the 2.67 ms quantum, on average
+    expect(res.p99Us).toBeLessThan(res.budgetMs * 1000 * 0.25);
+    expect(res.unlockedAvgMs).toBeLessThan(res.budgetMs * 0.25);
+  });
+
+  test('a stale frame number from the render thread (the same currentFrame twice) neither resets the ring nor shifts the time axis; a real gap is zero-filled', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      const S = window.__S, sig = new Float32Array(Math.round(0.9 * S.sr)), sched = 0.2;
+      S.clickInto(sig, sched * S.sr + 0.0893 * S.sr, 0, 0.05, 0.4);
+      const feed = (frameOf) => {
+        const core = timingMakeRefTemplate(S.sr); core.addClicks(S.click(sched, 0, 0.05));
+        const evs = [];
+        for (let q = 0; q * 128 + 128 <= sig.length; q++) for (const e of core.processChannels([sig.subarray(q * 128, q * 128 + 128)], 0, frameOf(q))) evs.push(e.lagMs);
+        return evs;
+      };
+      // quanta 110 and 112 (inside the click response) and 300 report the previous quantum's frame number (as seen in a loaded browser); the next one is right again
+      const stale = feed(q => (q === 110 || q === 112 || q === 300 ? q - 1 : q) * 128);
+      // a real gap: quanta 180 and 181 were never passed on (the audio is missing: the signal there is zero)
+      const sig2 = Float32Array.from(sig); sig2.fill(0, 180 * 128, 182 * 128);
+      const core = timingMakeRefTemplate(S.sr); core.addClicks(S.click(sched, 0, 0.05));
+      const gap = [];
+      for (let q = 0; q * 128 + 128 <= sig2.length; q++) { if (q === 180 || q === 181) continue; for (const e of core.processChannels([sig2.subarray(q * 128, q * 128 + 128)], 0, q * 128)) gap.push(e.lagMs); }
+      return { stale, gap };
+    });
+    expect(res.stale.length).toBe(1);
+    expect(Math.abs(res.stale[0] - 89.3)).toBeLessThanOrEqual(0.05);
+    expect(res.gap.length).toBe(1);               // a gap long after the click: nothing moves
+    expect(Math.abs(res.gap[0] - 89.3)).toBeLessThanOrEqual(0.05);
+  });
+
+  test('the instrument detector and the glitch scan ignore the ref channel', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const S = window.__S, sr = S.sr, total = 40000;
+      const instr = new Float32Array(total), ref = new Float32Array(total), clicks = [];
+      for (let i = 0; i < 3; i++) { const sched = (1000 + i * 9000) / sr; S.clickInto(ref, sched * sr + 480, 0, 0.05, 0.4); clicks.push(...S.click(sched, 0, 0.05)); }
+      for (let k = 0; k < 2000; k++) instr[5000 + k] = 0.4 * Math.sin(k * 0.3) * Math.exp(-k / 400);
+      const det = timingMakeRefTemplate(sr), core = timingMakeOnsetCore(sr);
+      det.addClicks(clicks); det.setTrack(0.01);
+      const refs = [], ons = [];
+      for (let f = 0; f + 128 <= total; f += 128) {
+        const chs = [instr.subarray(f, f + 128), ref.subarray(f, f + 128)];
+        ons.push(...core.processChannels(chs, 0, f));
+        for (const e of det.processChannels(chs, 1, f)) refs.push(e.lagMs);
+      }
+      // instrument channel carries a steady non-zero signal while the ref channel is exactly zero: not a glitch
+      const g = timingMakeOnsetCore(sr), v = new Float32Array(128).fill(1e-4), z = new Float32Array(128);
+      for (let f = 0; f < 128 * 40; f += 128) g.processChannels([v, z], 0, f);
+      return { refs, onsets: ons.length, glitches: g.takeGlitches().length, zeroRuns: g.takeLevel().zeroRuns };
+    });
+    expect(r.refs.length).toBe(3);
+    r.refs.forEach(l => expect(Math.abs(l - 10)).toBeLessThanOrEqual(0.05));
+    expect(r.onsets).toBe(1);     // only the instrument burst
+    expect(r.glitches).toBe(0);
+    expect(r.zeroRuns).toBe(0);
+  });
+
+  test('the worklet finds the real app clicks (accent, normal, subdivisions) at their scheduled start through a 90 ms digital loopback', async ({ page }) => {
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => {
+      timingNode.port.onmessage = null;
+      timingChannels = 2; timingLoadChannel();
+      timingSetRef(1);
+      // tap the metronome output into channel 1 of a second detector through a whole-sample delay (like an interface digital loopback)
+      const node = new AudioWorkletNode(audioCtx, 'onset-detector', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'explicit' });
+      const merger = audioCtx.createChannelMerger(2);
+      const delay = audioCtx.createDelay(1);
+      window.__tapDelayMs = Math.round(0.09 * audioCtx.sampleRate) / audioCtx.sampleRate * 1000;
+      delay.delayTime.value = window.__tapDelayMs / 1000;
+      masterGainNode.connect(delay); delay.connect(merger, 0, 1);
+      merger.connect(node);
+      const sink = audioCtx.createGain(); sink.gain.value = 0;
+      node.connect(sink); sink.connect(audioCtx.destination);
+      window.__tapRefs = [];
+      // the app side runs for real: events go to timingHandleRef, and the clicks / track messages it posts are forwarded to the tap
+      node.port.onmessage = (e) => { if (e.data.type === 'ref') { window.__tapRefs.push(e.data); timingOnWorkletMessage(e); } };
+      const orig = timingNode.port.postMessage.bind(timingNode.port);
+      timingNode.port.postMessage = (m) => { orig(m); if (m.type === 'clicks' || m.type === 'track') node.port.postMessage(m); };
+      node.port.postMessage({ type: 'config', channel: 0, refChannel: 1 });
+      updateBpm(120);
+      subdivision = '4';
+      beatStates[0] = 2; beatStates[1] = 1;
+    });
+    await clickPlay(page);
+    await expect.poll(() => page.evaluate(() => window.__tapRefs.length)).toBeGreaterThan(14);
+    await page.evaluate(() => togglePlay());
+    await page.waitForTimeout(300);
+    const res = await page.evaluate(() => {
+      const sr = audioCtx.sampleRate, st = timingRefState();
+      const clicks = timingClickTimes.slice();
+      return { lags: window.__tapRefs.map(r => r.lagMs), scheds: window.__tapRefs.map(r => clicks.indexOf(r.sched)), n: window.__tapRefs.length, clicks: clicks.length, sr, delay: window.__tapDelayMs, live: st.liveLms, locked: st.locked, hist: st.history.map(h => h.kind), minNcc: Math.min(...window.__tapRefs.map(r => r.ncc)) };
+    });
+    // every scheduled click is found once, in order, and named by its own scheduled time
+    res.scheds.forEach((i, k) => { expect(i).toBeGreaterThanOrEqual(0); if (k) expect(i).toBe(res.scheds[k - 1] + 1); });
+    expect(res.n).toBeGreaterThanOrEqual(res.clicks - 3);
+    expect(res.minNcc).toBeGreaterThan(0.95);
+    const oneSampleMs = 1000 / res.sr;
+    for (const l of res.lags) expect(Math.abs(l - res.delay)).toBeLessThanOrEqual(1.5 * oneSampleMs);
+    expect(res.locked).toBe(true);
+    expect(Math.abs(res.live - res.delay)).toBeLessThanOrEqual(1.5 * oneSampleMs);
+    expect(res.hist[0]).toBe('lock');
+    expect(res.hist.slice(1).every(k => k === 'accept')).toBe(true);
+    console.log('real-click lag (ms) min/max:', Math.min(...res.lags).toFixed(4), Math.max(...res.lags).toFixed(4), 'delay', res.delay.toFixed(4), 'live', res.live.toFixed(4));
+  });
+});
+
+test.describe('Timing Check - click ref matcher (pure)', () => {
+  test.beforeEach(async ({ page }) => { await navigateAndWait(page); });
+
+  // feeds [sched, refTime] pairs through timingRefMatch and returns the per-event results
+  const run = (page, pairs) => page.evaluate((pairs) => {
+    let st = timingRefNewState();
+    return pairs.map(([s, t]) => {
+      const r = timingRefMatch(st, s, t);
+      st = r.state;
+      return { kind: r.kind, liveMs: st.liveL === null ? null : st.liveL * 1000, pendingMs: st.pending === null ? null : st.pending * 1000, oldMs: r.oldL === undefined ? null : r.oldL * 1000, newMs: r.newL === undefined ? null : r.newL * 1000, acc: st.accepted.length };
+    });
+  }, pairs);
+  const grid = (n, step, t0 = 10) => Array.from({ length: n }, (_, i) => t0 + i * step);
+
+  test('the first event locks to the lag of its own click, whichever click that is', async ({ page }) => {
+    const r = await run(page, [[10, 10.089]]);
+    expect(r[0].kind).toBe('lock');
+    expect(r[0].liveMs).toBeCloseTo(89, 6);
+    // a click in the middle of a fast run: the event names it, there is nothing else to pair with
+    const f = await run(page, [[10.45, 10.539]]);
+    expect(f[0].liveMs).toBeCloseTo(89, 6);
+  });
+
+  test('a stable 89 ms offset is tracked and liveL is the median of the last 5 accepted offsets', async ({ page }) => {
+    const clicks = grid(12, 0.5);
+    const offs = [0.089, 0.0895, 0.0885, 0.0900, 0.0880, 0.0910, 0.0890, 0.0892];
+    const r = await run(page, offs.map((o, i) => [clicks[i], clicks[i] + o]));
+    expect(r.map(x => x.kind)).toEqual(['lock', ...Array(7).fill('accept')]);
+    const last5 = offs.slice(-5).map(x => x * 1000).sort((a, b) => a - b);
+    expect(r[7].liveMs).toBeCloseTo(last5[2], 6);
+    expect(r[7].acc).toBe(5);
+    expect(r[1].liveMs).toBeCloseTo((89 + 89.5) / 2, 6); // median of two
+  });
+
+  test('a +20 ms jump is adopted after 2 agreeing events; a single outlier is rejected', async ({ page }) => {
+    const clicks = grid(14, 0.5);
+    const ev = (i, o) => [clicks[i], clicks[i] + o];
+    const r = await run(page, [ev(0, 0.089), ev(1, 0.089), ev(2, 0.089), ev(3, 0.109), ev(4, 0.1095), ev(5, 0.109)]);
+    expect(r.map(x => x.kind)).toEqual(['lock', 'accept', 'accept', 'pending', 'jump', 'accept']);
+    expect(r[3].liveMs).toBeCloseTo(89, 6);
+    expect(r[3].pendingMs).toBeCloseTo(109, 6);
+    expect(r[4].oldMs).toBeCloseTo(89, 6);
+    expect(r[4].newMs).toBeCloseTo(109.25, 6);
+    expect(r[5].liveMs).toBeCloseTo(109.125, 6); // median of the accepted offsets [109.25, 109]
+    // an outlier between good events is dropped and does not become a jump
+    const o = await run(page, [ev(0, 0.089), ev(1, 0.089), ev(2, 0.099), ev(3, 0.089), ev(4, 0.089)]);
+    expect(o.map(x => x.kind)).toEqual(['lock', 'accept', 'pending', 'accept', 'accept']);
+    expect(o[3].pendingMs).toBeNull();
+    expect(o[4].liveMs).toBeCloseTo(89, 6);
+    // two disagreeing off-track events do not jump either
+    const d = await run(page, [ev(0, 0.089), ev(1, 0.089), ev(2, 0.099), ev(3, 0.110)]);
+    expect(d.map(x => x.kind)).toEqual(['lock', 'accept', 'pending', 'pending']);
+  });
+
+  test('16ths at 200 BPM (75 ms apart) with 89 ms latency: every event keeps its own click, also after a 20 ms jump', async ({ page }) => {
+    const clicks = grid(40, 0.075);
+    const r = await run(page, clicks.map((s, i) => [s, s + (i < 25 ? 0.089 : 0.109)]));
+    expect(r[0].liveMs).toBeCloseTo(89, 6);
+    r.slice(0, 25).forEach(x => expect(Math.abs(x.liveMs - 89)).toBeLessThan(0.01)); // never the neighbours (14 / 164 ms)
+    expect(r[25].kind).toBe('pending');
+    expect(r[26].kind).toBe('jump');
+    r.slice(26).forEach(x => expect(Math.abs(x.liveMs - 109)).toBeLessThan(0.01));
+  });
+});
+
+test.describe('Timing Check - click ref flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => {
+      timingNode.port.onmessage = null; // ignore the fake device; messages are injected
+      timingSwapUntil = 0;
+      timingChannels = 2; timingLoadChannel();
+      updateBpm(250);
+    });
+  });
+
+  const setRef = (page) => page.evaluate(() => timingSetRef(1));
+  const glitch = (page, afterSec, ms) => page.evaluate(({ afterSec, ms }) => timingOnWorkletMessage({ data: { type: 'glitch', startTime: timingStreamCtxAt + afterSec, lengthSamples: Math.round(ms * 48), lengthMs: ms } }), { afterSec, ms });
+  // inject a ref event for every click in the ring, in order, `off` seconds after the click
+  const injectRefs = (page, off, from = 0) => page.evaluate(({ off, from }) => timingClickTimes.slice(from).map(s => timingHandleRef(s, s + off, 0.9).kind), { off, from });
+  // Fake "2 s later" tick and read the state in the same task. The page's own frame loop also runs timingRefTick with the real clock
+  // and would clear the faked lost flag between two separate evaluate() calls (that was the flake).
+  const lostSnapshot = (page) => page.evaluate(() => { timingRefTick(audioCtx.currentTime + 2); return timingRefState(); });
+  const playUntilClicks = async (page, n) => {
+    await clickPlay(page);
+    await expect.poll(() => page.evaluate(() => timingClickTimes.length)).toBeGreaterThan(n);
+  };
+  // instrument onsets `lateMs` after (beat + latency)
+  const hitBeats = (page, latMs, lateMs, k = 3) => page.evaluate(({ latMs, lateMs, k }) => {
+    const done = timingBeats.filter(b => b.dur > 0).slice(-(k + 1), -1);
+    done.forEach(b => timingHandleOnset(b.time + (latMs + lateMs) / 1000, -20));
+    return done.length;
+  }, { latMs, lateMs, k });
+
+  test('lock, then instrument matching uses liveL: Avg +12 ms; the glitch is not compensated twice', async ({ page }) => {
+    await setRef(page);
+    await playUntilClicks(page, 6);
+    const kinds = await injectRefs(page, 0.089);
+    expect(kinds[0]).toBe('lock');
+    expect(kinds.slice(1).every(k => k === 'accept')).toBe(true);
+    expect(await page.evaluate(() => Math.round(timingMatchLatencyMs() * 1000) / 1000)).toBe(89);
+    // the stored/manual latency is irrelevant now
+    await page.evaluate(() => timingSetLatency(30));
+    expect(await hitBeats(page, 89, 12)).toBe(3);
+    await expect(page.locator('#timingAvg')).toHaveText(/^\+12 ms$/);
+    // a 20 ms FIFO slip: the worklet reports the zero run, the ref sees +20 ms. liveL follows; the glitch compensation must not be added on top
+    await glitch(page, 5, 20);
+    expect(await page.evaluate(() => timingGlitchCompMs)).toBe(20);
+    expect(await page.evaluate(() => Math.round(timingMatchLatencyMs()))).toBe(89);
+    await page.evaluate(() => { timingHits = []; });
+    expect(await hitBeats(page, 89, 12)).toBe(3);
+    await expect(page.locator('#timingAvg')).toHaveText(/^\+12 ms$/); // double compensation would give +32 ms
+    // the following clicks arrive 20 ms later: two agreeing events adopt the jump (logged), then Avg stays +12
+    await page.evaluate(() => {
+      const next = timingClickTimes[timingClickTimes.length - 1];
+      window.__fut = [next + 0.24, next + 0.48, next + 0.72];
+      window.__fut.forEach(s => timingClickTimes.push(s));
+    });
+    const jk = await page.evaluate(() => window.__fut.map(s => timingHandleRef(s, s + 0.109, 0.9).kind));
+    expect(jk).toEqual(['pending', 'jump', 'accept']);
+    const st = await page.evaluate(() => timingRefState());
+    expect(st.liveLms).toBeCloseTo(109, 1);
+    expect(st.matchLatencyMs).toBeCloseTo(109, 1);
+    const log = await page.evaluate(() => timingGlitchLog().filter(e => e.type === 'ref-jump'));
+    expect(log.length).toBe(1);
+    expect(log[0].oldMs).toBeCloseTo(89, 1);
+    expect(log[0].newMs).toBeCloseTo(109, 1);
+    expect(log[0].deltaMs).toBeCloseTo(20, 1);
+    await page.evaluate(() => { timingHits = []; });
+    expect(await hitBeats(page, 109, 12)).toBe(3);
+    await expect(page.locator('#timingAvg')).toHaveText(/^\+12 ms$/);
+    await clickPlay(page);
+  });
+
+  test('syncing: no hit is judged before the ref is confirmed by 2 agreeing clicks; Syncing… and the Live pulse show meanwhile and clear on lock; then hits count', async ({ page }) => {
+    await setRef(page);
+    await playUntilClicks(page, 2);
+    await page.evaluate(() => { timingPlayStart = audioCtx.currentTime + 60; }); // a loaded machine must not reach the 1.5 s no-click warning during the checks
+    await page.evaluate(() => { timingDbg = { refs: [], clicks: [], beats: [], onsets: [], matches: [], near: [], chunks: [] }; });
+    await expect(page.locator('#timingStatus')).toHaveText('Syncing…');
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingRefLive')).toHaveText('Live —');
+    expect(await page.evaluate(() => 'sync' in document.getElementById('timingRefLive').dataset)).toBe(true);
+    // before any ref event: hits are not judged
+    expect(await hitBeats(page, 89, 12, 1)).toBe(1);
+    expect(await page.evaluate(() => timingHits.length)).toBe(0);
+    expect(await page.evaluate(() => timingDbg.matches.map(m => m.reason).slice(-1))).toEqual(['syncing']);
+    // one ref event is a lock but not yet confirmed: still nothing judged
+    expect(await page.evaluate(() => { const s = timingClickTimes[0]; return timingHandleRef(s, s + 0.089, 0.9).kind; })).toBe('lock');
+    expect(await hitBeats(page, 89, 12, 1)).toBe(1);
+    expect(await page.evaluate(() => timingHits.length)).toBe(0);
+    // a second click that disagrees (>1 ms) replaces the lock; still syncing
+    expect(await page.evaluate(() => { const s = timingClickTimes[1]; return timingHandleRef(s, s + 0.095, 0.9).kind; })).toBe('lock');
+    expect(await page.evaluate(() => timingRefState().locked && timingRef.confirmed)).toBe(false);
+    // two agreeing clicks confirm
+    expect(await page.evaluate(() => { const s = timingClickTimes[2]; return timingHandleRef(s, s + 0.0955, 0.9).kind; })).toBe('accept');
+    await expect(page.locator('#timingStatus')).not.toHaveText('Syncing…');
+    await expect(page.locator('#timingRefLive')).toHaveText(/^Live 95[.][0-9] ms$/);
+    expect(await page.evaluate(() => 'sync' in document.getElementById('timingRefLive').dataset)).toBe(false);
+    await page.evaluate(() => { timingDbg = null; });
+    await expect.poll(() => page.evaluate(() => timingBeats.filter(b => b.dur > 0).length)).toBeGreaterThan(4);
+    await page.evaluate(() => { timingHits = []; });
+    expect(await hitBeats(page, 95, 12)).toBe(3);
+    expect(await page.evaluate(() => timingHits.length)).toBe(3);
+    // a later loss keeps judging with the held liveL
+    await page.evaluate(() => { timingRefTick(audioCtx.currentTime + 5); });
+    expect(await hitBeats(page, 95, 12)).toBe(3);
+    expect(await page.evaluate(() => timingHits.length)).toBeGreaterThanOrEqual(6);
+    await page.keyboard.press('Escape');
+    await clickPlay(page);
+  });
+
+  test('trim is added to liveL; ref off restores the manual latency + glitch compensation path', async ({ page }) => {
+    await setRef(page);
+    await playUntilClicks(page, 4);
+    await injectRefs(page, 0.089);
+    await page.evaluate(() => timingSetRefTrim(-3));
+    expect(await page.evaluate(() => timingMatchLatencyMs())).toBeCloseTo(86, 6);
+    await page.evaluate(() => { timingSetLatency(40); });
+    await glitch(page, 5, 10);
+    await page.evaluate(() => timingSetRef(-1));
+    expect(await page.evaluate(() => timingMatchLatencyMs())).toBe(50);
+    await clickPlay(page);
+  });
+
+  test('lost: nothing ever locked warns; a muted metronome after a lock holds liveL silently; audible clicks without ref warn and hold', async ({ page }) => {
+    await setRef(page);
+    await playUntilClicks(page, 3);
+    // never locked: falls back to the manual/effective latency and warns after 1.5 s
+    expect(await page.evaluate(() => timingMatchLatencyMs() === timingEffectiveLatencyMs())).toBe(true);
+    await expect(page.locator('#timingStatus')).toHaveText('No click on ref channel', { timeout: 5000 });
+    await expect(page.locator('#timingStatus')).toHaveAttribute('data-q', 'warn');
+    // lock now, then let 2 s pass with clicks still being scheduled: lost + warn, last liveL is kept
+    await injectRefs(page, 0.089);
+    expect(await page.evaluate(() => timingRefState().warn)).toBe(false);
+    await page.waitForTimeout(500); // clicks scheduled after the last heard one
+    let s = await lostSnapshot(page);
+    expect(s.lost).toBe(true);
+    expect(s.warn).toBe(true);
+    expect(s.matchLatencyMs).toBeCloseTo(89, 6);
+    await expect(page.locator('#timingRefLive')).toHaveText('Live 89.0 ms');
+    // a heard click clears it
+    const ok = await page.evaluate(() => { const s0 = timingClickTimes[timingClickTimes.length - 1]; return timingHandleRef(s0, s0 + 0.089, 0.9).kind; });
+    expect(ok).toBe('accept');
+    s = await page.evaluate(() => timingRefState());
+    expect([s.lost, s.warn]).toEqual([false, false]);
+    // muted: no clicks are scheduled any more, so being silent is not an error (lost, but no warning)
+    await page.evaluate(() => { beatStates.fill(3); });
+    await page.waitForTimeout(400);
+    await page.evaluate(() => { timingClickTimes.forEach(s => timingHandleRef(s, s + 0.089, 0.9)); });
+    s = await lostSnapshot(page);
+    expect(s.lost).toBe(true);
+    expect(s.warn).toBe(false);
+    expect(s.matchLatencyMs).toBeCloseTo(89, 6);
+    await clickPlay(page);
+  });
+
+  test('the ref state is cleared on play start', async ({ page }) => {
+    await setRef(page);
+    await playUntilClicks(page, 4);
+    await injectRefs(page, 0.089);
+    expect((await page.evaluate(() => timingRefState())).locked).toBe(true);
+    await clickPlay(page);
+    await clickPlay(page);
+    const s = await page.evaluate(() => timingRefState());
+    expect(s.locked).toBe(false);
+    expect(s.events).toBe(0);
+    expect(s.clickTimes.length).toBeLessThanOrEqual(4); // only the new run's clicks
+    await clickPlay(page);
+  });
+
+  test('the scheduler hook does not alter scheduled times', async ({ page }) => {
+    const capture = async (refOn) => {
+      await page.evaluate((refOn) => { timingSetRef(refOn ? 1 : -1); updateBpm(120); subdivision = '2'; }, refOn);
+      await clickPlay(page);
+      await expect.poll(() => page.evaluate(() => timingBeats.length)).toBeGreaterThan(7);
+      await clickPlay(page);
+      return page.evaluate(() => ({ beats: timingBeats.slice(0, 8).map(b => b.time - timingBeats[0].time), clicks: timingClickTimes.slice(0, 15).map(t => t - timingClickTimes[0]) }));
+    };
+    const off = await capture(false);
+    const on = await capture(true);
+    expect(off.clicks.length).toBe(0);
+    expect(on.beats.length).toBe(8);
+    on.beats.forEach((d, i) => { expect(d).toBeCloseTo(i * 0.5, 9); expect(off.beats[i]).toBeCloseTo(d, 9); });
+    expect(on.clicks.length).toBe(15);
+    on.clicks.forEach((d, i) => expect(d).toBeCloseTo(i * 0.25, 9)); // every beat and every half-beat click, nothing else
+  });
+
+  test('muted beats record no click (their subdivision clicks are muted too); the others do', async ({ page }) => {
+    await setRef(page);
+    await page.evaluate(() => { updateBpm(120); subdivision = '2'; beatStates[1] = 3; });
+    await clickPlay(page);
+    await expect.poll(() => page.evaluate(() => timingBeats.length)).toBeGreaterThan(5);
+    await clickPlay(page);
+    const c = await page.evaluate(() => timingClickTimes.map(t => Math.round((t - timingClickTimes[0]) / 0.25)));
+    // beat 2 (index 1) is muted: neither its main click nor its subdivision click sounds, so neither is recorded
+    expect(c.slice(0, 6)).toEqual([0, 1, 4, 5, 6, 7]);
+  });
+});
+
+test.describe('Timing Check - click ref UI', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => {
+      timingNode.port.onmessage = null;
+      timingSwapUntil = 0;
+      timingChannels = 2; timingChannel = 0; timingLoadChannel(); timingRenderRefSeg();
+    });
+  });
+
+  const segTexts = (page) => page.evaluate(() => [...document.querySelectorAll('#timingRefSeg button')].map(b => b.textContent));
+  const lockRef = (page) => page.evaluate(() => {
+    timingClickTimes = [20, 21, 22];
+    timingHandleRef(20, 20.089, 0.9); timingHandleRef(21, 21.089, 0.9);
+  });
+  const glitchUi = (page) => page.evaluate(() => timingOnWorkletMessage({ data: { type: 'glitch', startTime: timingStreamCtxAt + 5, lengthSamples: 960, lengthMs: 20 } }));
+
+  test('the Click options are Off plus every channel except the instrument channel, with the tooltip', async ({ page }) => {
+    await page.click('#timingSetBtn');
+    expect(await segTexts(page)).toEqual(['Off', 'Ch 2']);
+    await expect(page.locator('#timingRefRowSel')).toHaveAttribute('title', 'Channel that carries the metronome itself (e.g. an interface loopback). Timing is then measured against the actual clicks, so latency is tracked automatically.');
+    await page.evaluate(() => { timingSetChannel(1); });
+    expect(await segTexts(page)).toEqual(['Off', 'Ch 1']);
+    await page.evaluate(() => { timingChannels = 4; timingSetChannel(2); });
+    expect(await segTexts(page)).toEqual(['Off', 'Ch 1', 'Ch 2', 'Ch 4']);
+    await page.evaluate(() => { timingChannels = 1; timingLoadChannel(); timingRenderRefSeg(); });
+    await expect(page.locator('#timingRefRowSel')).toBeHidden();
+  });
+
+  test('instrument and click channels are mutually exclusive', async ({ page }) => {
+    await page.click('#timingSetBtn');
+    await page.click('#timingRefSeg [data-v="1"]');
+    expect(await page.evaluate(() => [timingRefCh, timingRefOn, localStorage.getItem('wm.timing.refCh.' + timingDeviceId)])).toEqual([1, true, '1']);
+    await expect(page.locator('#timingRefSeg [data-v="1"]')).toHaveAttribute('aria-pressed', 'true');
+    // picking the click channel as the instrument channel switches the click ref off
+    await page.click('#timingChSeg [data-v="1"]');
+    expect(await page.evaluate(() => [timingChannel, timingRefCh, timingRefOn, localStorage.getItem('wm.timing.refCh.' + timingDeviceId)])).toEqual([1, -1, false, 'off']);
+    expect(await segTexts(page)).toEqual(['Off', 'Ch 1']);
+    await expect(page.locator('#timingRefSeg [data-v="-1"]')).toHaveAttribute('aria-pressed', 'true');
+    // the API refuses the instrument channel too
+    expect(await page.evaluate(() => { timingSetRef(1); return timingRefCh; })).toBe(-1);
+    // a stored ref equal to the instrument channel is dropped on load
+    expect(await page.evaluate(() => { localStorage.setItem('wm.timing.refCh.' + timingDeviceId, '1'); timingLoadRef(); return timingRefCh; })).toBe(-1);
+  });
+
+  test('the ref channel and its trim persist per device and are posted to the worklet', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const sent = [];
+      const orig = timingNode.port.postMessage.bind(timingNode.port);
+      timingNode.port.postMessage = m => { sent.push(m); orig(m); };
+      timingDeviceId = 'devA';
+      timingSetRef(1); timingSetRefTrim(4);
+      const a = [localStorage.getItem('wm.timing.refCh.devA'), localStorage.getItem('wm.timing.refTrim.devA')];
+      timingDeviceId = 'devB'; timingLoadRef();
+      const b = [timingRefCh, timingRefTrimMs, timingRefOn];
+      timingDeviceId = 'devA'; timingLoadRef();
+      const c = [timingRefCh, timingRefTrimMs, timingRefOn];
+      timingSetRefTrim(99);
+      return { a, b, c, clamp: timingRefTrimMs, cfg: sent.filter(m => m.type === 'config').map(m => m.refChannel) };
+    });
+    expect(r.a).toEqual(['1', '4']);
+    expect(r.b).toEqual([-1, 0, false]);
+    expect(r.c).toEqual([1, 4, true]);
+    expect(r.clamp).toBe(20);
+    expect(r.cfg).toContain(1);
+  });
+
+  test('ref mode: Live / Trim replace the latency stepper and Measure; hints and notes are hidden; the button shows Live', async ({ page }) => {
+    // before: normal latency UI with a glitch note
+    await page.evaluate(() => { timingSetLatency(58); });
+    await glitchUi(page);
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingLatRow')).toBeVisible();
+    await expect(page.locator('#timingLatComp')).toBeVisible();
+    await page.evaluate(() => { timingLatencyEst = false; timingMeasuredSeq = 5; timingMeasuredPage = 'x'; timingRenderLatency(); });
+    await expect(page.locator('#timingLatRemeasure')).toBeVisible();
+    await page.click('#timingRefSeg [data-v="1"]');
+    await expect(page.locator('#timingLatRow')).toBeHidden();
+    await expect(page.locator('#timingLoopOpen')).toBeHidden();
+    await expect(page.locator('#timingLoopPanel')).toBeHidden();
+    await expect(page.locator('#timingLatComp')).toBeHidden();
+    await expect(page.locator('#timingLatRemeasure')).toBeHidden();
+    await expect(page.locator('#timingRefMeasureOff')).toBeVisible();
+    await expect(page.locator('#timingRefMeasureOff')).toBeDisabled();
+    await expect(page.locator('#timingRefMeasureOff')).toHaveAttribute('title', 'Not needed with a click ref channel');
+    await expect(page.locator('#timingRefLive')).toHaveText('Live —');
+    await expect(page.locator('#timingSetGrid')).toHaveText('16 ·');
+    await expect(page.locator('#timingSetVals')).toHaveText('Live — · S5');
+    await expect(page.locator('#timingSetEst')).toBeHidden();
+    await lockRef(page);
+    await expect(page.locator('#timingRefLive')).toHaveText('Live 89.0 ms');
+    await expect(page.locator('#timingSetVals')).toHaveText('Live 89 ms · S5');
+    // trim stepper
+    await expect(page.locator('#timingRefTrimValue')).toHaveText('0 ms');
+    await page.click('#timingRefTrimPlus');
+    await page.click('#timingRefTrimPlus');
+    await expect(page.locator('#timingRefTrimValue')).toHaveText('+2 ms');
+    await page.click('#timingRefTrimMinus');
+    await page.click('#timingRefTrimMinus');
+    await page.click('#timingRefTrimMinus');
+    await expect(page.locator('#timingRefTrimValue')).toHaveText('−1 ms');
+    expect(await page.evaluate(() => localStorage.getItem('wm.timing.refTrim.' + timingDeviceId))).toBe('-1');
+    expect(await page.evaluate(() => timingMatchLatencyMs())).toBeCloseTo(88, 6);
+    // back to Off restores the latency UI and label
+    await page.click('#timingRefSeg [data-v="-1"]');
+    await expect(page.locator('#timingLatRow')).toBeVisible();
+    await expect(page.locator('#timingRefRow')).toBeHidden();
+    await expect(page.locator('#timingLoopOpen')).toBeVisible();
+    await expect(page.locator('#timingSetVals')).toHaveText('78 ms · S5'); // 58 + 20 ms glitch compensation
+  });
+
+  test('no horizontal overflow at 375 px in ref mode (locked, with a glitch note stored)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await glitchUi(page);
+    await page.click('#timingSetBtn');
+    await page.click('#timingRefSeg [data-v="1"]');
+    await page.evaluate(() => { timingClickTimes = [20, 21, 22]; timingHandleRef(20, 20.1234, 0.9); timingHandleRef(21, 21.1234, 0.9); timingSetRefTrim(-20); });
+    const r = await page.evaluate(() => {
+      const rect = id => document.getElementById(id).getBoundingClientRect();
+      const pop = rect('timingPopover');
+      const ids = ['timingRefLive', 'timingRefMeasureOff', 'timingRefTrimValue', 'timingRefTrimPlus', 'timingRefSeg'];
+      return { sw: document.documentElement.scrollWidth, iw: window.innerWidth, popL: pop.left, popR: pop.right, inside: ids.map(i => [rect(i).left >= pop.left - 0.5, rect(i).right <= pop.right + 0.5]), btnR: rect('timingSetBtn').right, text: document.getElementById('timingSetVals').textContent };
+    });
+    expect(r.text).toBe('Live 123 ms · S5');
+    expect(r.sw).toBeLessThanOrEqual(r.iw);
+    expect(r.popL).toBeGreaterThanOrEqual(0);
+    expect(r.popR).toBeLessThanOrEqual(r.iw);
+    expect(r.btnR).toBeLessThanOrEqual(r.iw);
+    r.inside.forEach(x => { expect(x[0]).toBe(true); expect(x[1]).toBe(true); });
+  });
+
+  test('the debug recorder records ref events, scheduled clicks and the liveL history; timingRefState is exposed', async ({ page }) => {
+    await page.evaluate(() => { timingSetRef(1); timingDbg = { refs: [], clicks: [], beats: [], onsets: [], matches: [], near: [], chunks: [] }; });
+    await lockRef(page);
+    await page.evaluate(() => timingRecordClick(30, 800, 0.05, 1.8));
+    const r = await page.evaluate(() => ({ refs: timingDbg.refs, clicks: timingDbg.clicks, st: window.timingRefState() }));
+    expect(r.refs.map(x => x.kind)).toEqual(['lock', 'accept']);
+    expect(r.refs[1].liveLms).toBeCloseTo(89, 6);
+    expect(r.clicks).toEqual([30]);
+    expect(r.st).toMatchObject({ enabled: true, channel: 1, locked: true, trimMs: 0 });
+    expect(r.st.liveLms).toBeCloseTo(89, 6);
+    expect(r.st.history.length).toBe(2);
+    await page.evaluate(() => { timingDbg = null; });
+  });
+});
+
+test.describe('Timing Check - click ref Off keeps the classic path', () => {
+  test('with the ref Off (the default) latency path, Measure UI, label and glitch compensation are unchanged', async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingNode.port.onmessage = null; timingSwapUntil = 0; timingChannels = 2; timingLoadChannel(); timingLoadRef(); timingSetLatency(99); });
+    const s = await page.evaluate(() => ({ ch: timingRefCh, on: timingRefOn, eff: timingEffectiveLatencyMs(), used: timingMatchLatencyMs() }));
+    expect(s).toEqual({ ch: -1, on: false, eff: 99, used: 99 });
+    await page.click('#timingSetBtn');
+    await expect(page.locator('#timingSetGrid')).toHaveText('16 ·');
+    await expect(page.locator('#timingSetVals')).toHaveText('99 ms · S5');
+    await expect(page.locator('#timingLatRow')).toBeVisible();
+    await expect(page.locator('#timingLoopOpen')).toBeVisible();
+    await expect(page.locator('#timingLoopOpen')).toBeEnabled();
+    await expect(page.locator('#timingRefRow')).toBeHidden();
+    // glitch compensation still applies; the Re-measure hint still shows
+    await page.evaluate(() => timingOnWorkletMessage({ data: { type: 'glitch', startTime: timingStreamCtxAt + 5, lengthSamples: 960, lengthMs: 20 } }));
+    expect(await page.evaluate(() => timingMatchLatencyMs())).toBe(119);
+    await expect(page.locator('#timingSetVals')).toHaveText('119 ms · S5');
+    await page.evaluate(() => { timingMeasuredSeq = 5; timingMeasuredPage = 'x'; timingLatencyEst = false; timingRenderLatency(); });
+    await expect(page.locator('#timingLatRemeasure')).toBeVisible();
+    // switching the ref on while playing and back off returns cleanly to the classic path
+    await page.evaluate(() => { updateBpm(250); timingSetRef(1); });
+    await page.evaluate(() => togglePlay());
+    await expect(page.locator('#timingRefRow')).toBeVisible();
+    await page.evaluate(() => { timingClickTimes = [1]; timingHandleRef(1, 1.05, 0.9); });
+    expect(await page.evaluate(() => Math.round(timingMatchLatencyMs()))).toBe(50);
+    await page.evaluate(() => timingSetRef(-1));
+    expect(await page.evaluate(() => [timingRefOn, timingMatchLatencyMs()])).toEqual([false, 119]);
+    await expect(page.locator('#timingSetVals')).toHaveText('119 ms · S5');
+    await expect(page.locator('#timingLatRow')).toBeVisible();
+    await expect(page.locator('#timingLoopOpen')).toBeVisible();
+    await expect(page.locator('#timingLatRemeasure')).toBeVisible();
+    await page.evaluate(() => togglePlay());
+  });
+});
+
+// Marker shapes by grid role -----------------------------------------------------
+
+test.describe('Timing Check - marker shapes by grid role', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingMuteOnsets = true; timingNode.port.onmessage = null; updateBpm(60); });
+    await page.click('#timingSetBtn');
+    await page.click('#timingResSeg [data-v="32"]');
+    await page.keyboard.press('Escape');
+  });
+  // one hit per role on the 32 grid: pos 0 (beat), 1/8 (finest), 1/4 (other), 1/2 (main off-beat), all exactly on time
+  const injectRoles = (page) => page.evaluate(() => {
+    const done = timingBeats.filter(b => b.dur > 0); const b = done[done.length - 2];
+    const g = getTimingGrid();
+    return [0, 1 / 8, 1 / 4, 1 / 2].map(p => {
+      const j = g.pos.findIndex(x => Math.abs(x - p) < 1e-9);
+      const r = timingHandleOnset(b.time + timingLatencyMs / 1000 + p * b.dur, -20);
+      return r && { role: g.role[j], posInBeat: p };
+    });
+  });
+  for (const view of ['timeline', 'beats']) {
+    test(`${view}: role -> shape (beat circle, off-beat diamond, other square, finest tiny circle) and a centred diamond`, async ({ page }) => {
+      test.setTimeout(30000);
+      if (view === 'beats') await page.click('#timingViewSeg [data-v="beats"]');
+      await clickPlay(page);
+      await expect.poll(() => page.evaluate(() => timingBeats.filter(b => b.dur > 0).length), { timeout: 10000 }).toBeGreaterThan(2);
+      const host = view === 'timeline' ? '#timingTrack' : '#timingBeatsMarks';
+      const roles = await injectRoles(page);
+      expect(roles.map(r => r && r.role)).toEqual([0, 3, 1, 2]);
+      await expect(page.locator(host + ' .tm-dot')).toHaveCount(4);
+      const info = await page.evaluate(h => {
+        const out = {};
+        for (const c of ['d0', 'd1', 'd2', 'd3']) {
+          const el = document.querySelector(h + ' .tm-dot.' + c), s = getComputedStyle(el), r = el.getBoundingClientRect();
+          const b = getComputedStyle(el, '::before');
+          out[c] = { w: s.width, h: s.height, radius: s.borderTopLeftRadius, bg: s.backgroundColor, cx: r.left + r.width / 2, cy: r.top + r.height / 2, before: b.content, bw: parseFloat(b.width), bh: parseFloat(b.height), bl: parseFloat(b.left), bt: parseFloat(b.top), tf: b.transform, bbg: b.backgroundColor };
+        }
+        out.halfBeatPx = h === '#timingTrack' ? 0.5 * timingBeats.filter(b => b.dur > 0).slice(-2)[0].dur * timingTl.pps : 0.5 * timingC.sp;
+        const cr = document.querySelector(h).closest('.tm-chart').getBoundingClientRect();
+        out.midY = cr.top + cr.height / 2;
+        return out;
+      }, host);
+      expect(parseFloat(info.d0.radius)).toBeGreaterThan(0); expect(info.d0.w).toBe('11px');
+      expect(parseFloat(info.d3.radius)).toBeGreaterThan(0); expect(info.d3.w).toBe('4px');
+      expect(info.d1.radius).toBe('0px'); expect(info.d1.w).toBe('6px'); expect(info.d1.h).toBe('6px');
+      expect(info.d1.bg).not.toBe('rgba(0, 0, 0, 0)');
+      expect(info.d2.radius).toBe('0px'); expect(info.d2.bg).toBe('rgba(0, 0, 0, 0)');   // the element is only the centring box
+      expect(info.d2.before).toBe('""');
+      expect(info.d2.bbg).not.toBe('rgba(0, 0, 0, 0)');
+      expect(info.d2.tf).toMatch(/^matrix\(0\.70\d*, 0\.70\d*, -0\.70\d*, 0\.70\d*, 0, 0\)$/);   // rotate(45deg)
+      // the diamond is centred in its box: pseudo-element centre == box centre
+      expect(info.d2.bl + info.d2.bw / 2).toBeCloseTo(parseFloat(info.d2.w) / 2, 2);
+      expect(info.d2.bt + info.d2.bh / 2).toBeCloseTo(parseFloat(info.d2.h) / 2, 2);
+      // x encodes timing: the half-beat diamond sits half a beat after the beat circle; on time = on the centre line vertically
+      expect(Math.abs((info.d2.cx - info.d0.cx) - info.halfBeatPx)).toBeLessThanOrEqual(0.5);
+      for (const c of ['d0', 'd1', 'd2', 'd3']) expect(Math.abs(info[c].cy - info.midY)).toBeLessThanOrEqual(0.5);
+    });
+  }
+
+  test('the rejected ring stays a hollow grey ring, distinct from every filled shape', async ({ page }) => {
+    await page.click('#timingViewSeg [data-v="beats"]');
+    const css = await page.evaluate(() => {
+      const el = document.createElement('div'); el.className = 'tm-ring'; document.getElementById('timingBeatsMarks').appendChild(el);
+      const s = getComputedStyle(el), r = { w: s.width, bw: s.borderTopWidth, bc: s.borderTopColor, rad: s.borderTopLeftRadius, bg: s.backgroundColor, before: getComputedStyle(el, '::before').content };
+      el.remove(); return r;
+    });
+    expect(css.w).toBe('8px');
+    expect(parseFloat(css.bw)).toBeGreaterThanOrEqual(1);
+    expect(css.bc).toBe('rgb(148, 163, 184)');
+    expect(parseFloat(css.rad)).toBeGreaterThan(0);
+    expect(css.bg).toBe('rgba(0, 0, 0, 0)');
+    expect(css.before).toBe('none');
+  });
+});
+
+// Worklet frame clock ----------------------------------------------------------------
+
+test.describe('Timing Check - worklet frame clock', () => {
+  test.beforeEach(async ({ page }) => { await navigateAndWait(page); });
+  // runs the real processor source against a stubbed AudioWorkletGlobalScope; stale quanta report the previous quantum's currentFrame
+  const run = (page, mode) => page.evaluate((mode) => {
+    const sr = 48000, total = 128 * 80, G = { currentFrame: 0 }, msgs = [];
+    let Proc = null;
+    class Base { constructor() { this.port = { postMessage: (m) => msgs.push(m) }; } }
+    new Function('AudioWorkletProcessor', 'registerProcessor', 'sampleRate', 'G', TIMING_WORKLET_SRC.replace(/\bcurrentFrame\b/g, 'G.currentFrame'))(Base, (n, c) => { Proc = c; }, sr, G);
+    const x = new Float32Array(total).fill(1e-4);
+    x.fill(0, 1000, 1100);                                    // 100 zero samples (a glitch) crossing the quantum boundary at 1024
+    for (let k = 0; k < 1500; k++) x[6000 + k] = 0.4 * Math.sin(k * 0.3) * Math.exp(-k / 400);   // an onset
+    const p = new Proc();
+    const stale = new Set(mode === 'stale' ? [7, 8, 9, 46, 47, 48] : []);   // 7..9 cover the glitch, 46..48 the onset
+    for (let q = 0; q * 128 < total; q++) {
+      if (mode === 'gap' && q >= 20 && q < 22) continue;     // two quanta never passed on
+      G.currentFrame = (stale.has(q) ? q - 1 : q) * 128;
+      p.process([[x.subarray(q * 128, q * 128 + 128)]]);
+    }
+    return { sr, onsets: msgs.filter(m => m.type === 'onset').map(m => m.time), glitches: msgs.filter(m => m.type === 'glitch').map(m => ({ t: m.startTime, n: m.lengthSamples })) };
+  }, mode);
+
+  test('a repeated currentFrame does not shift onset or glitch timestamps', async ({ page }) => {
+    const ok = await run(page, 'ok');
+    const st = await run(page, 'stale');
+    expect(ok.glitches).toEqual([{ t: 1000 / ok.sr, n: 100 }]);
+    expect(ok.onsets.length).toBe(1);
+    expect(st.glitches).toEqual(ok.glitches);
+    expect(st.onsets).toEqual(ok.onsets);
+  });
+
+  test('a real gap (frames skipped) resyncs the clock to currentFrame', async ({ page }) => {
+    const ok = await run(page, 'ok');
+    const gap = await run(page, 'gap');
+    expect(gap.onsets.length).toBe(1);
+    expect(Math.abs(gap.onsets[0] - ok.onsets[0])).toBeLessThan(1e-9);
   });
 });

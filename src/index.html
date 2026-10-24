@@ -274,8 +274,19 @@
         .tm-loop { display: flex; flex-direction: column; gap: 6px; background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 8px 10px; }
         .tm-cal-btn { border: 0; background: #eef2ff; color: #6366f1; font-weight: 700; font-size: 0.72rem; padding: 6px 10px; border-radius: 9px; cursor: pointer; font-family: inherit; }
         .tm-cal-btn:disabled, .tm-text-btn:disabled { opacity: 0.45; cursor: default; }
+        .tm-ref { display: flex; flex-direction: column; gap: 6px; }
+        .tm-live { font: 700 0.8rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; color: #334155; white-space: nowrap; }
+        .tm-live[data-lost] { color: #b45309; }
         .tm-loop-live { font: 700 0.72rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; color: #475569; min-height: 1rem; }
         .tm-loop-result { font-size: 0.75rem; font-weight: 700; color: var(--q, #475569); }
+        .tm-hist { font-size: 0.72rem; color: #475569; min-width: 0; }
+        .tm-hist summary { cursor: pointer; font-weight: 700; }
+        .tm-hist-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+        .tm-hist-list li { font: 600 0.66rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; padding: 2px 4px; border-radius: 6px; }
+        .tm-hist-list li[data-flag~="rate"] { background: #fef3c7; color: #92400e; }
+        .tm-hist-list li[data-flag~="change"] { box-shadow: inset 3px 0 0 #818cf8; }
+        .tm-hist-list li[data-res="failed"] { color: #b91c1c; }
+        .tm-hist-copied { font-weight: 700; color: #16a34a; }
         .tm-view-row { flex-wrap: nowrap; gap: 8px; }
         .tm-view-row .tm-seg { flex: none; flex-wrap: nowrap; }
         .tm-pop-wrap { position: relative; margin-left: auto; flex: none; }
@@ -290,9 +301,14 @@
         .tm-set-vals { font: 700 0.72rem ui-monospace, 'Cascadia Mono', Consolas, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .tm-set-est { font-size: 0.5rem; font-weight: 700; color: #94a3b8; vertical-align: super; line-height: 1; align-self: flex-start; margin-top: 4px; }
         .tm-pulse { width: 7px; height: 7px; border-radius: 50%; background: #6366f1; animation: tm-pulse 1s ease-in-out infinite; }
+        .tm-live[data-sync] { animation: tm-pulse 1.4s ease-in-out infinite; }
         @keyframes tm-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
         @media (prefers-reduced-motion: reduce) { .tm-pulse { animation: none; } }
         .tm-popover { position: absolute; right: 0; top: calc(100% + 6px); width: 280px; max-width: calc(100vw - 16px); z-index: 50; display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #fff; border: 1px solid #f1f5f9; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); text-align: left; }
+        .tm-remeasure-dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; flex: none; }
+        .tm-lat-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+        .tm-remeasure { font-size: 0.66rem; font-weight: 700; color: #b45309; background: #fef3c7; border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+        .tm-comp { font-size: 0.66rem; font-weight: 700; color: #b45309; white-space: nowrap; }
         .tm-est { font-size: 0.68rem; font-weight: 700; color: #94a3b8; }
         .tm-text-btn { border: 0; background: transparent; color: #6366f1; font-weight: 700; font-size: 0.72rem; padding: 4px 6px; cursor: pointer; font-family: inherit; }
         .tm-meter-wrap { display: flex; align-items: center; gap: 8px; width: 100%; }
@@ -304,16 +320,16 @@
         .tm-meter-fill.hot { background: #e11d48; }
         .tm-hot { font-size: 0.72rem; font-weight: 700; color: #e11d48; margin-top: -4px; line-height: 1.1rem; height: 1.1rem; visibility: hidden; } /* space is reserved so the warning never shifts the layout */
         .tm-hot.on { visibility: visible; }
-        /* detection threshold: solid dark 2 px line, taller than the track (12 px) */
-        .tm-meter-th { position: absolute; top: 4px; height: 12px; left: 0; width: 100%; will-change: transform; pointer-events: none; z-index: 2; }
-        .tm-meter-th::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: #334155; }
-        /* quiet level: dotted grey line inside the track plus a small triangle below it */
+        /* accepted-onset cue: opacity-only overlay on the track, pulsed from JS (Web Animations) */
+        .tm-meter-flash { position: absolute; inset: 0; background: rgb(99 102 241 / 0.4); opacity: 0; pointer-events: none; }
+        /* quiet level (the main reference line): bold dark dotted line inside the track plus a small triangle below it */
         .tm-meter-q { position: absolute; top: 0; bottom: 0; left: 0; width: 100%; will-change: transform; pointer-events: none; }
-        .tm-meter-q::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 1.5px; background: repeating-linear-gradient(to bottom, #94a3b8 0 1.5px, transparent 1.5px 3px); }
-        .tm-meter-triwrap { position: absolute; top: 15px; left: 0; width: 100%; height: 4px; will-change: transform; pointer-events: none; }
-        .tm-meter-tri { position: absolute; left: 0; top: 0; width: 0; height: 0; margin-left: -3px; border-left: 3px solid transparent; border-right: 3px solid transparent; border-bottom: 4px solid #94a3b8; }
+        .tm-meter-q::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: repeating-linear-gradient(to bottom, #334155 0 3px, transparent 3px 4px); }
+        .tm-meter-triwrap { position: absolute; top: 15px; left: 0; width: 100%; height: 5px; will-change: transform; pointer-events: none; }
+        .tm-meter-tri { position: absolute; left: 0; top: 0; width: 0; height: 0; margin-left: -4px; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid #334155; }
         [data-q="listen"] { --q: #64748b; }
         .tm-status { font-size: 0.68rem; font-weight: 700; color: var(--q, #94a3b8); width: 9ch; text-align: right; white-space: nowrap; flex: none; }
+        .tm-status.wide { width: auto; max-width: 60%; white-space: normal; line-height: 1.15; }
         .tm-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
         .tm-sm { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 6px 10px; min-width: 0; }
         .tm-sm .k { font-size: 0.6rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -326,11 +342,16 @@
         .tm-side { position: absolute; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.1em; color: #94a3b8; z-index: 3; }
         .tm-gl { position: absolute; top: 0; bottom: 0; left: 0; width: 1px; background: #e2e8f0; }
         .tm-gl.sub { background: rgb(226 232 240 / 0.55); }
+        .tm-gl.fine { background: rgb(226 232 240 / 0.3); }
         .tm-gl.bar { width: 2px; background: #cbd5e1; }
         .tm-dot { position: absolute; left: 0; top: 50%; border-radius: 50%; background: var(--q); box-shadow: 0 0 0 1.5px #f8fafc; z-index: 2; }
         .tm-dot.d0 { width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; }
-        .tm-dot.d2 { width: 8px; height: 8px; margin: -4px 0 0 -4px; }
-        .tm-dot.d1 { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+        /* main off-beat: filled diamond. The element keeps the 8px centred box (so the inline translate positions it); the diamond is its ::before, rotated 45deg about its own centre (7px square = ~49px2, like the old 8px dot) */
+        .tm-dot.d2 { width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 0; background: none; box-shadow: none; }
+        .tm-dot.d2::before { content: ""; position: absolute; left: 0.5px; top: 0.5px; width: 7px; height: 7px; background: var(--q); box-shadow: 0 0 0 1.5px #f8fafc; transform: rotate(45deg); }
+        /* other (16ths, triplets): small filled square */
+        .tm-dot.d1 { width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 0; }
+        .tm-dot.d3 { width: 4px; height: 4px; margin: -2px 0 0 -2px; }
         /* out-of-range accepted hit: red triangle pinned at the edge, pointing outward (only x is moved with transform) */
         .tm-tri { position: absolute; left: 0; width: 0; height: 0; margin-left: -5px; border-left: 5px solid transparent; border-right: 5px solid transparent; z-index: 2; }
         .tm-tri.up { top: 2px; border-bottom: 8px solid #f43f5e; }
@@ -371,7 +392,7 @@
             .tm-hdr .text-xs { font-size: 0.65rem; letter-spacing: 0.02em; }
         }
         /* narrow screens (kept after the base rules so they win) */
-        @media (max-width: 420px) { .tm-set-feel { display: none; } }
+        @media (max-width: 420px) { .tm-set-grid { display: none; } }
         @media (max-width: 359px) { .tm-view-row { flex-wrap: wrap; } }
         @media (prefers-reduced-motion: reduce) { .tm-noinput { transition: none; } }
     </style>
@@ -700,10 +721,11 @@
                         <button type="button" data-v="beats" aria-pressed="false">On beats</button>
                     </div>
                     <div class="tm-pop-wrap">
-                        <button id="timingSetBtn" type="button" class="tm-set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="timingPopover" title="Input, feel, latency and sensitivity">
-                            <span id="timingSetFeel" class="tm-set-vals tm-set-feel">Straight ·</span>
+                        <button id="timingSetBtn" type="button" class="tm-set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="timingPopover" title="Input, detection grid, latency and sensitivity">
+                            <span id="timingSetGrid" class="tm-set-vals tm-set-grid">16 ·</span>
                             <span id="timingSetVals" class="tm-set-vals">0 ms · S5</span>
                             <span id="timingSetEst" class="tm-set-est" hidden>est.</span>
+                            <span id="timingSetRemeasure" class="tm-remeasure-dot" hidden title="Re-measure latency" aria-label="Re-measure latency"></span>
                             <span id="timingSetBusy" class="tm-pulse" hidden title="Measuring latency"></span>
                         </button>
                         <div id="timingPopover" class="tm-popover dropdown-menu" role="dialog" aria-label="Timing settings" hidden>
@@ -716,21 +738,29 @@
                                         <button type="button" data-v="1" aria-pressed="false">Ch 2</button>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="tm-sec">
-                                <span class="tm-label">Feel</span>
-                                <div class="tm-row">
-                                    <div id="timingFeelSeg" class="tm-seg" role="group" aria-label="Feel to check against">
-                                        <button type="button" data-v="straight" aria-pressed="true">Straight</button>
-                                        <button type="button" data-v="shuffle" aria-pressed="false">Shuffle</button>
-                                        <button type="button" data-v="halftime" aria-pressed="false" title="Half-time shuffle">Half-time</button>
-                                    </div>
-                                    <span id="timingFeelHint" class="tm-hint-ind" hidden>Set by rhythm</span>
+                                <div id="timingRefRowSel" class="tm-row tm-nowrap" title="Channel that carries the metronome itself (e.g. an interface loopback). Timing is then measured against the actual clicks, so latency is tracked automatically." hidden>
+                                    <span class="tm-label">Click</span>
+                                    <div id="timingRefSeg" class="tm-seg" role="group" aria-label="Click reference channel"></div>
                                 </div>
                             </div>
                             <div class="tm-sec">
-                                <span class="tm-label">Latency</span>
-                                <div class="tm-row tm-nowrap">
+                                <span class="tm-label">Detect</span>
+                                <div class="tm-row tm-nowrap" title="Which notes to check. Hits between grid points are shown as rejected.">
+                                    <div id="timingResSeg" class="tm-seg" role="group" aria-label="Detection resolution">
+                                        <button type="button" data-v="4" aria-pressed="false" aria-label="Quarter notes">4</button>
+                                        <button type="button" data-v="8" aria-pressed="false" aria-label="8th notes">8</button>
+                                        <button type="button" data-v="16" aria-pressed="true" aria-label="16th notes">16</button>
+                                        <button type="button" data-v="32" aria-pressed="false" aria-label="32nd notes">32</button>
+                                    </div>
+                                    <div class="tm-seg">
+                                        <button id="timingShuffleBtn" type="button" aria-pressed="false">Shuffle</button>
+                                    </div>
+                                </div>
+                                <span id="timingDetectHint" class="tm-hint-ind" hidden>Locked to Triplet</span>
+                            </div>
+                            <div class="tm-sec">
+                                <span class="tm-lat-head"><span class="tm-label">Latency</span><span id="timingLatRemeasure" class="tm-remeasure" tabindex="0" title="The input stream was reopened. Latency can shift by up to ~10 ms per reopen; measure again." hidden>Re-measure</span><span id="timingLatComp" class="tm-comp" title="Chrome's input buffer slipped; the extra delay is added automatically." hidden></span></span>
+                                <div id="timingLatRow" class="tm-row tm-nowrap">
                                     <div class="tm-step">
                                         <button id="timingLatMinus" type="button" class="tm-step-btn" aria-label="Decrease latency">−</button>
                                         <span id="timingLatValue" class="tm-step-val" tabindex="0" role="button" title="Play steady on the click and adjust until Avg sits near 0 ms.">0 ms</span>
@@ -742,6 +772,23 @@
                                         <button id="timingLatReset" type="button" class="tm-text-btn" title="Reset to the browser's latency estimate">Reset</button>
                                         <button id="timingLoopOpen" type="button" class="tm-text-btn" title="Measure the system latency with a loopback cable">Measure</button>
                                     </span>
+                                </div>
+                                <div id="timingRefRow" class="tm-ref" hidden>
+                                    <div class="tm-row tm-nowrap">
+                                        <span id="timingRefLive" class="tm-live" title="Round-trip latency measured against the actual clicks on the Click channel.">Live —</span>
+                                        <span class="tm-pair">
+                                            <button id="timingRefMeasureOff" type="button" class="tm-text-btn" disabled title="Not needed with a click ref channel">Measure</button>
+                                        </span>
+                                    </div>
+                                    <div class="tm-row tm-nowrap">
+                                        <span class="tm-label" title="Small difference between the headphone path and the loopback path.">Trim</span>
+                                        <div class="tm-step">
+                                            <button id="timingRefTrimMinus" type="button" class="tm-step-btn" aria-label="Decrease trim">−</button>
+                                            <span id="timingRefTrimValue" class="tm-step-val" tabindex="0" role="button" title="Small difference between the headphone path and the loopback path (−20 to +20 ms).">0 ms</span>
+                                            <input id="timingRefTrimInput" class="tm-step-input" type="number" min="-20" max="20" step="1" hidden>
+                                            <button id="timingRefTrimPlus" type="button" class="tm-step-btn" aria-label="Increase trim">+</button>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div id="timingLoopPanel" class="tm-loop" hidden>
                                     <p class="tm-note">Connect your interface output to its input with a cable, then press Start. Keep the output volume low.</p>
@@ -755,6 +802,16 @@
                                         <span id="timingLoopResult" class="tm-loop-result"></span>
                                         <button id="timingLoopApply" type="button" class="tm-cal-btn" hidden>Apply</button>
                                     </div>
+                                    <details id="timingLoopHist" class="tm-hist">
+                                        <summary id="timingLoopHistSummary">History</summary>
+                                        <ul id="timingLoopHistList" class="tm-hist-list"></ul>
+                                        <div class="tm-row">
+                                            <button id="timingLoopHistCopy" type="button" class="tm-text-btn">Copy JSON</button>
+                                            <button id="timingGlitchCopy" type="button" class="tm-text-btn">Copy glitch log</button>
+                                            <button id="timingLoopHistClear" type="button" class="tm-text-btn">Clear</button>
+                                            <span id="timingLoopHistCopied" class="tm-hist-copied" aria-live="polite"></span>
+                                        </div>
+                                    </details>
                                 </div>
                             </div>
                             <div class="tm-sec">
@@ -782,11 +839,10 @@
                         </div>
                     </div>
                 </div>
-                <div class="tm-meter-wrap" title="Detection threshold − dB · Quiet below -60 dB">
+                <div class="tm-meter-wrap" title="Quiet below −60 dB">
                     <svg class="tm-mic-ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>
                     <div class="tm-meter-area">
-                        <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterQuiet" class="tm-meter-q"></div></div>
-                        <div id="timingMeterTh" class="tm-meter-th"></div>
+                        <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterQuiet" class="tm-meter-q"></div><div id="timingMeterFlash" class="tm-meter-flash" data-flash="0"></div></div>
                         <div id="timingMeterQuietTri" class="tm-meter-triwrap"><span class="tm-meter-tri"></span></div>
                     </div>
                     <span id="timingStatus" class="tm-status">Quiet</span>
@@ -988,7 +1044,8 @@
 
     function initAudioContext() {
         if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const AC = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AC();
             masterGainNode = audioCtx.createGain();
             masterGainNode.gain.value = masterVolume;
             masterGainNode.connect(audioCtx.destination);
@@ -1073,6 +1130,7 @@
         gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
         osc.start(time);
         osc.stop(time + duration);
+        if (timingRefOn) timingRecordClick(time, freq, duration, gain); // Timing Check click ref: remember this audible click and its waveform parameters (cheap push, no scheduling change)
     }
 
     function playTimerEndSound() {
@@ -1829,6 +1887,7 @@
         const inAccelMode = accelTargetBpm !== null && isTimerActive && accelSchedule.length > 0;
         setPlayBtnStyle(inAccelMode ? 'pause' : 'stop');
 
+        timingPlayedSinceLast = true;
         timingOnPlayStart(); // must run before scheduler() records the first beat
         scheduler();
     }
@@ -1921,7 +1980,7 @@
             while (rhythmTrigger.firstChild) rhythmTrigger.removeChild(rhythmTrigger.firstChild);
             Array.from(target.childNodes).forEach(node => rhythmTrigger.appendChild(node.cloneNode(true)));
             rhythmMenu.classList.add('hidden');
-            timingApplyFeel();
+            timingApplyDetect();
         });
     });
 
@@ -2162,7 +2221,8 @@
     // --- Timing state ---
     let timingOn = false;
     let timingView = 'timeline';          // 'timeline' | 'beats'
-    let timingFeel = 'straight';          // 'straight' | 'shuffle' | 'halftime'
+    let timingRes = '16';                 // detection resolution: '4' | '8' | '16' | '32'
+    let timingShuffle = false;            // shuffle preference (applies at 8 and 16 only)
     let timingStream = null;
     let timingSource = null;
     let timingNode = null;
@@ -2172,6 +2232,12 @@
     let timingLatencyEst = true;          // true while the value is the browser estimate (no saved value)
     let timingTrackLatency = 0;           // track.getSettings().latency in seconds (0 when unavailable)
     let timingChannel = 0;                // selected input channel index
+    let timingRefCh = -1;                 // click-ref channel index (-1 = off): the channel of the stream that carries the metronome itself
+    let timingRefSent = false;            // the worklet currently has a ref channel configured
+    let timingRefOn = false;              // timingOn && timingRefCh >= 0 (read by the scheduler hook in playSound)
+    let timingRefTrimMs = 0;              // -20..+20 ms, analog difference between the headphone path and the loopback path
+    let timingClickTimes = [];            // ring buffer (64) of scheduled audible click start times (context seconds)
+    let timingRef = timingRefNewState();  // click-ref lock/track state
     let timingChannels = 1;               // channels actually received
     let timingSensitivity = 5;            // 1..10, 5 = reference tuning
     let timingBeats = [];                 // ring buffer (64) of { time, beatInMeasure, n, dur }
@@ -2180,12 +2246,23 @@
     let timingLastHitTime = 0;            // context time of last accepted hit
     let timingBeatSeq = 0;
     let timingToken = 0;                  // invalidates async start/switch when Timing is toggled
+    const TIMING_SWAP_GRACE_MS = 1500;    // after an attach: no No-input / Quiet / glitch reporting
+    let timingSwapUntil = 0;              // performance.now() until which No input / Quiet are suppressed (and zero-quantum counts absorbed) after an attach
+    const TIMING_STARTUP_IGNORE_SEC = 1.0; // zero runs starting within this many context seconds of an attach are a startup artifact
+    let timingStreamCtxAt = 0;            // audioCtx.currentTime when the current stream attached
+    let timingGlitchCompMs = 0;           // sum of real glitch lengths since the stream attached or the latency was last set
+    let timingGlitchCompN = 0;            // how many glitches that sum holds
+    let timingZeroRuns = 0;               // worklet zero-quantum runs for the current stream
+    let timingZeroBase = 0;               // worklet's running count when the current stream attached
+    let timingZeroRaw = 0;                // latest running count reported by the worklet
+    let timingMeasuredSeq = null;         // stream seq the applied latency was measured on (null = estimate or user-set)
+    let timingMeasuredPage = '';          // pageLoadId of that measurement
     let timingModuleReady = null;
     let timingError = '';
     let timingLevelDb = -120;
     let timingThDb = -45;
     let timingLevelCount = 0;             // level messages received (diagnostics / tests)
-    let timingMuteOnsets = false;         // tests: drop live mic onsets so synthetic ones are the only input
+    let timingMuteOnsets = false;         // tests: drop live mic onsets and glitch counts so synthetic ones are the only input
     let timingPlayStart = 0;
     let timingFrozenNow = 0;
     let timingRaf = 0;
@@ -2227,7 +2304,7 @@
     const timingSetBtn = document.getElementById('timingSetBtn');
     const timingPopover = document.getElementById('timingPopover');
     const timingSetVals = document.getElementById('timingSetVals');
-    const timingSetFeel = document.getElementById('timingSetFeel');
+    const timingSetGrid = document.getElementById('timingSetGrid');
     const timingSetEst = document.getElementById('timingSetEst');
     const timingSetBusy = document.getElementById('timingSetBusy');
     const timingLoopOpen = document.getElementById('timingLoopOpen');
@@ -2238,11 +2315,23 @@
     const timingLoopLive = document.getElementById('timingLoopLive');
     const timingLoopResult = document.getElementById('timingLoopResult');
     const timingLoopApplyBtn = document.getElementById('timingLoopApply');
+    const timingRefRowSel = document.getElementById('timingRefRowSel');
+    const timingRefSeg = document.getElementById('timingRefSeg');
+    const timingLatRow = document.getElementById('timingLatRow');
+    const timingRefRow = document.getElementById('timingRefRow');
+    const timingRefLive = document.getElementById('timingRefLive');
+    const timingRefTrimMinus = document.getElementById('timingRefTrimMinus');
+    const timingRefTrimPlus = document.getElementById('timingRefTrimPlus');
+    const timingRefTrimValue = document.getElementById('timingRefTrimValue');
+    const timingRefTrimInput = document.getElementById('timingRefTrimInput');
     const timingLatMinus = document.getElementById('timingLatMinus');
     const timingLatPlus = document.getElementById('timingLatPlus');
     const timingLatValue = document.getElementById('timingLatValue');
     const timingLatInput = document.getElementById('timingLatInput');
     const timingLatEst = document.getElementById('timingLatEst');
+    const timingLatRemeasure = document.getElementById('timingLatRemeasure');
+    const timingLatComp = document.getElementById('timingLatComp');
+    const timingSetRemeasure = document.getElementById('timingSetRemeasure');
     const timingLatReset = document.getElementById('timingLatReset');
     const timingSensMinus = document.getElementById('timingSensMinus');
     const timingSensPlus = document.getElementById('timingSensPlus');
@@ -2250,10 +2339,12 @@
     const timingSensInput = document.getElementById('timingSensInput');
     const timingViewSeg = document.getElementById('timingViewSeg');
     const timingMeterFill = document.getElementById('timingMeterFill');
-    const timingMeterTh = document.getElementById('timingMeterTh');
+    const timingMeterFlash = document.getElementById('timingMeterFlash');
+    let timingFlashCount = 0;
     const timingStatusEl = document.getElementById('timingStatus');
-    const timingFeelSeg = document.getElementById('timingFeelSeg');
-    const timingFeelHint = document.getElementById('timingFeelHint');
+    const timingResSeg = document.getElementById('timingResSeg');
+    const timingShuffleBtn = document.getElementById('timingShuffleBtn');
+    const timingDetectHint = document.getElementById('timingDetectHint');
     const timingTimeline = document.getElementById('timingTimeline');
     const timingTrack = document.getElementById('timingTrack');
     const timingNow = document.getElementById('timingNow');
@@ -2276,36 +2367,65 @@
     function timingLsSet(key, value) {
         try { localStorage.setItem(key, String(value)); } catch (e) { /* storage unavailable */ }
     }
+    function timingLsRemove(key) {
+        try { localStorage.removeItem(key); } catch (e) { /* storage unavailable */ }
+    }
 
     // --- Grids (positions are fractions of a beat) ---
-    function timingGridGap(pos) {
-        let gap = Infinity;
+    // Smallest (or widest) gap between neighbouring grid points, wrapping into the next beat
+    function timingGridGap(pos, widest) {
+        let gap = widest ? 0 : Infinity;
         for (let i = 0; i < pos.length; i++) {
             const next = i + 1 < pos.length ? pos[i + 1] : 1 + pos[0];
-            gap = Math.min(gap, next - pos[i]);
+            gap = widest ? Math.max(gap, next - pos[i]) : Math.min(gap, next - pos[i]);
         }
         return gap;
     }
 
-    // role: 0 = beat (big dot), 2 = main off-beat (medium), 1 = other (small)
+    // role: 0 = beat (big circle), 2 = main off-beat (diamond), 1 = other (small square), 3 = finest (tiny circle)
     const TIMING_GRIDS = {
-        straight:   { name: 'Straight',          pos: [0, 1/4, 1/2, 3/4],            role: [0, 1, 2, 1] },
-        shuffle:    { name: 'Shuffle',           pos: [0, 1/3, 2/3],                 role: [0, 1, 2] },
-        halftime:   { name: 'Half-time shuffle', pos: [0, 1/3, 1/2, 5/6],            role: [0, 1, 2, 1] },
-        triplet:    { name: 'Triplet',           pos: [0, 1/3, 2/3],                 role: [0, 1, 1] },
-        quintuplet: { name: 'Quintuplet',        pos: [0, 1/5, 2/5, 3/5, 4/5],       role: [0, 1, 1, 1, 1] },
-        sextuplet:  { name: 'Sextuplet',         pos: [0, 1/6, 2/6, 3/6, 4/6, 5/6],  role: [0, 1, 1, 2, 1, 1] },
+        '4':         { name: '4',          pos: [0],                                  role: [0] },
+        '8':         { name: '8',          pos: [0, 1/2],                             role: [0, 2] },
+        '16':        { name: '16',         pos: [0, 1/4, 1/2, 3/4],                   role: [0, 1, 2, 1] },
+        '32':        { name: '32',         pos: [0, 1/8, 1/4, 3/8, 1/2, 5/8, 3/4, 7/8], role: [0, 3, 1, 3, 2, 3, 1, 3] },
+        '8shuffle':  { name: '8 Shuffle',  pos: [0, 2/3],                             role: [0, 2] },
+        '16shuffle': { name: '16 Shuffle', pos: [0, 1/3, 1/2, 5/6],                   role: [0, 1, 2, 1] },
+        '8triplet':  { name: '8 Triplet',  pos: [0, 1/3, 2/3],                        role: [0, 1, 2] }, // 'shuffle' rhythm at Detect 16
+        triplet:     { name: 'Triplet',    pos: [0, 1/3, 2/3],                        role: [0, 1, 1] },
+        quintuplet:  { name: 'Quintuplet', pos: [0, 1/5, 2/5, 3/5, 4/5],              role: [0, 1, 1, 1, 1] },
+        sextuplet:   { name: 'Sextuplet',  pos: [0, 1/6, 2/6, 3/6, 4/6, 5/6],         role: [0, 1, 1, 2, 1, 1] },
     };
     Object.keys(TIMING_GRIDS).forEach(k => { TIMING_GRIDS[k].gap = timingGridGap(TIMING_GRIDS[k].pos); });
 
-    // subdivision values that force a grid
-    const TIMING_LOCK = { 'shuffle': 'shuffle', '16shuffle': 'halftime', '3': 'triplet', '5': 'quintuplet', '6': 'sextuplet' };
+    // Rhythms that force the grid. Tuplets lock it completely; the shuffle rhythms force Shuffle on
+    // (the value is the resolution used when the chosen one is 32, which has no shuffle form).
+    const TIMING_TUPLET = { '3': 'triplet', '5': 'quintuplet', '6': 'sextuplet' };
+    const TIMING_SHUFFLE_RHYTHM = { 'shuffle': '8', '16shuffle': '16' };
+
+    // Effective detection settings for the current rhythm
+    function timingEffective() {
+        const forced = !!TIMING_SHUFFLE_RHYTHM[subdivision];
+        const res = forced && timingRes === '32' ? TIMING_SHUFFLE_RHYTHM[subdivision] : timingRes;
+        const canShuffle = res === '8' || res === '16';
+        return { res, forced, canShuffle, shuffle: canShuffle && (forced || timingShuffle) };
+    }
 
     function getTimingGrid() {
-        const lockKey = TIMING_LOCK[subdivision];
-        const key = lockKey || timingFeel;
-        const g = TIMING_GRIDS[key] || TIMING_GRIDS.straight;
-        return { key, name: g.name, pos: g.pos, role: g.role, gap: g.gap, locked: !!lockKey };
+        const tuplet = TIMING_TUPLET[subdivision];
+        let key = tuplet, res = null, shuffle = false;
+        if (!tuplet) {
+            const e = timingEffective();
+            res = e.res; shuffle = e.shuffle;
+            key = res + (shuffle ? 'shuffle' : '');
+            if (subdivision === 'shuffle' && res === '16') key = '8triplet'; // 8th shuffle rhythm: check the 8th-triplet grid
+        }
+        const g = TIMING_GRIDS[key];
+        return { key, name: g.name, pos: g.pos, role: g.role, gap: g.gap, res, shuffle, locked: !!(tuplet || TIMING_SHUFFLE_RHYTHM[subdivision]) };
+    }
+
+    // Grid line class: finest-role lines are lighter, then sub lines, then the bar start
+    function timingGlClass(role, j, bar) {
+        return 'tm-gl' + (role === 3 ? ' fine' : j ? ' sub' : bar ? ' bar' : '');
     }
 
     // --- Pure helpers ---
@@ -2345,9 +2465,11 @@
         const dur = nxt ? nxt.time - cur.time : fallbackDur;
         if (!(dur > 0)) return null;
         const curN = cur.n !== undefined ? cur.n : k;
-        // Role-weighted capture: every grid point scores |offset| / weight (beat 1.0, main off-beat 0.85, other 0.6);
-        // the lowest score wins. Reject when the runner-up is within 8 % (ambiguous) or the hit is > 0.45 beat away.
-        const W = [1.0, 0.6, 0.85];
+        // Role-weighted capture: every grid point scores |offset| / weight (beat 1.0, main off-beat 0.85, other 0.6,
+        // finest 0.5); the lowest score wins. Reject when the runner-up is within 8 % (ambiguous) or the hit is
+        // beyond the capture radius: 0.42 x the widest gap (so a 16th hit on a coarse 8 grid is 'too-far'),
+        // clamped to 0.16-0.45 beat.
+        const W = [1.0, 0.6, 0.85, 0.5];
         const cands = [];
         for (let j = 0; j < grid.pos.length; j++) {
             const g = cur.time + grid.pos[j] * dur;
@@ -2364,7 +2486,8 @@
             else if (c.score < second) second = c.score;
         });
         const offsetMs = best.off * 1000;
-        if (Math.abs(best.off) > 0.45 * dur) { timingLastMatchReason = 'too-far'; return null; }
+        const radius = Math.max(0.16, Math.min(0.45, 0.42 * timingGridGap(grid.pos, true)));
+        if (Math.abs(best.off) > radius * dur) { timingLastMatchReason = 'too-far'; return null; }
         if (second <= best.score * 1.08) { timingLastMatchReason = 'ambiguous'; return null; }
         timingLastMatchReason = '';
         return { offsetMs, beatGlobal: best.beatGlobal, beatInMeasure: best.beatInMeasure, pos: best.pos, role: best.role, gridTime: best.gridTime };
@@ -2377,6 +2500,8 @@
     // Re-trigger guard: >= 40 ms and the band must have dropped below 0.7 x its peak (or exceed 1.5 x it).
     // Onset time = earliest crossing sample of the triggering bands.
     const TIMING_ONSET_CORE_SRC = `
+// Clipping detection: a real clip is a flat top of several consecutive full-scale samples; a lone peak at 1.0 is not.
+const CLIP_LEVEL = 0.998, CLIP_RUN = 4;
 class OnsetCore {
   constructor(sr, opts) {
     opts = opts || {};
@@ -2407,27 +2532,55 @@ class OnsetCore {
     this.hi = 0; this.blocks = 0;
     this.n = 0; this.blockStart = 0;
     this.state = 0; this.onsetFrame = -1e12;
-    this.lvl = 0; this.thMin = this.minTh; this.raw = 0; this.clip = false;
+    this.lvl = 0; this.thMin = this.minTh; this.raw = 0; this.clip = false; this.clipRun = 0; // clipRun persists across quanta (only takeLevel clears clip)
     this.rec = false; this.near = []; this.lastNear = -1e12; this.trigInfo = null; // debug recorder only
+    // input glitch detector: runs of render quanta that are exactly 0.0 after non-zero data (a real noise floor is never 0.0)
+    this.zeroRuns = 0; this.zSeen = false; this.zPrev = false;
+    // sample-precise runs of exactly-zero samples (spanning quanta), reported when the run ends; >= 32 samples, after non-zero data only
+    this.gSeen = false; this.gRun = 0; this.gStart = 0; this.glitches = [];
   }
   processChannels(chs, idx, startFrame) {
-    return this.process(chs[idx] || chs[0], startFrame);
+    const x = chs[idx] || chs[0];
+    this.scanZero(x, startFrame || 0);
+    return this.process(x, startFrame);
+  }
+  takeGlitches() { const g = this.glitches; this.glitches = []; return g; }
+  scanRuns(x, startFrame) {
+    for (let i = 0; i < x.length; i++) {
+      if (x[i] === 0) {
+        if (this.gSeen) { if (this.gRun === 0) this.gStart = startFrame + i; this.gRun++; }
+      } else {
+        if (this.gRun >= 32) this.glitches.push({ type: 'glitch', startTime: this.gStart / this.sr, lengthSamples: this.gRun, lengthMs: this.gRun / this.sr * 1000 });
+        this.gRun = 0; this.gSeen = true;
+      }
+    }
+  }
+  scanZero(x, startFrame) {
+    this.scanRuns(x, startFrame || 0);
+    let allZero = x.length > 0;
+    for (let i = 0; i < x.length; i++) if (x[i] !== 0) { allZero = false; break; }
+    if (allZero) {
+      if (this.zSeen && !this.zPrev) this.zeroRuns++; // count each run once, at its start
+      this.zPrev = true;
+    } else {
+      this.zSeen = true; this.zPrev = false;
+    }
   }
   takeLevel() {
-    const r = { db: 20 * Math.log10(this.lvl > 1e-9 ? this.lvl : 1e-9), thDb: 20 * Math.log10(this.thMin), rawDb: 20 * Math.log10(this.raw > 1e-9 ? this.raw : 1e-9), clip: this.clip };
+    const r = { db: 20 * Math.log10(this.lvl > 1e-9 ? this.lvl : 1e-9), thDb: 20 * Math.log10(this.thMin), rawDb: 20 * Math.log10(this.raw > 1e-9 ? this.raw : 1e-9), clip: this.clip, zeroRuns: this.zeroRuns };
     this.lvl = 0; this.raw = 0; this.clip = false;
     return r;
   }
-  // Sensitivity 1..10 (5 = reference tuning). f scales the required rises: 1.5 at 1, 1.0 at 5, 0.55 at 10.
+  // Sensitivity 1..10 (5 = reference tuning). f scales the required rises: 1.5 at 1, 1.0 at 5, 0.35 at 10.
   setSensitivity(v) {
     v = Math.max(1, Math.min(10, +v || 5));
-    const f = v >= 5 ? 1 - (v - 5) * 0.09 : 1 + (5 - v) * 0.125;
+    const f = v >= 5 ? 1 - (v - 5) * 0.13 : 1 + (5 - v) * 0.125;
     this.sens = v; this.f = f;
     this.jumps = this.baseJumps.map(j => Math.pow(j, f)); // jump dB x f
     this.combDb = this.baseCombDb * f;
     this.thRatio = Math.pow(2, f);                     // gate: floor + 6 dB x f
     this.minTh = Math.pow(10, (-55 + (5 - v) * 2) / 20); // absolute gate, -55 dBFS shifted 2 dB per step
-    this.drop = v >= 5 ? 0.7 + (v - 5) * 0.02 : 0.7 - (5 - v) * 0.025; // re-trigger drop: 0.6 at 1, 0.8 at 10
+    this.drop = v >= 5 ? 0.7 + (v - 5) * 0.03 : 0.7 - (5 - v) * 0.025; // re-trigger drop: 0.6 at 1, 0.85 at 10
     if (this.thMin !== undefined) this.thMin = this.minTh;
   }
   params() {
@@ -2446,8 +2599,8 @@ class OnsetCore {
       const v = x[i];
       const av = v < 0 ? -v : v;
       if (av > this.raw) this.raw = av; // raw input peak (before the band filters)
-      // clipping: any raw sample at full scale (>= 0.999, about -0.01 dBFS)
-      if (av >= 0.999) this.clip = true;
+      // clipping = a flat top (CLIP_RUN consecutive samples at/near full scale), not one peak touching it
+      if (av >= CLIP_LEVEL) { if (++this.clipRun >= CLIP_RUN) this.clip = true; } else this.clipRun = 0;
       if (this.n === 0) this.blockStart = startFrame + i;
       const k = this.n;
       for (let b = 0; b < nb; b++) {
@@ -2567,6 +2720,242 @@ class OnsetCore {
     for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = false; }
   }
 }
+// Click-ref detector: template matching of the metronome's own, known click waveform on a (digital loopback) reference channel.
+// The main thread sends every audible click as [sched, freq, dur, gain]; the click is an oscillator sine (phase 0 at the start) times an
+// exponential gain ramp gain -> 0.001 over dur, so its waveform is known exactly (only the loopback scale is unknown, NCC ignores it).
+// The ref channel is band-limited (HP 250 Hz / LP 2400 Hz, 2nd order each; the template goes through the same filter, so the peak stays
+// exactly at the true start) into a ring. For each click whose search window is complete, the matched-filter output (correlation with the first
+// 15 ms of the template) is searched over a lag range: coarse (stride S, ~12 kHz) over the whole range, then full rate around the best coarse
+// peaks, then parabolic interpolation. The peak is picked on the raw correlation (robust to loud bursts, which only inflate a normalizer) and
+// accepted when the normalized cross-correlation (NCC) there is >= 0.6. Ranges: no prediction = 5..400 ms; prediction L = L +-4 ms, widened to
+// L-5 .. L+45 ms when that misses (covers 10/20/40 ms input FIFO slips). The prediction comes from the main thread (setTrack).
+// Real-time: everything is preallocated; the coarse sweep is time-sliced (budget MACs per render quantum).
+class RefTemplate {
+  constructor(sr) {
+    this.sr = sr;
+    this.S = Math.max(1, Math.round(sr / 12000));
+    let R = 1; while (R < 1.5 * sr) R <<= 1;
+    this.R = R; this.mask = R - 1;
+    this.ring = new Float32Array(2 * R);          // mirrored: ring[(p & mask) + k] is contiguous for k < R
+    this.wr = 0; this.first = -1;                 // absolute frames written / first frame seen
+    this.fs = new Float64Array(8); this.fb = new Float64Array(8);   // filter states (stream / template build)
+    this.coef = new Float64Array(10);
+    RefTemplate.biquad(this.coef, 0, 250, sr, false);
+    RefTemplate.biquad(this.coef, 5, Math.min(2400, 0.4 * sr), sr, true);
+    this.maxLen = Math.ceil(0.015 * sr) + 2;
+    this.tp = [];
+    for (let i = 0; i < 12; i++) this.tp.push({ f: 0, d: 0, g: 0, len: 0, ls: 0, et: 0, ets: 0, used: 0, buf: new Float32Array(this.maxLen), sub: new Float32Array(Math.ceil(this.maxLen / this.S) + 2) });
+    this.tclock = 0;
+    this.QN = 256;
+    this.qT = new Float64Array(this.QN); this.qF = new Float64Array(this.QN); this.qD = new Float64Array(this.QN); this.qG = new Float64Array(this.QN);
+    this.qh = 0; this.qt = 0;                     // click queue (FIFO, absolute counters)
+    this.lag = null; this.mode = 0;               // predicted lag in seconds; mode 0 = none (first click of a run), 1 = a hint, 2 = locked
+    this.cc = new Float32Array(Math.ceil(0.46 * sr / this.S) + 16);   // coarse correlation of the current sweep
+    this.cands = new Int32Array(8); this.pD = new Float64Array(8); this.pV = new Float64Array(8); this.pN = new Float64Array(8);
+    this.jOn = false; this.jStage = 0; this.jN0 = 0; this.jTpl = null; this.aLo = 0; this.aHi = 0; this.jLo = 0; this.jHi = 0; this.jD = 0; this.jCi = 0; this.jE = 0; this.jNeed = 0;
+    this.budget = 150000;                         // coarse MACs per render quantum
+    this.eMin = 1e-9;                             // mean-square floor of the window (about -90 dBFS rms): below it the NCC is not meaningful
+    this.thr = 0.6;                               // NCC to accept
+    this.thrFirst = 0.65;                         // stricter for the first click of a run, which has no prediction to lean on
+    this.out = [];
+    this.hits = 0; this.misses = 0; this.wide = 0; this.full = 0;   // stats
+  }
+  // RBJ biquad (Q = 1/sqrt(2)) written to c[o..o+4] = b0 b1 b2 a1 a2 (normalized)
+  static biquad(c, o, fc, sr, low) {
+    const w = 2 * Math.PI * fc / sr, cs = Math.cos(w), al = Math.sin(w) / (2 * Math.SQRT1_2), a0 = 1 + al;
+    c[o + 3] = -2 * cs / a0; c[o + 4] = (1 - al) / a0;
+    if (low) { c[o] = (1 - cs) / 2 / a0; c[o + 1] = (1 - cs) / a0; }
+    else { c[o] = (1 + cs) / 2 / a0; c[o + 1] = -(1 + cs) / a0; }
+    c[o + 2] = c[o];
+  }
+  // one sample through HP then LP; st = state (x1 x2 y1 y2 of each section)
+  step(st, v) {
+    const c = this.coef;
+    const y = c[0] * v + c[1] * st[0] + c[2] * st[1] - c[3] * st[2] - c[4] * st[3];
+    st[1] = st[0]; st[0] = v; st[3] = st[2]; st[2] = y;
+    const z = c[5] * y + c[6] * st[4] + c[7] * st[5] - c[8] * st[6] - c[9] * st[7];
+    st[5] = st[4]; st[4] = y; st[7] = st[6]; st[6] = z;
+    return z;
+  }
+  // flat [sched, freq, dur, gain, ...]; the oldest queued click is dropped when the queue is full
+  addClicks(a) {
+    for (let i = 0; i + 3 < a.length; i += 4) {
+      if (this.qt - this.qh >= this.QN) { this.qh++; this.jOn = false; }
+      const k = this.qt & (this.QN - 1);
+      this.qT[k] = a[i]; this.qF[k] = a[i + 1]; this.qD[k] = Math.round(a[i + 2] * 4000) / 4000; this.qG[k] = a[i + 3];
+      this.qt++;
+    }
+  }
+  // lagSec: the lag to expect (seconds) or null; locked false = only a hint (a stored latency): a miss then falls back to the full range
+  setTrack(lagSec, locked) {
+    const ok = typeof lagSec === 'number' && isFinite(lagSec);
+    this.lag = ok ? lagSec : null;
+    this.mode = !ok ? 0 : (locked === false ? 1 : 2);
+  }
+  // template of the click (cached in a small pool): osc phase 0 * exponential ramp gain -> 0.001 over dur, through the stream prefilter
+  tplFor(f, d, g) {
+    const tp = this.tp;
+    let victim = null;
+    for (let i = 0; i < tp.length; i++) {
+      const t = tp[i];
+      if (t.f === f && t.d === d && t.g === g) { t.used = ++this.tclock; return t; }
+      if (t !== this.jTpl && (victim === null || t.used < victim.used)) victim = t;
+    }
+    const t = victim, sr = this.sr, S = this.S, fb = this.fb;
+    t.f = f; t.d = d; t.g = g; t.used = ++this.tclock;
+    t.len = Math.min(this.maxLen, Math.max(64, Math.min(Math.round(0.015 * sr), Math.round(d * sr))));
+    const rate = Math.log(g / 0.001) / (sr * d), w = 2 * Math.PI * f / sr;
+    fb.fill(0);
+    let et = 0;
+    for (let k = 0; k < t.len; k++) { const y = this.step(fb, Math.exp(-rate * k) * Math.sin(w * k)); t.buf[k] = y; et += y * y; }
+    t.et = et;
+    t.ls = Math.floor((t.len - 1) / S) + 1;
+    let ets = 0;
+    for (let j = 0; j < t.ls; j++) { const y = t.buf[j * S]; t.sub[j] = y; ets += y * y; }
+    t.ets = ets;
+    return t;
+  }
+  // returns the (reused) array of events { time, lagMs, ncc, sched } found in this quantum
+  processChannels(chs, idx, startFrame) {
+    this.out.length = 0;
+    const x = chs[idx];
+    if (!x) return this.out;
+    this.write(x, startFrame || 0);
+    this.run();
+    return this.out;
+  }
+  write(x, sf) {
+    const R = this.R, mask = this.mask, ring = this.ring, st = this.fs;
+    // Frame numbers are only used to place gaps (quanta the worklet did not pass on). A number at or below the write position is a
+    // stale currentFrame (seen under load, once in a while) and the data is still the next quantum, so it is appended, never a rewind.
+    if (this.first < 0 || sf - this.wr >= R) { this.first = sf; this.wr = sf; st.fill(0); }
+    let w = this.wr;
+    for (; w < sf; w++) { const y = this.step(st, 0), k = w & mask; ring[k] = y; ring[k + R] = y; }   // the stream delivered nothing here
+    for (let i = 0; i < x.length; i++, w++) { const y = this.step(st, x[i]), k = w & mask; ring[k] = y; ring[k + R] = y; }
+    this.wr = w;
+  }
+  // choose the lag range of a stage (1 locked, 2 widened, 3 unlocked); false = nothing to search
+  setupStage(stage) {
+    const sr = this.sr, S = this.S, L = this.mode === 0 ? 0 : this.lag;
+    let lo, hi;
+    if (stage === 1) { lo = Math.round((L - 0.004) * sr); hi = Math.round((L + 0.004) * sr); }
+    else if (stage === 2) { lo = Math.round((L - 0.005) * sr); hi = Math.round((L + 0.045) * sr); }
+    else { lo = Math.round(0.005 * sr); hi = Math.round(0.4 * sr); }
+    // [lo, hi] is where a response is accepted. The sweep extends 4 ms further on both sides, so that a carrier-cycle echo of a click
+    // that really starts just outside the range cannot win inside it: the click's own, stronger peak is in the sweep and takes the slot.
+    const m = Math.round(0.004 * sr), valid0 = Math.max(this.first, this.wr - this.R + 2);
+    this.aLo = lo; this.aHi = hi;
+    lo = Math.max(lo - m, 0, valid0 - this.jN0 + S + 1); hi += m;
+    this.jStage = stage; this.jLo = lo; this.jHi = hi; this.jD = lo; this.jCi = 0;
+    this.jNeed = this.jN0 + hi + S + 1 + this.jTpl.len;   // the whole window (and the fine stage's margin) must be in the ring
+    return hi >= this.aLo && (hi - lo) / S + 2 < this.cc.length;
+  }
+  finish(ev) {
+    this.jOn = false; this.qh++;
+    if (ev) { this.out.push(ev); this.hits++; } else this.misses++;
+  }
+  run() {
+    let budget = this.budget;
+    while (budget > 0) {
+      if (!this.jOn) {
+        if (this.qh === this.qt) return;
+        const k = this.qh & (this.QN - 1);
+        this.jN0 = Math.round(this.qT[k] * this.sr);
+        this.jTpl = this.tplFor(this.qF[k], this.qD[k], this.qG[k]);
+        this.jOn = true;
+        if (!this.setupStage(this.mode === 0 ? 3 : 1)) { this.finish(null); continue; }
+      }
+      if (this.wr < this.jNeed) return;           // the search window is not complete yet
+      budget = this.coarse(budget);
+      if (this.jD > this.jHi) this.fine();
+    }
+  }
+  // coarse sweep (resumable) on every S-th sample and lag; the window energy slides (one add and one subtract per step)
+  coarse(budget) {
+    const S = this.S, tpl = this.jTpl, ls = tpl.ls, sub = tpl.sub, ets = tpl.ets, ring = this.ring, mask = this.mask, cc = this.cc, n0 = this.jN0, hi = this.jHi;
+    const emin = this.eMin * ls;
+    let d = this.jD, ci = this.jCi, E = this.jE;
+    while (d <= hi && budget > 0) {
+      const b = (n0 + d) & mask;
+      if (ci === 0) { E = 0; for (let j = 0; j < ls; j++) { const v = ring[b + j * S]; E += v * v; } }
+      let dot = 0;
+      for (let j = 0; j < ls; j++) dot += ring[b + j * S] * sub[j];
+      cc[ci++] = E > emin && dot > 0.45 * Math.sqrt(E * ets) ? dot : 0;   // raw correlation where the NCC is plausible (a decaying tail has NCC ~ 1 too, but less raw correlation)
+      const a = ring[b], z = ring[b + ls * S];
+      E += z * z - a * a; if (E < 0) E = 0;
+      d += S; budget -= ls;
+    }
+    this.jD = d; this.jCi = ci; this.jE = E;
+    return budget;
+  }
+  dot(pos, tpl) {
+    const b = pos & this.mask, ring = this.ring, buf = tpl.buf, len = tpl.len;
+    let s = 0;
+    for (let k = 0; k < len; k++) s += ring[b + k] * buf[k];
+    return s;
+  }
+  fine() {
+    const S = this.S, cc = this.cc, n = this.jCi, tpl = this.jTpl, n0 = this.jN0, cands = this.cands;
+    const sep = Math.max(2, Math.ceil(0.004 * this.sr / S));   // one candidate per click response (its strongest carrier cycle): peaks 4 ms apart
+    let nc = 0;
+    for (let c = 0; c < cands.length; c++) {
+      let bi = -1, bv = 0;
+      for (let i = 0; i < n; i++) if (cc[i] > bv) { bv = cc[i]; bi = i; }
+      if (bi < 0) break;
+      cands[nc++] = bi;
+      const a = Math.max(0, bi - sep), z = Math.min(n - 1, bi + sep);
+      for (let i = a; i <= z; i++) cc[i] = -1;
+    }
+    // each candidate: its best full-rate lag by raw correlation, kept only if the NCC there is >= thr
+    const pD = this.pD, pV = this.pV, pN = this.pN, ring = this.ring, len = tpl.len;
+    let np = 0;
+    for (let c = 0; c < nc; c++) {
+      const dc = this.jLo + cands[c] * S;
+      let cv = 0, cd = dc;
+      for (let d = dc - S; d <= dc + S; d++) {
+        const v = this.dot(n0 + d, tpl);
+        if (v > cv) { cv = v; cd = d; }
+      }
+      if (cv <= 0) continue;
+      const b = (n0 + cd) & this.mask;
+      let e = 0;
+      for (let k = 0; k < len; k++) { const v = ring[b + k]; e += v * v; }
+      const ncc = e > this.eMin * len ? cv / Math.sqrt(e * tpl.et) : 0;
+      if (ncc >= (this.mode === 0 ? this.thrFirst : this.thr)) { pD[np] = cd; pV[np] = cv; pN[np] = ncc; np++; }
+    }
+    // Which response is this click's own: in the +-4 ms search the strongest. In the wider searches other clicks of the same tone can be in
+    // range (fast subdivisions), so the one nearest to the prediction; with no prediction (the first click of a run, later clicks follow it) the earliest.
+    let bestD = 0, bestV = 0, bestN = 0;
+    if (np > 0) {
+      const anchor = this.mode === 0 ? -1e12 : this.lag * this.sr;
+      let top = 0;
+      for (let i = 0; i < np; i++) if (pV[i] > top) top = pV[i];
+      let a = -1;
+      for (let i = 0; i < np; i++) {
+        if (pV[i] < 0.7 * top) continue;       // weaker peaks are echoes of a click's decaying tail (same waveform, scaled), not other clicks
+        if (a < 0 || (this.jStage === 1 ? pV[i] > pV[a] : Math.abs(pD[i] - anchor) < Math.abs(pD[a] - anchor))) a = i;
+      }
+      bestD = pD[a]; bestV = pV[a]; bestN = pN[a];
+      if (bestD < this.aLo || bestD > this.aHi) bestV = 0;   // a response outside the range being searched
+    }
+    let ev = null;
+    if (bestV > 0) {
+      const rm = this.dot(n0 + bestD - 1, tpl), rp = this.dot(n0 + bestD + 1, tpl), den = rm - 2 * bestV + rp;
+      let dl = den < 0 ? 0.5 * (rm - rp) / den : 0;
+      if (dl > 0.5) dl = 0.5; else if (dl < -0.5) dl = -0.5;
+      const sched = this.qT[this.qh & (this.QN - 1)], time = (n0 + bestD + dl) / this.sr;
+      ev = { time, lagMs: (time - sched) * 1000, ncc: bestN, sched };
+    }
+    if (ev) {
+      if (this.jStage === 2) this.wide++; else if (this.jStage === 3) this.full++;
+      this.lag = ev.lagMs / 1000; this.mode = 2;            // the next clicks search here until the main thread says otherwise
+      this.finish(ev); return;
+    }
+    if (this.jStage === 1 && this.setupStage(2)) return;   // widen: the stream may have slipped
+    if (this.jStage === 2 && this.mode === 1 && this.setupStage(3)) return;   // only a hint: search everywhere
+    this.finish(null);
+  }
+}
 `;
     function timingMakeOnsetCoreParams(sr, sensitivity) {
         const c = timingMakeOnsetCore(sr, { sensitivity });
@@ -2576,6 +2965,10 @@ class OnsetCore {
         const Core = new Function(TIMING_ONSET_CORE_SRC + '; return OnsetCore;')();
         return new Core(sr, opts);
     }
+    function timingMakeRefTemplate(sr) {
+        const Ref = new Function(TIMING_ONSET_CORE_SRC + '; return RefTemplate;')();
+        return new Ref(sr);
+    }
 
     // --- Worklet (inline string, loaded through a Blob URL so the app stays single-file) ---
     const TIMING_WORKLET_SRC = TIMING_ONSET_CORE_SRC + `
@@ -2584,12 +2977,15 @@ class OnsetDetector extends AudioWorkletProcessor {
     super();
     this.core = new OnsetCore(sampleRate);
     this.ch = 0;
+    this.refCh = -1; this.ref = null;
     this.acc = 0;
     this.rec = false; this.recBuf = null; this.recN = 0; this.recFrame = 0;
+    this.clk = -1;   // shared frame clock (see frameStart)
     this.port.onmessage = (e) => {
       const m = e.data;
       if (m && m.type === 'config') {
         if (typeof m.channel === 'number') this.ch = m.channel | 0;
+        if (typeof m.refChannel === 'number' && (m.refChannel | 0) !== this.refCh) { this.refCh = m.refChannel | 0; this.ref = this.refCh >= 0 ? new RefTemplate(sampleRate) : null; }
         if (typeof m.sensitivity === 'number') this.core.setSensitivity(m.sensitivity);
         if (typeof m.record === 'boolean' && m.record !== this.rec) {
           this.rec = m.record;
@@ -2597,6 +2993,9 @@ class OnsetDetector extends AudioWorkletProcessor {
           if (m.record) { this.recBuf = new Float32Array(1024); this.recN = 0; }
           else { this.flushRaw(); this.port.postMessage({ type: 'recend' }); }
         }
+      } else if (m && this.ref) {
+        if (m.type === 'clicks') this.ref.addClicks(m.c);          // scheduled audible clicks [sched, freq, dur, gain, ...]
+        else if (m.type === 'track') this.ref.setTrack(m.lag, m.locked);   // lag to expect in seconds (null = none); locked false = only a hint
       }
     };
   }
@@ -2607,26 +3006,42 @@ class OnsetDetector extends AudioWorkletProcessor {
     }
     this.recBuf = this.rec ? new Float32Array(1024) : null; this.recN = 0;
   }
+  // One frame clock for the onset detector, the glitch scans, the ref detector and the recorder. currentFrame is sometimes stale under load
+  // (the same value twice while the input data is new), which would shift timestamps by a quantum. So: start from currentFrame, advance by
+  // the quantum length per call, resync only when currentFrame is ahead by at least one quantum (a real gap); behind or equal = keep the clock.
+  frameStart(n) {
+    if (this.clk < 0 || currentFrame - this.clk >= n) this.clk = currentFrame;
+    const f = this.clk;
+    this.clk += n;
+    return f;
+  }
   process(inputs) {
     const chs = inputs[0];
     if (!chs || !chs.length) return true;
-    const ons = this.core.processChannels(chs, this.ch, currentFrame);
+    const frame = this.frameStart(chs[0].length);
+    const ons = this.core.processChannels(chs, this.ch, frame);
     for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands });
+    if (this.ref) {
+      const rs = this.ref.processChannels(chs, this.refCh, frame);
+      for (let i = 0; i < rs.length; i++) this.port.postMessage({ type: 'ref', time: rs[i].time, lagMs: rs[i].lagMs, ncc: rs[i].ncc, sched: rs[i].sched });
+    }
     if (this.rec) {
       const x = chs[this.ch] || chs[0];
       if (this.recN + x.length > this.recBuf.length) this.flushRaw();
-      if (this.recN === 0) this.recFrame = currentFrame;
+      if (this.recN === 0) this.recFrame = frame;
       this.recBuf.set(x, this.recN);
       this.recN += x.length;
       if (this.recN >= this.recBuf.length) this.flushRaw();
       const nr = this.core.takeNear();
       for (let i = 0; i < nr.length; i++) this.port.postMessage({ type: 'near', time: nr[i].time, band: nr[i].band, ratioDb: nr[i].ratioDb, needDb: nr[i].needDb, levelDb: nr[i].levelDb, gateDb: nr[i].gateDb });
     }
+    const gl = this.core.takeGlitches();
+    for (let i = 0; i < gl.length; i++) this.port.postMessage(gl[i]);
     this.acc += chs[0].length;
     if (this.acc >= 1024) {
       this.acc = 0;
       const l = this.core.takeLevel();
-      this.port.postMessage({ type: 'level', db: l.db, thDb: l.thDb, rawDb: l.rawDb, clip: l.clip });
+      this.port.postMessage({ type: 'level', db: l.db, thDb: l.thDb, rawDb: l.rawDb, clip: l.clip, zeroRuns: l.zeroRuns });
     }
     return true;
   }
@@ -2666,11 +3081,11 @@ registerProcessor('onset-detector', OnsetDetector);
     const timingReduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // --- Status text (Detected / Too weak / Quiet) ---
-    function timingSetStatus(text, q, rank) {
+    function timingSetStatus(text, q, rank, ms) {
         const now = performance.now(); // UI-only timer, never used for hit timing
         const s = timingStatusState;
         if (now < s.until && rank < s.rank) return;
-        timingStatusState = { text, q: q || '', until: now + 450, rank };
+        timingStatusState = { text, q: q || '', until: now + (ms || 450), rank };
         timingQueueMeter();
     }
 
@@ -2684,9 +3099,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingMeterQueued = false;
         if (!timingOn) return;
         const f = Math.max(0, Math.min(1, (timingLevelDb + 80) / 80));   // meter scale -80..0 dBFS
-        const tf = Math.max(0, Math.min(0.99, (timingThDb + 80) / 80));
         timingMeterFill.style.transform = 'scaleX(' + f.toFixed(3) + ')';
-        timingMeterTh.style.transform = 'translateX(' + (tf * 100).toFixed(2) + '%)';
         const hot = timingLevelDb >= timingThDb;
         if (timingMeterFill.classList.contains('hit') !== hot) timingMeterFill.classList.toggle('hit', hot);
         const tooHot = performance.now() < timingHotUntil;
@@ -2707,8 +3120,9 @@ registerProcessor('onset-detector', OnsetDetector);
             timingStatusShown = key;
             timingSetText(timingStatusEl, text);
             timingSetQ(timingStatusEl, q);
+            timingStatusEl.classList.toggle('wide', text.length > 9);
         }
-        const title = 'Detection threshold ' + Math.round(timingThDb).toString().replace('-', '\u2212') + ' dB \u00b7 Quiet below ' + String(timingQuietDb).replace('-', '\u2212') + ' dB';
+        const title = 'Quiet below ' + String(timingQuietDb).replace('-', '\u2212') + ' dB';
         if (title !== timingMeterTitle) { timingMeterTitle = title; timingMeterWrap.title = title; }
         if (timingQuietShown !== timingQuietDb) {
             timingQuietShown = timingQuietDb;
@@ -2731,31 +3145,61 @@ registerProcessor('onset-detector', OnsetDetector);
         const sec = (audioCtx.outputLatency || 0) + (audioCtx.baseLatency || 0) + (timingTrackLatency || 0.010);
         return Math.max(0, Math.min(TIMING_LAT_MAX, Math.round(sec * 1000)));
     }
+    // Latency used for matching: the stored value plus the extra delay Chrome added to this stream (input FIFO underruns).
+    function timingEffectiveLatencyMs() { return timingLatencyMs + timingGlitchCompMs; }
     function timingLoadLatency() {
         const raw = timingLsGet('wm.timing.latency.' + timingDeviceId);
         const n = raw === null ? NaN : parseFloat(raw);
-        if (isFinite(n) && n >= 0) { timingLatencyMs = Math.min(TIMING_LAT_MAX, Math.round(n)); timingLatencyEst = false; }
+        timingMeasuredSeq = null; timingMeasuredPage = '';
+        if (isFinite(n) && n >= 0) {
+            timingLatencyMs = Math.min(TIMING_LAT_MAX, Math.round(n)); timingLatencyEst = false;
+            // source of the stored value: a measurement ({pageLoadId, streamSeq}) or a manual edit ({manual:true})
+            try {
+                const src = JSON.parse(timingLsGet('wm.timing.latencySrc.' + timingDeviceId) || 'null');
+                if (src && !src.manual && isFinite(src.streamSeq) && typeof src.pageLoadId === 'string') { timingMeasuredSeq = src.streamSeq; timingMeasuredPage = src.pageLoadId; }
+            } catch (e) { /* unreadable: treat as user-set */ }
+        }
         else { timingLatencyMs = timingEstimateLatencyMs(); timingLatencyEst = true; }
         timingRenderLatency();
     }
-    function timingSetLatency(ms) {
+    // A loopback measurement is only valid for the input stream it was taken on (Chrome picks a new random
+    // round-trip offset, ~80-90 ms, every time a stream is opened). Hint when the stream is no longer that one.
+    function timingNeedsRemeasure() {
+        return timingMeasuredSeq !== null && !timingLatencyEst && (timingMeasuredPage !== timingPageLoadId || timingMeasuredSeq !== timingStreamSeq);
+    }
+    // src omitted = manual edit (user-set, no stream binding); {streamSeq} = applied loopback measurement
+    function timingSetLatency(ms, src) {
         const v = Math.max(0, Math.min(TIMING_LAT_MAX, Math.round(Number(ms))));
         if (!isFinite(v)) return;
         timingLatencyMs = v;
+        timingGlitchCompMs = 0; timingGlitchCompN = 0; // the new value is taken as already correct
         timingLatencyEst = false;
         timingLsSet('wm.timing.latency.' + timingDeviceId, v);
+        if (src && typeof src.streamSeq === 'number') {
+            timingMeasuredSeq = src.streamSeq; timingMeasuredPage = timingPageLoadId;
+            timingLsSet('wm.timing.latencySrc.' + timingDeviceId, JSON.stringify({ pageLoadId: timingPageLoadId, streamSeq: src.streamSeq }));
+        } else {
+            timingMeasuredSeq = null; timingMeasuredPage = '';
+            timingLsSet('wm.timing.latencySrc.' + timingDeviceId, JSON.stringify({ manual: true }));
+        }
         timingRenderLatency();
     }
     function timingResetLatency() {
-        try { localStorage.removeItem('wm.timing.latency.' + timingDeviceId); } catch (e) { /* storage unavailable */ }
+        try { localStorage.removeItem('wm.timing.latency.' + timingDeviceId); localStorage.removeItem('wm.timing.latencySrc.' + timingDeviceId); } catch (e) { /* storage unavailable */ }
+        timingMeasuredSeq = null; timingMeasuredPage = '';
         timingLatencyMs = timingEstimateLatencyMs();
+        timingGlitchCompMs = 0; timingGlitchCompN = 0;
         timingLatencyEst = true;
         timingRenderLatency();
     }
     function timingRenderLatency() {
         timingSetText(timingLatValue, Math.round(timingLatencyMs) + ' ms');
         timingLatEst.hidden = !timingLatencyEst;
-        timingRenderSettingsBtn();
+        const comp = timingGlitchCompMs > 0 && !timingRefOn; // ref mode: liveL already tracks the slips
+        timingLatComp.hidden = !comp;
+        if (comp) timingSetText(timingLatComp, '+' + Math.round(timingGlitchCompMs) + ' ms auto (' + timingGlitchCompN + (timingGlitchCompN === 1 ? ' glitch)' : ' glitches)'));
+        timingLatRemeasure.hidden = timingRefOn || !timingNeedsRemeasure();
+        timingRenderRef(); // also renders the settings button
         let title = 'Play steady on the click and adjust until Avg sits near 0 ms.';
         const last = timingLoopLoadLast();
         if (last) title += ' Last loopback measurement: ' + Math.round(last.median) + ' ms \u00b1 ' + last.sd.toFixed(1) + ' ms (' + last.n + ' clicks' + (last.at ? ', ' + String(last.at).slice(0, 10) : '') + ').';
@@ -2797,7 +3241,11 @@ registerProcessor('onset-detector', OnsetDetector);
     }
 
     function timingPostConfig() {
-        if (timingNode) timingNode.port.postMessage({ type: 'config', channel: timingChannel, sensitivity: timingSensitivity });
+        if (!timingNode) return;
+        const m = { type: 'config', channel: timingChannel, sensitivity: timingSensitivity };
+        // refChannel is only sent once the click ref has been used, so with it Off the message is exactly the old one
+        if (timingRefOn || timingRefSent) { m.refChannel = timingRefOn ? timingRefCh : -1; timingRefSent = timingRefOn; }
+        timingNode.port.postMessage(m);
     }
     function timingLoadChannel() {
         const raw = timingLsGet('wm.timing.channel.' + timingDeviceId);
@@ -2813,7 +3261,235 @@ registerProcessor('onset-detector', OnsetDetector);
         timingChannel = i;
         timingLsSet('wm.timing.channel.' + timingDeviceId, i);
         timingChSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === i)));
-        timingPostConfig();
+        if (timingRefCh === i) timingSetRef(-1); // instrument and click channels are mutually exclusive (re-posts the config)
+        else { timingRenderRefSeg(); timingPostConfig(); }
+    }
+
+    // ---------------------------------------------------------------
+    // Click ref channel. A channel of the SAME input stream carries the metronome itself (e.g. an interface's digital loopback).
+    // We send the worklet every audible click (scheduled time + the waveform parameters); it finds each one on that channel by template
+    // matching (RefTemplate) and reports { sched, time }. Each event therefore carries the click it belongs to, and the exact current
+    // round-trip latency of this very stream is liveL = time - sched. Stream offsets and FIFO slips are tracked for free.
+    // ---------------------------------------------------------------
+    const TIMING_REF_RING = 64;          // scheduled clicks remembered
+    const TIMING_REF_TOL = 0.003;        // an event within this of liveL is accepted
+    const TIMING_REF_JUMP_TOL = 0.001;   // two consecutive off-track events agreeing within this adopt a new offset
+    const TIMING_REF_KEEP = 5;           // accepted offsets in the median
+    const TIMING_REF_LOST_SEC = 1.5;     // no accepted event for this long while playing = lost
+    const TIMING_REF_TRIM_MAX = 20;
+    let timingRefHist = [];              // liveL history { t (ctx s), ms, kind } (debug recorder / console), last 200
+    let timingClickOut = [];             // clicks recorded since the last flush to the worklet: [sched, freq, dur, gain, ...]
+    let timingClickFlushQueued = false;
+    let timingTrackSent = null;          // last { lag (s or null), locked } posted to the worklet; null = nothing sent yet
+    let timingRefHint = null;            // stored latency (s) to start from when the ref is switched on / changed mid-play; null at a play start
+    let timingRefWarn = false;           // lost with audible clicks being scheduled (or never locked): show the warning
+    let timingRefWarnAt = 0;
+    const TIMING_SYNCING = 'Syncing…';
+    function timingRefSyncing() { return timingRefOn && isPlaying && !timingRef.confirmed; }
+    function timingRefNewState() {
+        return { liveL: null, accepted: [], pending: null, lastAccept: null, everLocked: false, confirmed: false, lost: false, events: 0 };
+    }
+    function timingRefMedian(a) {
+        const b = a.slice().sort((x, y) => x - y), n = b.length;
+        return n % 2 ? b[(n - 1) / 2] : (b[n / 2 - 1] + b[n / 2]) / 2;
+    }
+    // Pure. state, sched (the click's scheduled time), refTime (where the worklet found it) -> { state (a new object), kind, offset, oldL, newL }.
+    // kind: 'lock' (first event of a run, or a first lock that the next click did not confirm), 'accept', 'pending' (off track, waiting for a second agreeing event), 'jump'. Offsets are seconds.
+    // The event names its own click, so there is nothing to pair or disambiguate (fast subdivisions included).
+    function timingRefMatch(state, sched, refTime) {
+        const st = Object.assign({}, state, { accepted: state.accepted.slice(), events: state.events + 1 });
+        const d = refTime - sched;
+        if (!st.confirmed && st.liveL !== null) {
+            // first lock not confirmed yet: the next click must agree within 1 ms, otherwise it becomes the new first lock
+            if (Math.abs(d - st.liveL) <= TIMING_REF_JUMP_TOL) {
+                st.accepted.push(d); st.liveL = timingRefMedian(st.accepted); st.confirmed = true; st.lastAccept = refTime; st.lost = false;
+                return { state: st, kind: 'accept', offset: d, newL: st.liveL };
+            }
+            st.liveL = d; st.accepted = [d]; st.lastAccept = refTime;
+            return { state: st, kind: 'lock', offset: d, newL: d };
+        }
+        if (st.liveL === null) {
+            st.liveL = d; st.accepted = [d]; st.pending = null; st.lastAccept = refTime; st.everLocked = true; st.lost = false;
+            return { state: st, kind: 'lock', offset: d, newL: d };
+        }
+        if (Math.abs(d - st.liveL) <= TIMING_REF_TOL) {
+            st.accepted.push(d);
+            if (st.accepted.length > TIMING_REF_KEEP) st.accepted.shift();
+            st.liveL = timingRefMedian(st.accepted); st.pending = null; st.lastAccept = refTime; st.lost = false;
+            return { state: st, kind: 'accept', offset: d, newL: st.liveL };
+        }
+        if (st.pending !== null && Math.abs(d - st.pending) <= TIMING_REF_JUMP_TOL) {
+            const oldL = st.liveL, nl = (d + st.pending) / 2;
+            st.liveL = nl; st.accepted = [nl]; st.pending = null; st.lastAccept = refTime; st.lost = false;
+            return { state: st, kind: 'jump', offset: d, oldL, newL: nl };
+        }
+        st.pending = d;
+        return { state: st, kind: 'pending', offset: d };
+    }
+    // Scheduler hook (called from playSound for every audible click): a few pushes, no scheduling math. The click list for the worklet is
+    // flushed in a microtask, i.e. once per scheduler tick after it has finished.
+    function timingRecordClick(time, freq, dur, gain) {
+        timingClickTimes.push(time);
+        if (timingClickTimes.length > TIMING_REF_RING) timingClickTimes.shift();
+        if (timingDbg) timingDbg.clicks.push(time);
+        if (freq > 0) {
+            timingClickOut.push(time, freq, dur, gain);
+            if (!timingClickFlushQueued) { timingClickFlushQueued = true; queueMicrotask(timingFlushClicks); }
+        }
+    }
+    function timingFlushClicks() {
+        timingClickFlushQueued = false;
+        const c = timingClickOut;
+        timingClickOut = [];
+        if (c.length && timingNode && timingRefSent) timingNode.port.postMessage({ type: 'clicks', c });
+    }
+    // Tells the worklet where to look: around liveL (locked), or around a hint (lost, or a mid-play start: the stored latency), or, with
+    // neither (first click of a run), over 5..400 ms taking the earliest response. The worklet also follows its own last result meanwhile.
+    function timingPostTrack() {
+        if (!timingNode || !timingRefSent) return;
+        const st = timingRef;
+        const m = st.liveL !== null ? { lag: st.liveL, locked: !st.lost } : { lag: timingRefHint, locked: false };
+        const sent = timingTrackSent;
+        if (sent && sent.locked === m.locked && (sent.lag === m.lag || (m.lag !== null && sent.lag !== null && Math.abs(m.lag - sent.lag) < 0.0002))) return;
+        timingTrackSent = m;
+        timingNode.port.postMessage({ type: 'track', lag: m.lag, locked: m.locked });
+    }
+    function timingUpdateRefOn() { timingRefOn = timingOn && timingRefCh >= 0; }
+    // Back to unlocked. A play start (keepClicks false) also forgets the recorded clicks; a mid-play change keeps them.
+    function timingRefReset(keepClicks) {
+        timingRef = timingRefNewState();
+        if (!keepClicks) timingClickTimes = [];
+        timingRefWarn = false;
+        timingRefHint = keepClicks ? timingEffectiveLatencyMs() / 1000 : null;
+        timingTrackSent = null;
+        timingPostTrack();
+    }
+    // The one place that picks the latency used to compensate instrument onsets.
+    function timingMatchLatencyMs() {
+        // liveL already includes any FIFO slip: no glitch compensation on top of it
+        if (timingRefOn && timingRef.liveL !== null) return timingRef.liveL * 1000 + timingRefTrimMs;
+        return timingEffectiveLatencyMs();
+    }
+    function timingRefLogJump(ctxTime, oldL, newL) {
+        timingGlitchLogAdd({
+            type: 'ref-jump', at: new Date().toISOString(), ctxTime, oldMs: oldL * 1000, newMs: newL * 1000, deltaMs: (newL - oldL) * 1000,
+            streamSeq: timingStreamSeq, playing: !!isPlaying, deviceId: timingDeviceId, pageLoadId: timingPageLoadId
+        });
+    }
+    // Entry point for ref clicks found by the worklet (tests inject here too): the click scheduled at sched was found at time.
+    function timingHandleRef(sched, time, ncc) {
+        if (!timingRefOn || !audioCtx) return null;
+        if (timingLoop && timingLoop.running) return null;
+        const r = timingRefMatch(timingRef, sched, time);
+        timingRef = r.state;
+        timingPostTrack();
+        if (timingDbg) timingDbg.refs.push({ sched, time, ncc, kind: r.kind, offsetMs: r.offset === undefined ? null : r.offset * 1000, liveLms: timingRef.liveL === null ? null : timingRef.liveL * 1000 });
+        if (r.kind === 'lock' || r.kind === 'accept' || r.kind === 'jump') {
+            timingRefHist.push({ t: time, ms: timingRef.liveL * 1000, kind: r.kind });
+            if (timingRefHist.length > 200) timingRefHist.shift();
+        }
+        if (r.kind === 'jump') timingRefLogJump(time, r.oldL, r.newL);
+        timingRefWarn = false;
+        if (timingRef.confirmed && timingStatusState.text === TIMING_SYNCING) { timingStatusState = { text: '', q: '', until: 0, rank: 0 }; timingQueueMeter(); }
+        timingRenderRef();
+        return r;
+    }
+    // Lost detection (called from the frame loop): no accepted event for > 1.5 s while playing.
+    // The warning needs audible clicks that should have been heard by now, or no lock at all in this run.
+    function timingRefTick(now) {
+        if (!timingRefOn || !isPlaying || !audioCtx) return;
+        if (now === undefined) now = audioCtx.currentTime;
+        const st = timingRef;
+        if (!st.confirmed && (timingStatusState.text !== TIMING_SYNCING || performance.now() > timingStatusState.until - 300) && !timingRefWarn) timingSetStatus(TIMING_SYNCING, '', 1, 700);
+        const since = st.lastAccept !== null ? st.lastAccept : timingPlayStart;
+        const lost = now - since > TIMING_REF_LOST_SEC;
+        let warn = false;
+        if (lost) {
+            if (!st.everLocked) warn = true;
+            else {
+                const after = st.lastAccept - st.liveL + 1e-4; // clicks scheduled after the last heard one
+                warn = timingClickTimes.some(s => s > after && s < now - 0.6);
+            }
+        }
+        const changed = lost !== st.lost || warn !== timingRefWarn;
+        if (lost !== st.lost) { timingRef = Object.assign({}, st, { lost }); timingPostTrack(); } // lost: search the whole range again
+        timingRefWarn = warn;
+        if (warn && performance.now() - timingRefWarnAt > 500) { timingRefWarnAt = performance.now(); timingSetStatus('No click on ref channel', 'warn', 3, 1200); }
+        if (changed) timingRenderRef();
+    }
+    function timingRefState() {
+        const st = timingRef;
+        return {
+            enabled: timingRefOn, channel: timingRefCh, trimMs: timingRefTrimMs,
+            liveLms: st.liveL === null ? null : st.liveL * 1000, locked: st.liveL !== null, everLocked: st.everLocked, lost: st.lost, warn: timingRefWarn,
+            acceptedMs: st.accepted.map(v => v * 1000), pendingMs: st.pending === null ? null : st.pending * 1000,
+            lastAccept: st.lastAccept, events: st.events, matchLatencyMs: timingMatchLatencyMs(),
+            clickTimes: timingClickTimes.slice(), history: timingRefHist.slice()
+        };
+    }
+    window.timingRefState = timingRefState;
+
+    function timingLoadRef() {
+        const raw = timingLsGet('wm.timing.refCh.' + timingDeviceId);
+        const n = raw === null || raw === 'off' ? -1 : parseInt(raw, 10);
+        timingRefCh = isFinite(n) && n >= 0 && n < timingChannels && n !== timingChannel ? n : -1;
+        const t = parseFloat(timingLsGet('wm.timing.refTrim.' + timingDeviceId));
+        timingRefTrimMs = isFinite(t) ? timingClamp(Math.round(t), TIMING_REF_TRIM_MAX) : 0;
+        timingUpdateRefOn();
+        timingRefReset(isPlaying);
+        timingRenderRefSeg();
+        timingRenderLatency();
+    }
+    function timingSetRef(i) {
+        if (!(i === -1 || (i >= 0 && i < timingChannels && i !== timingChannel))) return;
+        if (i === timingRefCh) return;
+        timingRefCh = i;
+        timingLsSet('wm.timing.refCh.' + timingDeviceId, i < 0 ? 'off' : i);
+        timingUpdateRefOn();
+        if (timingRefOn) { timingLoopCancel(''); timingLoopPanel.hidden = true; }
+        timingPostConfig(); // first: the worklet creates / drops its ref matcher, then it gets the unlocked track
+        timingRefReset(isPlaying);
+        timingRenderRefSeg();
+        timingRenderLatency();
+    }
+    function timingSetRefTrim(ms) {
+        const v = timingClamp(Math.round(Number(ms)), TIMING_REF_TRIM_MAX);
+        if (!isFinite(v)) return;
+        timingRefTrimMs = v;
+        timingLsSet('wm.timing.refTrim.' + timingDeviceId, v);
+        timingRenderRef();
+    }
+    // Off + every channel except the instrument channel
+    function timingRenderRefSeg() {
+        timingRefRowSel.hidden = timingChannels < 2;
+        timingRefSeg.textContent = '';
+        const add = (v, label) => {
+            const b = document.createElement('button');
+            b.type = 'button'; b.dataset.v = String(v); b.textContent = label;
+            b.setAttribute('aria-pressed', String(v === timingRefCh));
+            timingRefSeg.appendChild(b);
+        };
+        add(-1, 'Off');
+        for (let c = 0; c < timingChannels; c++) if (c !== timingChannel) add(c, 'Ch ' + (c + 1));
+    }
+    function timingRefFmtTrim(v) { return v === 0 ? '0 ms' : (v > 0 ? '+' : '−') + Math.abs(v) + ' ms'; }
+    function timingRenderRef() {
+        const on = timingRefOn;
+        timingLatRow.hidden = on;
+        timingRefRow.hidden = !on;
+        if (on) {
+            timingLoopPanel.hidden = true;
+            const st = timingRef;
+            timingSetText(timingRefLive, 'Live ' + (!st.confirmed ? '—' : (st.liveL * 1000).toFixed(1) + ' ms'));
+            if (timingRefSyncing()) { if (timingRefLive.dataset.sync === undefined) timingRefLive.dataset.sync = ''; }
+            else if (timingRefLive.dataset.sync !== undefined) delete timingRefLive.dataset.sync;
+            if (timingRefWarn) { if (timingRefLive.dataset.lost === undefined) timingRefLive.dataset.lost = ''; }
+            else if (timingRefLive.dataset.lost !== undefined) delete timingRefLive.dataset.lost;
+            const title = timingRefWarn && st.liveL !== null ? 'No click on the ref channel. Holding the last value.' : 'Round-trip latency measured against the actual clicks on the Click channel.';
+            if (timingRefLive.title !== title) timingRefLive.title = title;
+            timingSetText(timingRefTrimValue, timingRefFmtTrim(timingRefTrimMs));
+        }
+        timingRenderSettingsBtn();
     }
 
     // +/- stepper with press-and-hold repeat (400 ms delay, then 60 ms) and click-to-type value
@@ -2865,7 +3541,7 @@ registerProcessor('onset-detector', OnsetDetector);
     }
 
     // --- Session hooks (togglePlay) ---
-    function timingResetSession() {
+    function timingResetSession(midPlay) {
         timingBeats = [];
         timingBeatSeq = 0;
         timingHits = [];
@@ -2874,6 +3550,8 @@ registerProcessor('onset-detector', OnsetDetector);
         timingPlayStart = now;
         timingLastHitTime = now;
         timingFrozenNow = 0;
+        timingRefReset(midPlay); // a play start forgets the recorded clicks; Timing switched on mid-play keeps them
+        timingRenderRef();
         timingSetNoInput(false);
         timingTlReset(now);
         timingCClearMarks();
@@ -2908,7 +3586,9 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingHandleOnset(time, peakDb) {
         if (!timingOn || !audioCtx) return null;
         if (!isPlaying) { if (timingDbg) timingDbgMatch(time, null, null, 'not-playing'); return null; }
-        const tComp = time - timingLatencyMs / 1000;
+        // click ref mode: nothing is judged before the ref is locked (2 agreeing clicks); the fallback latency could be wrong
+        if (timingRefOn && !timingRef.confirmed) { if (timingDbg) timingDbgMatch(time, null, null, 'syncing'); return null; }
+        const tComp = time - timingMatchLatencyMs() / 1000;
         const m = matchOnsetToGrid(tComp, timingBeats, getTimingGrid(), 60 / bpm);
         if (!m) {
             const reason = timingLastMatchReason;
@@ -2938,6 +3618,61 @@ registerProcessor('onset-detector', OnsetDetector);
         return hit;
     }
 
+    // Brief opacity pulse on the meter for each accepted onset (~120 ms on, then fade); animate() restarts cleanly on rapid hits.
+    function timingFlashOnset() {
+        timingMeterFlash.dataset.flash = String(++timingFlashCount);
+        if (timingMeterFlash.animate) timingMeterFlash.animate([{ opacity: 1, offset: 0 }, { opacity: 1, offset: 0.35 }, { opacity: 0, offset: 1 }], { duration: 340, easing: 'ease-out' });
+    }
+    // Zero-quantum runs reported by the worklet (running count since the worklet was created). Count only: the length
+    // (needed for compensation) comes from the sample-precise 'glitch' message.
+    function timingInStartupWindow(ctxTime) { return ctxTime < timingStreamCtxAt + TIMING_STARTUP_IGNORE_SEC; }
+    function timingOnZeroRuns(raw) {
+        timingZeroRaw = raw;
+        if (performance.now() < timingSwapUntil || (audioCtx && timingInStartupWindow(audioCtx.currentTime))) { timingZeroBase = raw; return; } // fresh attach: absorb
+        const n = raw - timingZeroBase;
+        if (n > timingZeroRuns) timingZeroRuns = n;
+    }
+    // Sample-precise zero runs from the worklet -> persisted glitch log (last 200). A run that starts within 1 s of the
+    // stream attaching is a startup artifact: logged as ignored, never counted or compensated.
+    // A real run adds its length to the stream's compensation (Chrome's latency grows by exactly the run length).
+    function timingGlitchLoad() {
+        try {
+            const a = JSON.parse(timingLsGet(TIMING_GLITCH_KEY) || 'null');
+            if (Array.isArray(a)) return a;
+        } catch (e) { /* unreadable: fall back to memory */ }
+        return null;
+    }
+    function timingGlitchLog() { return timingGlitchLoad() || timingGlitchEntries; }
+    function timingGlitchLogAdd(e) {
+        const log = timingGlitchLog().slice();
+        log.push(e);
+        if (log.length > TIMING_GLITCH_MAX) log.splice(0, log.length - TIMING_GLITCH_MAX);
+        timingGlitchEntries = log;
+        timingLsSet(TIMING_GLITCH_KEY, JSON.stringify(log));
+    }
+    function timingOnGlitch(m) {
+        if (!(m.lengthMs >= 0)) return;
+        const now = performance.now();
+        const ignored = timingInStartupWindow(m.startTime);
+        if (!ignored) {
+            timingGlitchMsTotal += m.lengthMs;
+            timingGlitchCount++;
+            timingGlitchCompMs += m.lengthMs; timingGlitchCompN++;
+        }
+        const e = {
+            at: new Date().toISOString(), ctxTime: m.startTime, lengthMs: m.lengthMs, lengthSamples: m.lengthSamples,
+            streamSeq: timingStreamSeq, streamAgeSec: timingStreamAt ? (now - timingStreamAt) / 1000 : null,
+            playing: !!isPlaying, visibility: document.visibilityState, hasFocus: document.hasFocus(),
+            longTask: timingLongTaskEnd > 0 && timingLongTaskEnd >= now - 500,
+            glitchMsTotal: timingGlitchMsTotal, latencyHint: TIMING_LATENCY_HINT,
+            deviceId: timingDeviceId, pageLoadId: timingPageLoadId
+        };
+        if (ignored) e.ignored = 'startup';
+        timingGlitchLogAdd(e);
+        if (ignored) return;
+        timingRenderLatency();
+        if (isPlaying) timingSetStatus('Input glitch \u2014 compensated +' + Math.round(m.lengthMs) + ' ms', 'warn', 3, 4000);
+    }
     function timingOnWorkletMessage(ev) {
         const m = ev.data;
         if (!m) return;
@@ -2946,12 +3681,17 @@ registerProcessor('onset-detector', OnsetDetector);
             timingThDb = m.thDb;
             timingLevelCount++;
             if (typeof m.rawDb === 'number') {
-                if (m.rawDb < timingQuietDb) { if (!timingQuietSince) timingQuietSince = performance.now(); }
+                if (m.rawDb < timingQuietDb && performance.now() >= timingSwapUntil) { if (!timingQuietSince) timingQuietSince = performance.now(); }
                 else timingQuietSince = 0;
             }
+            if (typeof m.zeroRuns === 'number' && !timingMuteOnsets) timingOnZeroRuns(m.zeroRuns);
             if (m.clip) { timingHotUntil = performance.now() + 3000; timingQueueMeter(); }
             if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
             timingQueueMeter();
+        } else if (m.type === 'ref') {
+            if (!timingMuteOnsets) timingHandleRef(m.sched, m.time, m.ncc);
+        } else if (m.type === 'glitch') {
+            if (!timingMuteOnsets) timingOnGlitch(m);
         } else if (m.type === 'raw') {
             if (timingDbg) timingDbg.chunks.push({ frame: m.frame, data: m.samples });
         } else if (m.type === 'near') {
@@ -2962,6 +3702,7 @@ registerProcessor('onset-detector', OnsetDetector);
             if (timingDbg) timingDbg.onsets.push({ time: m.time, peakDb: m.peakDb, thDb: m.thDb, bands: m.bands, ctxNow: audioCtx ? audioCtx.currentTime : null });
             if (timingLoop && timingLoop.running) { timingLoopOnset(m.time); return; } // measurement clicks never reach the matcher/views
             if (timingMuteOnsets) return;
+            timingFlashOnset();
             timingHandleOnset(m.time, m.peakDb);
         }
     }
@@ -2969,9 +3710,12 @@ registerProcessor('onset-detector', OnsetDetector);
     // --- Settings popover (latency, loopback measurement, sensitivity) ---
     function timingRenderSettingsBtn() {
         const g = getTimingGrid();
-        timingSetText(timingSetFeel, (g.key === 'halftime' ? 'Half-time' : g.name) + ' \u00b7');
-        timingSetText(timingSetVals, Math.round(timingLatencyMs) + ' ms \u00b7 S' + timingSensitivity);
-        timingSetEst.hidden = !timingLatencyEst;
+        timingSetText(timingSetGrid, g.name + ' \u00b7');
+        const ref = timingRefOn;
+        timingSetText(timingSetVals, (ref ? 'Live ' + (!timingRef.confirmed ? '\u2014' : Math.round(timingRef.liveL * 1000) + ' ms') : Math.round(timingEffectiveLatencyMs()) + ' ms') + ' \u00b7 S' + timingSensitivity);
+        timingSetEst.hidden = ref || !timingLatencyEst;
+        const rm = !ref && timingNeedsRemeasure();
+        if (timingSetRemeasure.hidden === rm) timingSetRemeasure.hidden = !rm;
         const busy = !!(typeof timingLoop !== 'undefined' && timingLoop && timingLoop.running);
         if (timingSetBusy.hidden === busy) timingSetBusy.hidden = !busy;
     }
@@ -3024,6 +3768,143 @@ registerProcessor('onset-detector', OnsetDetector);
         } catch (e) { return null; }
     }
 
+    // --- Measurement history (diagnostics): last 30 finished measurements per device ---
+    const TIMING_LOOP_HIST_MAX = 30, TIMING_LOOP_HIST_SHOWN = 10;
+    const timingPageLoadId = Math.random().toString(36).slice(2, 10);
+    let timingStreamSeq = 0;        // increments on every acquired input stream in this page session
+    let timingStreamAt = 0;         // performance.now() when the current stream was acquired
+    let timingPlayedSinceLast = false;
+    // glitch log + per-stream glitch totals (reset on every acquired stream)
+    const TIMING_LATENCY_HINT = 'default'; // the AudioContext is always built with no options; the field stays in history/glitch entries so old and new logs compare
+    const TIMING_GLITCH_MAX = 200;
+    const TIMING_GLITCH_KEY = 'wm.timing.glitchLog';
+    let timingGlitchEntries = [];       // in-memory fallback when localStorage is unavailable
+    let timingGlitchMsTotal = 0, timingGlitchCount = 0;
+    let timingFirstGood = null;     // { seq, median } of the first good measurement on the current stream
+    let timingLongTaskEnd = 0;      // performance.now() at the end of the latest long task seen
+    try {
+        if (typeof PerformanceObserver !== 'undefined') {
+            new PerformanceObserver(list => {
+                list.getEntries().forEach(e => { timingLongTaskEnd = Math.max(timingLongTaskEnd, e.startTime + e.duration); });
+            }).observe({ entryTypes: ['longtask'] });
+        }
+    } catch (e) { /* longtask API unavailable */ }
+    window.timingGlitchLog = timingGlitchLog;
+    const timingLoopHistSummary = document.getElementById('timingLoopHistSummary');
+    const timingLoopHistList = document.getElementById('timingLoopHistList');
+    const timingLoopHistCopyBtn = document.getElementById('timingLoopHistCopy');
+    const timingLoopHistClearBtn = document.getElementById('timingLoopHistClear');
+    const timingLoopHistCopied = document.getElementById('timingLoopHistCopied');
+    let timingLoopHistCopiedTimer = 0;
+
+    function timingLoopHistory() {
+        const raw = timingLsGet('wm.timing.loopHistory.' + timingDeviceId);
+        if (!raw) return [];
+        try {
+            const a = JSON.parse(raw);
+            return Array.isArray(a) ? a : [];
+        } catch (e) { return []; }
+    }
+
+    function timingLoopHistAppend(result, st) {
+        const track = timingStream && timingStream.getAudioTracks && timingStream.getAudioTracks()[0];
+        let ts = {};
+        try { ts = (track && track.getSettings && track.getSettings()) || {}; } catch (e) { ts = {}; }
+        const num = v => (typeof v === 'number' && isFinite(v)) ? v : null;
+        const ms = v => num(v) === null ? null : v * 1000;
+        const now = performance.now();
+        if (result === 'good' && st && (!timingFirstGood || timingFirstGood.seq !== timingStreamSeq)) timingFirstGood = { seq: timingStreamSeq, median: st.median };
+        // what the median should be if the stored latency was measured on this very stream and only the glitches since then moved it
+        const sameStream = !timingLatencyEst && timingMeasuredSeq !== null && timingMeasuredSeq === timingStreamSeq && timingMeasuredPage === timingPageLoadId;
+        const expectedMs = sameStream ? timingLatencyMs + timingGlitchCompMs : null;
+        const residualMs = (expectedMs !== null && st && num(st.median) !== null) ? st.median - expectedMs : null;
+        const rec = {
+            at: new Date().toISOString(), result,
+            n: st ? st.n : 0, median: st ? st.median : null, sd: st ? st.sd : null, mad: st ? st.mad : null,
+            min: st ? st.min : null, max: st ? st.max : null, drift: st ? st.drift : null,
+            ctxRate: audioCtx.sampleRate, baseLatencyMs: ms(audioCtx.baseLatency), outputLatencyMs: ms(audioCtx.outputLatency),
+            trackRate: num(ts.sampleRate), trackLatencyMs: ms(ts.latency), channelCount: num(ts.channelCount),
+            label: (track && track.label) || '',
+            ctxTimeSec: audioCtx.currentTime, pageAgeSec: now / 1000,
+            streamAgeSec: timingStreamAt ? (now - timingStreamAt) / 1000 : null,
+            streamSeq: timingStreamSeq, pageLoadId: timingPageLoadId,
+            playedSinceLast: timingPlayedSinceLast,
+            zeroRuns: timingZeroRuns,
+            glitches: timingGlitchCount, glitchMsTotal: timingGlitchMsTotal,
+            measuredMinusFirst: (st && timingFirstGood && timingFirstGood.seq === timingStreamSeq && num(st.median) !== null) ? st.median - timingFirstGood.median : null,
+            latencyHint: TIMING_LATENCY_HINT,
+            appliedMs: timingLatencyMs, compMs: timingGlitchCompMs, expectedMs, residualMs,
+            outTs: null, channel: timingChannel, sensitivity: timingSensitivity
+        };
+        if (typeof audioCtx.getOutputTimestamp === 'function') {
+            try {
+                const o = audioCtx.getOutputTimestamp();
+                rec.outTs = { perfDeltaMs: now - o.performanceTime, ctxDeltaMs: (audioCtx.currentTime - o.contextTime) * 1000 };
+            } catch (e) { rec.outTs = null; }
+        }
+        timingPlayedSinceLast = false;
+        const hist = timingLoopHistory();
+        hist.push(rec);
+        timingLsSet('wm.timing.loopHistory.' + timingDeviceId, JSON.stringify(hist.slice(-TIMING_LOOP_HIST_MAX)));
+        timingLoopRenderHistory();
+    }
+
+    function timingLoopHistLine(r) {
+        const p2 = x => String(x).padStart(2, '0');
+        const d = new Date(r.at);
+        const t = isNaN(d) ? '--:--:--' : p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+        const f1 = v => typeof v === 'number' ? v.toFixed(1) : '?';
+        const rd = v => typeof v === 'number' ? String(Math.round(v)) : '?';
+        const head = r.result === 'failed' ? 'failed (' + r.n + ' clicks)' : f1(r.median) + ' ms \u00b1' + f1(r.sd) + (r.result === 'unstable' ? ' unstable' : '');
+        return [t, head, 'ctx ' + (r.ctxRate == null ? '?' : r.ctxRate) + ' / in ' + (r.trackRate == null ? '?' : r.trackRate),
+            'out ' + rd(r.outputLatencyMs), 'in ' + rd(r.trackLatencyMs), 'stream #' + r.streamSeq, rd(r.streamAgeSec) + ' s'].concat(r.zeroRuns > 0 ? ['zr ' + r.zeroRuns + (typeof r.glitchMsTotal === 'number' ? ' (+' + r.glitchMsTotal.toFixed(1) + ' ms)' : '')] : []).concat(typeof r.residualMs === 'number' ? ['\u0394 ' + (r.residualMs >= 0 ? '+' : '\u2212') + Math.abs(r.residualMs).toFixed(1)] : []).join(' \u00b7 ');
+    }
+
+    function timingLoopRenderHistory() {
+        const hist = timingLoopHistory();
+        timingLoopHistSummary.textContent = 'History (' + hist.length + ')';
+        timingLoopHistList.textContent = '';
+        for (let i = hist.length - 1, shown = 0; i >= 0 && shown < TIMING_LOOP_HIST_SHOWN; i--, shown++) {
+            const r = hist[i], prev = hist[i - 1], flags = [];
+            if (r.ctxRate != null && r.trackRate != null && r.ctxRate !== r.trackRate) flags.push('rate');
+            if (prev && (prev.streamSeq !== r.streamSeq || prev.pageLoadId !== r.pageLoadId)) flags.push('change');
+            const li = document.createElement('li');
+            li.textContent = timingLoopHistLine(r);
+            li.dataset.res = r.result;
+            if (flags.length) li.dataset.flag = flags.join(' ');
+            li.title = (flags.indexOf('rate') >= 0 ? 'Context and input sample rates differ. ' : '') + (flags.indexOf('change') >= 0 ? 'New input stream or page load since the previous measurement.' : '');
+            timingLoopHistList.appendChild(li);
+        }
+    }
+
+    function timingLoopHistCopy() { timingCopyText(JSON.stringify(timingLoopHistory(), null, 2)); }
+    function timingCopyText(text) {
+        const done = ok => {
+            timingSetText(timingLoopHistCopied, ok ? 'Copied' : 'Copy failed');
+            clearTimeout(timingLoopHistCopiedTimer);
+            timingLoopHistCopiedTimer = setTimeout(() => timingSetText(timingLoopHistCopied, ''), 1500);
+        };
+        const fallback = () => {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            let ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            document.body.removeChild(ta);
+            done(ok);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), fallback);
+        else fallback();
+    }
+
+    timingLoopHistCopyBtn.addEventListener('click', timingLoopHistCopy);
+    document.getElementById('timingGlitchCopy').addEventListener('click', () => timingCopyText(JSON.stringify(timingGlitchLog(), null, 2)));
+    timingLoopHistClearBtn.addEventListener('click', () => {
+        try { localStorage.removeItem('wm.timing.loopHistory.' + timingDeviceId); localStorage.removeItem(TIMING_GLITCH_KEY); } catch (e) { /* storage unavailable */ }
+        timingGlitchEntries = [];
+        timingLoopRenderHistory();
+    });
+
     function timingLoopStats(samples) {
         // samples: [{ ts, ms }]
         const v = samples.map(x => x.ms), n = v.length;
@@ -3044,6 +3925,7 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingLoopRender() {
         const running = !!(timingLoop && timingLoop.running);
         timingRenderSettingsBtn();
+        timingLoopRenderHistory();
         timingLoopStartBtn.disabled = running || isPlaying || !timingStream;
         timingLoopStartBtn.title = isPlaying ? 'Stop the metronome to measure.' : '';
         timingLoopStopBtn.disabled = !running;
@@ -3126,16 +4008,20 @@ registerProcessor('onset-detector', OnsetDetector);
         if (!st || st.n < 40) {
             timingLoopSetResult('Could not hear the clicks. Check the cable and levels.', 'bad');
             timingLoopApplyBtn.hidden = true;
+            timingLoopHistAppend('failed', st);
             return;
         }
-        timingLsSet('wm.timing.loopback.' + timingDeviceId, JSON.stringify({ median: st.median, sd: st.sd, mad: st.mad, drift: st.drift, n: st.n, at: new Date().toISOString() }));
+        timingLsSet('wm.timing.loopback.' + timingDeviceId, JSON.stringify({ median: st.median, sd: st.sd, mad: st.mad, drift: st.drift, n: st.n, at: new Date().toISOString(), streamSeq: timingStreamSeq, pageLoadId: timingPageLoadId }));
+        L.seq = timingStreamSeq; // stream this measurement was taken on; bound to the latency when the user presses Apply
         timingRenderLatency();
         timingSetText(timingLoopLive, st.n + '/' + TIMING_LOOP_CLICKS + ' \u00b7 median ' + st.median.toFixed(1) + ' ms \u00b7 SD ' + st.sd.toFixed(1) + ' \u00b7 MAD ' + st.mad.toFixed(1) +
             ' \u00b7 range ' + st.min.toFixed(1) + '\u2013' + st.max.toFixed(1) + ' \u00b7 drift ' + st.drift.toFixed(1) + ' ms/min \u00b7 misses ' + st.misses);
         if (st.sd > 2 || Math.abs(st.drift) > 1 || st.mad > 2) {
             timingLoopSetResult('Latency is unstable. Use the same interface for input and output, and match sample rates.', 'warn');
             timingLoopApplyBtn.hidden = true;
+            timingLoopHistAppend('unstable', st);
         } else {
+            timingLoopHistAppend('good', st);
             timingLoopSetResult('System latency ' + Math.round(st.median) + ' ms \u00b1 ' + st.sd.toFixed(1) + ' ms', 'good');
             timingLoopApplyBtn.hidden = false;
         }
@@ -3147,7 +4033,7 @@ registerProcessor('onset-detector', OnsetDetector);
     timingLoopCloseBtn.addEventListener('click', () => { timingLoopCancel(''); timingLoopPanel.hidden = true; });
     timingLoopApplyBtn.addEventListener('click', () => {
         const r = timingLoop && timingLoop.result;
-        if (r) { timingSetLatency(Math.round(r.median)); timingLoopApplyBtn.hidden = true; timingLoopSetResult('Applied: LATENCY ' + Math.round(r.median) + ' ms', 'good'); }
+        if (r) { timingSetLatency(Math.round(r.median), { streamSeq: typeof timingLoop.seq === 'number' ? timingLoop.seq : timingStreamSeq }); timingLoopApplyBtn.hidden = true; timingLoopSetResult('Applied: LATENCY ' + Math.round(r.median) + ' ms', 'good'); }
     });
 
     // ---------------------------------------------------------------
@@ -3165,15 +4051,16 @@ registerProcessor('onset-detector', OnsetDetector);
         const g = getTimingGrid();
         timingDbg = {
             seconds, chunks: [], beats: timingBeats.map(b => ({ time: b.time, beatInMeasure: b.beatInMeasure, n: b.n, bpm, subdivision, grid: g.key, preexisting: true })),
-            onsets: [], matches: [], near: [], ending: false, timer: 0, fallback: 0,
+            onsets: [], matches: [], near: [], refs: [], clicks: [], ending: false, timer: 0, fallback: 0,
             meta: {
                 startedAt: new Date().toISOString(), requestedSeconds: seconds,
                 sampleRate: audioCtx.sampleRate, ctxTimeAtStart: audioCtx.currentTime,
                 baseLatency: audioCtx.baseLatency || 0, outputLatency: audioCtx.outputLatency || 0,
-                latencyMs: timingLatencyMs, latencyIsEstimate: timingLatencyEst,
+                latencyMs: timingLatencyMs, glitchCompMs: timingGlitchCompMs, latencyIsEstimate: timingLatencyEst,
                 channel: timingChannel, channels: timingChannels,
-                bpm, subdivision, beatsPerMeasure, feel: timingFeel, isPlaying,
-                grid: { key: g.key, name: g.name, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
+                refChannel: timingRefOn ? timingRefCh : -1, refTrimMs: timingRefTrimMs, refLiveLmsAtStart: timingRef.liveL === null ? null : timingRef.liveL * 1000,
+                bpm, subdivision, beatsPerMeasure, isPlaying,
+                grid: { key: g.key, name: g.name, res: g.res, shuffle: g.shuffle, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
                 trackLabel: track ? track.label : '', trackSettings: track && track.getSettings ? track.getSettings() : {},
                 sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity), userAgent: navigator.userAgent
             }
@@ -3248,7 +4135,9 @@ registerProcessor('onset-detector', OnsetDetector);
             beats: d.beats.map(b => Object.assign({}, b, { sample: idx(b.time) })),
             onsets: d.onsets.map(o => Object.assign({}, o, { sample: idx(o.time) })),
             matches: d.matches.map(m => Object.assign({}, m, { onsetSample: idx(m.onsetTime) })),
-            nearMisses: d.near.map(n => Object.assign({}, n, { sample: idx(n.time) }))
+            nearMisses: d.near.map(n => Object.assign({}, n, { sample: idx(n.time) })),
+            // click ref: events found on the ref channel, every audible click scheduled during the recording, and the liveL history
+            ref: { events: d.refs.map(r => Object.assign({}, r, { sample: idx(r.time) })), clicks: d.clicks.map(t => ({ time: t, sample: idx(t) })), liveLHistory: timingRefHist.slice() }
         };
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
         if (total > 0) timingDownloadBlob('timing-debug-' + stamp + '.wav', timingBuildWav(samples, sr));
@@ -3357,7 +4246,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const g = getTimingGrid();
         for (let j = 0; j < g.pos.length; j++) {
             const el = document.createElement('div');
-            el.className = 'tm-gl' + (j ? ' sub' : bim === 0 ? ' bar' : '');
+            el.className = timingGlClass(g.role[j], j, bim === 0);
             timingTlAdd(el, t + g.pos[j] * dur, 0, pred);
         }
     }
@@ -3404,7 +4293,7 @@ registerProcessor('onset-detector', OnsetDetector);
         });
         tl.items = keep;
     }
-    // Rebuild from the beat ring buffer and hit log (view switch, feel change)
+    // Rebuild from the beat ring buffer and hit log (view switch, detect grid change)
     function timingTlRebuild() {
         const now = timingNowSec();
         timingTlReset(timingTl.t0);
@@ -3440,7 +4329,7 @@ registerProcessor('onset-detector', OnsetDetector);
         for (let k = 0; k < timingC.n; k++) {
             for (let j = 0; j < g.pos.length; j++) {
                 const el = document.createElement('div');
-                el.className = 'tm-gl' + (j ? ' sub' : '');
+                el.className = timingGlClass(g.role[j], j, false);
                 el.style.transform = 'translateX(' + timingCX(k + g.pos[j]).toFixed(2) + 'px)';
                 timingBeatsGrid.appendChild(el);
             }
@@ -3548,14 +4437,15 @@ registerProcessor('onset-detector', OnsetDetector);
             timingCFrame(now);
         }
         timingRenderMeter();
+        timingRefTick(now);
         const idle = now - Math.max(timingLastHitTime, timingPlayStart);
-        timingSetNoInput(idle > Math.max(timingBarDur(), 1.5));
+        timingSetNoInput(idle > Math.max(timingBarDur(), 1.5) && performance.now() >= timingSwapUntil);
         if (ts - timingLastSummaryTs > 100) { timingLastSummaryTs = ts; timingUpdateSummary(); }
         timingRaf = requestAnimationFrame(timingFrame);
     }
 
     // ---------------------------------------------------------------
-    // View / Feel controls
+    // View / Detect controls
     // ---------------------------------------------------------------
     function timingSetView(v, persist) {
         timingView = v === 'beats' ? 'beats' : 'timeline';
@@ -3574,17 +4464,20 @@ registerProcessor('onset-detector', OnsetDetector);
         }
     }
 
-    // Reflect the effective feel (locked by the rhythm menu or chosen) in the segment; rebuild grid lines
-    function timingApplyFeel() {
+    // Reflect the effective detection grid (chosen, or forced by the rhythm menu) in the controls; rebuild grid lines
+    function timingApplyDetect() {
         if (!timingOn) return;
         const g = getTimingGrid();
-        const inSegment = g.key === 'straight' || g.key === 'shuffle' || g.key === 'halftime';
-        timingFeelSeg.querySelectorAll('button').forEach(b => {
-            b.setAttribute('aria-pressed', String(inSegment && b.dataset.v === g.key));
-            b.disabled = g.locked && b.dataset.v !== g.key;
+        const tuplet = !!TIMING_TUPLET[subdivision];
+        const e = timingEffective();
+        timingResSeg.querySelectorAll('button').forEach(b => {
+            b.setAttribute('aria-pressed', String(!tuplet && b.dataset.v === g.res));
+            b.disabled = tuplet || (e.forced && b.dataset.v === '32');
         });
-        timingFeelHint.hidden = !g.locked;
-        timingSetText(timingFeelHint, inSegment ? 'Set by rhythm' : 'Set by rhythm: ' + g.name);
+        timingShuffleBtn.setAttribute('aria-pressed', String(!tuplet && (e.forced || e.shuffle)));
+        timingShuffleBtn.disabled = tuplet || e.forced || !e.canShuffle;
+        timingDetectHint.hidden = !tuplet;
+        timingSetText(timingDetectHint, 'Locked to ' + g.name);
         timingRenderSettingsBtn();
         timingTl.predDirty = true;
         if (timingView === 'timeline') timingTlRebuild(); else timingLayoutBeatsStrip();
@@ -3611,14 +4504,14 @@ registerProcessor('onset-detector', OnsetDetector);
         return 'Could not start the microphone.';
     }
 
-    async function timingGetStream(id) {
+    async function timingGetStream(id, strict) {
         const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } };
         const gum = c => navigator.mediaDevices.getUserMedia({ audio: c });
         if (!id) return gum(base);
         try {
             return await gum(Object.assign({ deviceId: { exact: id } }, base));
         } catch (e) {
-            if (e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) return gum(base);
+            if (!strict && e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) return gum(base);
             throw e;
         }
     }
@@ -3628,10 +4521,23 @@ registerProcessor('onset-detector', OnsetDetector);
         if (timingStream) { timingStream.getTracks().forEach(t => t.stop()); timingStream = null; }
     }
 
+    // Shared by start and device switch. If a previous stream is still attached it is
+    // replaced: the new source is connected first, then the old source is disconnected and its tracks stopped.
     function timingAttachStream(stream) {
+        const oldSource = timingSource, oldStream = timingStream;
         timingStream = stream;
+        timingStreamSeq++;
+        timingStreamAt = performance.now();
+        timingStreamCtxAt = audioCtx.currentTime; // startup-artifact window is compared in context time
+        timingZeroRuns = 0;
+        timingGlitchMsTotal = 0; timingGlitchCount = 0; timingFirstGood = null;
+        timingGlitchCompMs = 0; timingGlitchCompN = 0; // compensation is per stream
+        timingZeroBase = timingZeroRaw;
+        timingSwapUntil = timingStreamAt + TIMING_SWAP_GRACE_MS;
         timingSource = audioCtx.createMediaStreamSource(stream);
         timingSource.connect(timingNode);
+        if (oldSource) { try { oldSource.disconnect(); } catch (e) { /* ignore */ } }
+        if (oldStream && oldStream !== stream) oldStream.getTracks().forEach(t => t.stop());
         const track = stream.getAudioTracks()[0];
         timingDeviceId = (track && track.getSettings && track.getSettings().deviceId) || '';
         if (timingDeviceId) timingLsSet('wm.timing.deviceId', timingDeviceId);
@@ -3644,6 +4550,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingLoadSensitivity();
         timingLoadQuiet();
         timingLoadLatency();
+        timingLoadRef(); // a new stream has a new offset: the ref lock starts over
         timingPostConfig();
         timingLiveDot.hidden = false;
     }
@@ -3673,12 +4580,13 @@ registerProcessor('onset-detector', OnsetDetector);
     async function timingStart() {
         if (timingOn) return;
         timingOn = true;
+        timingUpdateRefOn();
         const tok = ++timingToken;
         timingRenderButton();
         timingShowError('');
         timingAddon.hidden = false;
         timingSetView(timingView, false);
-        timingApplyFeel();
+        timingApplyDetect();
         timingRenderLatency();
         timingTlLayout();
         try {
@@ -3698,7 +4606,7 @@ registerProcessor('onset-detector', OnsetDetector);
             await timingRefreshDevices();
             if (tok !== timingToken) return;
             timingShowError('');
-            if (isPlaying) { timingResetSession(); timingStartLoop(); }
+            if (isPlaying) { timingResetSession(true); timingStartLoop(); }
             timingRenderLatency();
         } catch (e) {
             if (tok !== timingToken) return;
@@ -3722,7 +4630,10 @@ registerProcessor('onset-detector', OnsetDetector);
         if (!timingOn) return;
         if (timingDbg) timingDbgFinish();
         timingOn = false;
+        timingUpdateRefOn();
+        timingClickTimes = [];
         timingToken++;
+        timingSwapUntil = 0;
         timingStopLoop();
         timingReleaseStream();
         timingDisconnectNodes();
@@ -3745,6 +4656,7 @@ registerProcessor('onset-detector', OnsetDetector);
     async function timingSwitchDevice(id) {
         if (!timingOn) return;
         const tok = ++timingToken;
+        timingSwapUntil = 0;
         timingLoopCancel('');
         timingReleaseStream(); // stop current tracks first, then reopen
         timingLiveDot.hidden = true;
@@ -3777,18 +4689,29 @@ registerProcessor('onset-detector', OnsetDetector);
         if (!b || b.disabled) return;
         timingSetView(b.dataset.v);
     });
-    timingFeelSeg.addEventListener('click', (e) => {
+    timingResSeg.addEventListener('click', (e) => {
         const b = e.target.closest('button[data-v]');
-        if (!b || b.disabled || TIMING_LOCK[subdivision]) return;
-        timingFeel = b.dataset.v;
-        timingLsSet('wm.timing.feel', timingFeel);
-        timingApplyFeel();
+        if (!b || b.disabled) return;
+        timingRes = b.dataset.v;
+        timingLsSet('wm.timing.res', timingRes);
+        timingApplyDetect();
+    });
+    timingShuffleBtn.addEventListener('click', () => {
+        if (timingShuffleBtn.disabled) return;
+        timingShuffle = !timingShuffle;
+        timingLsSet('wm.timing.shuffle', timingShuffle);
+        timingApplyDetect();
     });
     timingDeviceSelect.addEventListener('change', () => timingSwitchDevice(timingDeviceSelect.value));
     timingChSeg.addEventListener('click', (e) => {
         const b = e.target.closest('button[data-v]');
         if (b) timingSetChannel(parseInt(b.dataset.v, 10));
     });
+    timingRefSeg.addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-v]');
+        if (b) timingSetRef(parseInt(b.dataset.v, 10));
+    });
+    timingWireStepper({ minus: timingRefTrimMinus, plus: timingRefTrimPlus, value: timingRefTrimValue, input: timingRefTrimInput, get: () => timingRefTrimMs, set: timingSetRefTrim });
     timingWireStepper({ minus: timingLatMinus, plus: timingLatPlus, value: timingLatValue, input: timingLatInput, get: () => timingLatencyMs, set: timingSetLatency });
     timingLatReset.addEventListener('click', timingResetLatency);
     timingWireStepper({ minus: timingQuietMinus, plus: timingQuietPlus, value: timingQuietValue, input: timingQuietInput, get: () => timingQuietDb, set: timingSetQuiet });
@@ -3805,10 +4728,23 @@ registerProcessor('onset-detector', OnsetDetector);
 
     // Restore saved preferences
     (function timingRestorePrefs() {
+        timingLsRemove('wm.audio.latencyHint'); // the removed Audio buffer experiment: users who picked 20 ms go back to the default
         const v = timingLsGet('wm.timing.view');
         if (v === 'timeline' || v === 'beats') timingView = v;
+        const r = timingLsGet('wm.timing.res'), sh = timingLsGet('wm.timing.shuffle');
+        if (r === '4' || r === '8' || r === '16' || r === '32') timingRes = r;
+        if (sh === 'true' || sh === 'false') timingShuffle = sh === 'true';
+        // One-time migration of the old Feel setting (straight -> 16, shuffle -> 8 + Shuffle, half-time -> 16 + Shuffle)
         const f = timingLsGet('wm.timing.feel');
-        if (f === 'straight' || f === 'shuffle' || f === 'halftime') timingFeel = f;
+        if (f !== null) {
+            const legacy = { straight: ['16', false], shuffle: ['8', true], halftime: ['16', true] }[f];
+            if (legacy && r === null && sh === null) {
+                timingRes = legacy[0]; timingShuffle = legacy[1];
+                timingLsSet('wm.timing.res', timingRes);
+                timingLsSet('wm.timing.shuffle', timingShuffle);
+            }
+            timingLsRemove('wm.timing.feel');
+        }
         timingViewSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === timingView)));
         timingTimeline.hidden = timingView !== 'timeline';
     })();
