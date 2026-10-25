@@ -2851,7 +2851,7 @@ test.describe('Timing Check - worklet frame clock', () => {
 // "?" help tips in the settings popover ------------------------------------------------------
 test.describe('Timing Check - help tips', () => {
   const TIPS = {
-    input: ['Input', 'The audio input to listen to — pick your audio interface. Ch 1 / Ch 2 chooses the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
+    input: ['Input', 'The audio input to listen to — pick your audio interface. The Ch buttons (or list, on interfaces with many inputs) choose the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
     click: ['Click', "Optional. A channel that carries the metronome itself, e.g. an interface loopback. Timing is then measured against the actual clicks, so latency is tracked automatically and Measure isn't needed. Leave Off if you don't have one."],
     detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey × marks (Off grid), higher = earlier, lower = later. Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
     latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
@@ -3350,5 +3350,114 @@ test.describe('Timing Check - same-slot merge and nearby-noise merge', () => {
     await hitAt(page, 1, 0.55, -10);
     const b = await marks(page);
     expect(b[0] + b[1]).toBe(3);
+  });
+});
+
+// More than two input channels ---------------------------------------------------------
+
+test.describe('Timing Check - many input channels', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__gumCalls = [];
+      const md = navigator.mediaDevices;
+      if (md && md.getUserMedia) {
+        const orig = md.getUserMedia.bind(md);
+        md.getUserMedia = (c) => { window.__gumCalls.push(JSON.parse(JSON.stringify(c))); return orig(c); };
+      }
+    });
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.evaluate(() => { timingNode.port.onmessage = null; timingSwapUntil = 0; });
+    await page.click('#timingSetBtn');
+  });
+
+  const setCh = (page, n) => page.evaluate((n) => { timingChannels = n; timingLoadChannel(); timingLoadRef(); }, n);
+  const chOpts = (page) => page.evaluate(() => [...document.querySelectorAll('#timingChSeg button, #timingChSeg option')].map(b => b.textContent));
+  const refOpts = (page) => page.evaluate(() => [...document.querySelectorAll('#timingRefSeg button, #timingRefSeg option')].map(b => b.textContent));
+
+  test('requests as many capture channels as the device has', async ({ page }) => {
+    const calls = await page.evaluate(() => window.__gumCalls);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[0].audio.channelCount.ideal).toBeGreaterThanOrEqual(8);
+    expect(await page.evaluate(() => [timingNode.channelCount, timingNode.channelCountMode])).toEqual([32, 'max']);
+  });
+
+  test('4 channels show segmented buttons; the click list is Off plus the other three', async ({ page }) => {
+    await setCh(page, 4);
+    expect(await chOpts(page)).toEqual(['Ch 1', 'Ch 2', 'Ch 3', 'Ch 4']);
+    expect(await refOpts(page)).toEqual(['Off', 'Ch 2', 'Ch 3', 'Ch 4']);
+    expect(await page.locator('#timingChSeg select, #timingRefSeg select').count()).toBe(0);
+    await page.click('#timingChSeg [data-v="3"]');
+    expect(await refOpts(page)).toEqual(['Off', 'Ch 1', 'Ch 2', 'Ch 3']);
+  });
+
+  test('1 channel hides both selectors', async ({ page }) => {
+    await setCh(page, 1);
+    await expect(page.locator('#timingChSeg')).toBeHidden();
+    await expect(page.locator('#timingRefRowSel')).toBeHidden();
+  });
+
+  test('8 channels use selects; Ch 6 instrument and Ch 7 click post the right config and persist', async ({ page }) => {
+    await setCh(page, 8);
+    await expect(page.locator('#timingChSeg select')).toBeVisible();
+    await expect(page.locator('#timingRefSeg select')).toBeVisible();
+    expect((await chOpts(page)).length).toBe(8);
+    expect(await refOpts(page)).toEqual(['Off', 'Ch 2', 'Ch 3', 'Ch 4', 'Ch 5', 'Ch 6', 'Ch 7', 'Ch 8']); // Ch 1 is the instrument
+    await page.evaluate(() => { window.__posted = []; const o = timingNode.port.postMessage.bind(timingNode.port); timingNode.port.postMessage = (m) => { window.__posted.push(m); o(m); }; });
+    await page.selectOption('#timingChSeg select', '5');
+    await page.selectOption('#timingRefSeg select', '6');
+    const cfg = await page.evaluate(() => window.__posted.filter(m => m.type === 'config').pop());
+    expect([cfg.channel, cfg.refChannel]).toEqual([5, 6]);
+    // the instrument channel is gone from the click list
+    expect(await refOpts(page)).toEqual(['Off', 'Ch 1', 'Ch 2', 'Ch 3', 'Ch 4', 'Ch 5', 'Ch 7', 'Ch 8']);
+    // choosing the click channel as the instrument switches the click off
+    await page.selectOption('#timingChSeg select', '6');
+    expect(await page.evaluate(() => [timingChannel, timingRefCh])).toEqual([6, -1]);
+    await page.selectOption('#timingChSeg select', '5');
+    await page.selectOption('#timingRefSeg select', '6');
+    // persists across a reload
+    await page.reload();
+    await page.waitForFunction(() => typeof timingLoadChannel === 'function');
+    const r = await page.evaluate(() => {
+      timingDeviceId = timingLsGet('wm.timing.deviceId') || timingDeviceId;
+      timingChannels = 8; timingLoadChannel(); timingLoadRef();
+      return [timingChannel, timingRefCh, document.querySelector('#timingChSeg select').value, document.querySelector('#timingRefSeg select').value];
+    });
+    expect(r).toEqual([5, 6, '5', '6']);
+  });
+
+  test('8 channels do not overflow the popover at 375 px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await setCh(page, 8);
+    const m = await page.evaluate(() => {
+      const pop = document.getElementById('timingPopover').getBoundingClientRect();
+      const kids = [...document.querySelectorAll('#timingPopover select, #timingPopover #timingChSeg, #timingPopover #timingRefSeg')].map(e => e.getBoundingClientRect());
+      return { sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, pw: document.getElementById('timingPopover').scrollWidth, pcw: document.getElementById('timingPopover').clientWidth,
+        out: kids.filter(k => k.right > pop.right + 0.5 || k.left < pop.left - 0.5).length };
+    });
+    expect(m.sw).toBeLessThanOrEqual(m.cw);
+    expect(m.pw).toBeLessThanOrEqual(m.pcw);
+    expect(m.out).toBe(0);
+  });
+
+  test('worklet core: a 4-channel input with signal only on index 3 triggers onsets with channel 3', async ({ page }) => {
+    await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'signals.js') });
+    const r = await page.evaluate(() => {
+      const n = Math.round(sig.SR * 1.2), chs = [0, 1, 2, 3].map(() => new Float32Array(n)), rnd = sig.rng(9);
+      chs.forEach(c => sig.whiteNoise(c, sig.db(-70), rnd));
+      for (const t of [0.2, 0.6, 0.9]) {
+        sig.addNoise(chs[3], t, 0.004, sig.db(-15), rnd, 0.002);
+        sig.addSine(chs[3], t, 300, sig.db(-15), 0.05, 0.001, 0.25);
+      }
+      const count = idx => {
+        const core = timingMakeOnsetCore(sig.SR);
+        let c = 0;
+        for (let i = 0; i < n; i += 128) c += core.processChannels(chs.map(x => x.subarray(i, i + 128)), idx, i).length;
+        return c;
+      };
+      return [0, 1, 2, 3].map(count);
+    });
+    expect(r).toEqual([0, 0, 0, 3]);
   });
 });

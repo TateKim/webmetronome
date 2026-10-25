@@ -252,3 +252,12 @@ Purpose: measure only the system latency (output + input) and its **jitter**, so
 - 서로 다른 칸의 소리는 크기 차이와 상관없이 모두 유지한다. 외톨이 작은 소리도 그대로 보인다. 미터 플래시는 모든 onset에서 켜진다.
 - **버린 설계**: 전역 작은 소리 거르기(설정 FILTER, 최근 타격 대비 임계값)는 너무 공격적이어서(작은 소리를 전부 지움) 삭제했다. 주된 음 근처 시간창(W)/6 dB 마진 방식도 검토했으나 그리드 칸 기준이 더 단순하고 설정이 필요 없어 채택하지 않았다.
 - **기각 마크를 회색 ×로, 오프셋 높이에 표시**: 가운데 놓인 회색 링은 "완벽한 타이밍"처럼 보여 혼란스러웠다. 이제 기각된 onset은 회색 ×(`.tm-x`, 1.5px 두 줄, 약 9px)로 그리고, 세로 위치는 가장 가까운 슬롯과의 부호 있는 오프셋(`offsetMs = (tComp - 슬롯 시각) * 1000`, `timingNearestCell()`이 슬롯 시각 `t`를 함께 반환)을 점과 같은 매핑(`timingRangeY`)으로 놓는다. 이른 소리는 위, 늦은 소리는 아래. 보기 범위를 넘으면 위/아래 가장자리에 붙이되 삼각형이 아니라 ×를 유지한다. 범위를 바꾸면(`timingApplyRange`) 점과 함께 다시 배치한다. 가로 위치는 그대로.
+
+## v1.6 — 3채널 이상 입력
+
+문제: 오디오 인터페이스가 입력 채널을 3개 이상 가져도 Timing Check는 Ch 2까지만 쓸 수 있었다(`getUserMedia`에 `channelCount: { ideal: 2 }`, 선택 버튼도 Ch 1 / Ch 2 고정).
+
+- **스트림 요청**: `channelCount: { ideal: 32 }`로 장치가 가진 만큼 요청한다(크롬이 지원하는 가장 가까운 값을 고른다). 워크릿 노드는 `channelCount: 32, channelCountMode: 'max', channelInterpretation: 'discrete'`라서 입력의 채널 수를 그대로 따르고 믹싱하지 않는다. 워크릿 `process`는 원래 `inputs[0][ch]`로 임의의 채널 수를 다룬다. `timingChannels`는 `track.getSettings().channelCount`이고 없으면 1이다(소스 노드의 채널 수는 기본값 2라 믿을 수 없어 폴백으로 쓰지 않는다).
+- **선택 UI**: 악기 채널(`#timingChSeg`)과 클릭 ref 채널(`#timingRefSeg`)을 하나의 빌더 `timingRenderChoice`로 만든다. 옵션이 4개 이하면 지금처럼 분할 버튼, 5개 이상이면 `tm-select` 드롭다운(Ch 1 ... Ch N, ref는 맨 앞에 Off)으로 바꿔 375 px 팝오버가 넘치지 않게 한다. 이벤트는 `timingWireChoice` 하나가 버튼 클릭과 select 변경을 모두 받는다. 채널이 2개 미만이면 두 컨트롤 모두 숨긴다.
+- **그대로인 것**: 저장 키(`wm.timing.channel.<deviceId>`, ref 키)와 `n < timingChannels` 검증, 악기/클릭 채널 상호 배타, 디버그 기록의 `channels`/`channelCount`. 도움말 Input 문구만 "Ch 1 / Ch 2"에서 일반화했다.
+- **한계(확실하지 않음)**: 브라우저가 실제로 2채널을 넘겨 주는지는 OS/드라이버/브라우저에 달렸다. Chrome은 장치가 지원하면 `channelCount` ideal을 따르지만, Windows(WASAPI 공유 모드는 믹스 포맷, 보통 2채널)나 macOS의 일부 장치는 2채널로 잘려 들어올 수 있다. 이 경우 UI는 받은 채널 수만큼만 보인다.

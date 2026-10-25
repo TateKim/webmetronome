@@ -292,6 +292,7 @@
         .tm-pop-wrap { position: relative; margin-left: auto; flex: none; }
         .tm-sec { display: flex; flex-direction: column; gap: 4px; }
         .tm-nowrap { flex-wrap: nowrap; }
+        .tm-seg.tm-pick { background: none; padding: 0; flex: 1 1 100%; min-width: 0; }
         .tm-pair { display: inline-flex; align-items: center; margin-left: auto; }
         .tm-pair .tm-text-btn { font-size: 0.66rem; padding: 4px 6px; }
         .tm-pair .tm-text-btn + .tm-text-btn { border-left: 1px solid #e2e8f0; border-radius: 0; }
@@ -746,8 +747,6 @@
                                 <div class="tm-row">
                                     <select id="timingDeviceSelect" class="tm-select"></select>
                                     <div id="timingChSeg" class="tm-seg" role="group" aria-label="Input channel" hidden>
-                                        <button type="button" data-v="0" aria-pressed="true">Ch 1</button>
-                                        <button type="button" data-v="1" aria-pressed="false">Ch 2</button>
                                     </div>
                                 </div>
                                 <div id="timingRefRowSel" class="tm-row tm-nowrap" hidden>
@@ -3293,20 +3292,59 @@ registerProcessor('onset-detector', OnsetDetector);
         if (timingRefOn || timingRefSent) { m.refChannel = timingRefOn ? timingRefCh : -1; timingRefSent = timingRefOn; }
         timingNode.port.postMessage(m);
     }
+    // Shared by the instrument and click-ref channel selectors: up to TIMING_SEG_MAX options as segmented buttons, more as a compact <select>
+    // (so a many-channel interface never overflows the popover). opts = [{ v, label }]
+    const TIMING_SEG_MAX = 4;
+    function timingRenderChoice(host, opts, selected) {
+        host.textContent = '';
+        const asSelect = opts.length > TIMING_SEG_MAX;
+        host.classList.toggle('tm-pick', asSelect);
+        if (asSelect) {
+            const sel = document.createElement('select');
+            sel.className = 'tm-select';
+            sel.setAttribute('aria-label', host.getAttribute('aria-label') || '');
+            opts.forEach(o => {
+                const op = document.createElement('option');
+                op.value = String(o.v); op.textContent = o.label;
+                sel.appendChild(op);
+            });
+            sel.value = String(selected);
+            host.appendChild(sel);
+        } else {
+            opts.forEach(o => {
+                const b = document.createElement('button');
+                b.type = 'button'; b.dataset.v = String(o.v); b.textContent = o.label;
+                b.setAttribute('aria-pressed', String(o.v === selected));
+                host.appendChild(b);
+            });
+        }
+    }
+    function timingWireChoice(host, onPick) {
+        host.addEventListener('click', (e) => {
+            const b = e.target.closest('button[data-v]');
+            if (b) onPick(parseInt(b.dataset.v, 10));
+        });
+        host.addEventListener('change', (e) => {
+            if (e.target.matches('select')) onPick(parseInt(e.target.value, 10));
+        });
+    }
+    function timingRenderChSeg() {
+        timingChSeg.hidden = timingChannels < 2;
+        const opts = [];
+        for (let c = 0; c < timingChannels; c++) opts.push({ v: c, label: 'Ch ' + (c + 1) });
+        timingRenderChoice(timingChSeg, opts, timingChannel);
+    }
     function timingLoadChannel() {
         const raw = timingLsGet('wm.timing.channel.' + timingDeviceId);
         const n = raw === null ? 0 : parseInt(raw, 10);
         timingChannel = isFinite(n) && n >= 0 && n < timingChannels ? n : 0;
-        timingChSeg.hidden = timingChannels < 2;
-        timingChSeg.querySelectorAll('button').forEach(b => {
-            b.hidden = parseInt(b.dataset.v, 10) >= timingChannels;
-            b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === timingChannel));
-        });
+        timingRenderChSeg();
     }
     function timingSetChannel(i) {
+        if (!(i >= 0 && i < timingChannels)) return;
         timingChannel = i;
         timingLsSet('wm.timing.channel.' + timingDeviceId, i);
-        timingChSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === i)));
+        timingRenderChSeg();
         if (timingRefCh === i) timingSetRef(-1); // instrument and click channels are mutually exclusive (re-posts the config)
         else { timingRenderRefSeg(); timingPostConfig(); }
     }
@@ -3508,15 +3546,9 @@ registerProcessor('onset-detector', OnsetDetector);
     // Off + every channel except the instrument channel
     function timingRenderRefSeg() {
         timingRefRowSel.hidden = timingChannels < 2;
-        timingRefSeg.textContent = '';
-        const add = (v, label) => {
-            const b = document.createElement('button');
-            b.type = 'button'; b.dataset.v = String(v); b.textContent = label;
-            b.setAttribute('aria-pressed', String(v === timingRefCh));
-            timingRefSeg.appendChild(b);
-        };
-        add(-1, 'Off');
-        for (let c = 0; c < timingChannels; c++) if (c !== timingChannel) add(c, 'Ch ' + (c + 1));
+        const opts = [{ v: -1, label: 'Off' }];
+        for (let c = 0; c < timingChannels; c++) if (c !== timingChannel) opts.push({ v: c, label: 'Ch ' + (c + 1) });
+        timingRenderChoice(timingRefSeg, opts, timingRefCh);
     }
     function timingRefFmtTrim(v) { return v === 0 ? '0 ms' : (v > 0 ? '+' : '−') + Math.abs(v) + ' ms'; }
     function timingRenderRef() {
@@ -3792,7 +3824,7 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingPopoverOpen() { return !timingPopover.hidden; }
     // ---- Reusable "?" help tips for the settings popover: <button class="tm-help" data-help="key"> + one bubble each ----
     const TIMING_HELP = {
-        input: ['Input', 'The audio input to listen to — pick your audio interface. Ch 1 / Ch 2 chooses the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
+        input: ['Input', 'The audio input to listen to — pick your audio interface. The Ch buttons (or list, on interfaces with many inputs) choose the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
         click: ['Click', "Optional. A channel that carries the metronome itself, e.g. an interface loopback. Timing is then measured against the actual clicks, so latency is tracked automatically and Measure isn't needed. Leave Off if you don't have one."],
         detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey × marks (Off grid), higher = earlier, lower = later. Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
         latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
@@ -4661,7 +4693,7 @@ registerProcessor('onset-detector', OnsetDetector);
     }
 
     async function timingGetStream(id, strict) {
-        const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 2 } };
+        const base = { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: { ideal: 32 } }; // as many as the device has (Chrome picks the closest supported)
         const gum = c => navigator.mediaDevices.getUserMedia({ audio: c });
         if (!id) return gum(base);
         try {
@@ -4752,7 +4784,7 @@ registerProcessor('onset-detector', OnsetDetector);
             const saved = timingLsGet('wm.timing.deviceId') || '';
             const stream = await timingGetStream(saved);
             if (tok !== timingToken) { stream.getTracks().forEach(t => t.stop()); return; }
-            timingNode = new AudioWorkletNode(audioCtx, 'onset-detector', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'max' });
+            timingNode = new AudioWorkletNode(audioCtx, 'onset-detector', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 32, channelCountMode: 'max', channelInterpretation: 'discrete' }); // 'max': follows the input's channel count, no mixing
             timingNode.port.onmessage = timingOnWorkletMessage;
             timingSink = audioCtx.createGain();
             timingSink.gain.value = 0; // zero-gain connection only keeps the processing graph alive
@@ -4894,14 +4926,8 @@ registerProcessor('onset-detector', OnsetDetector);
         timingApplyDetect();
     });
     timingDeviceSelect.addEventListener('change', () => timingSwitchDevice(timingDeviceSelect.value));
-    timingChSeg.addEventListener('click', (e) => {
-        const b = e.target.closest('button[data-v]');
-        if (b) timingSetChannel(parseInt(b.dataset.v, 10));
-    });
-    timingRefSeg.addEventListener('click', (e) => {
-        const b = e.target.closest('button[data-v]');
-        if (b) timingSetRef(parseInt(b.dataset.v, 10));
-    });
+    timingWireChoice(timingChSeg, timingSetChannel);
+    timingWireChoice(timingRefSeg, timingSetRef);
     timingWireStepper({ minus: timingRefTrimMinus, plus: timingRefTrimPlus, value: timingRefTrimValue, input: timingRefTrimInput, get: () => timingRefTrimMs, set: timingSetRefTrim });
     timingWireStepper({ minus: timingLatMinus, plus: timingLatPlus, value: timingLatValue, input: timingLatInput, get: () => timingLatencyMs, set: timingSetLatency });
     timingLatReset.addEventListener('click', timingResetLatency);
