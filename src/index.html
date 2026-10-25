@@ -912,6 +912,8 @@
     </div>
 
 <script>
+    const APP_VERSION = 'dev';
+    console.info('[webmetronome] version ' + APP_VERSION);
     // --- Audio & Timing Variables ---
     let audioCtx = null;
     let masterGainNode = null;
@@ -3063,6 +3065,7 @@ class OnsetDetector extends AudioWorkletProcessor {
   process(inputs) {
     const chs = inputs[0];
     if (!chs || !chs.length) return true;
+    if (chs.length !== this.nch) { this.nch = chs.length; this.port.postMessage({ type: 'chans', n: chs.length }); }
     const frame = this.frameStart(chs[0].length);
     const ons = this.core.processChannels(chs, this.ch, frame);
     for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands });
@@ -3778,7 +3781,16 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingOnWorkletMessage(ev) {
         const m = ev.data;
         if (!m) return;
-        if (m.type === 'level') {
+        if (m.type === 'chans') {
+            // getSettings().channelCount may be missing or understate the real count: trust what the worklet actually receives
+            console.info('[timing] worklet receives ' + m.n + ' channels');
+            if (m.n > timingChannels) {
+                timingChannels = m.n;
+                timingLoadChannel();
+                if (timingRefCh === timingChannel) timingSetRef(-1);
+                else { timingRenderRefSeg(); timingPostConfig(); }
+            }
+        } else if (m.type === 'level') {
             timingLevelDb = m.db;
             timingThDb = m.thDb;
             timingLevelCount++;
@@ -4734,6 +4746,16 @@ registerProcessor('onset-detector', OnsetDetector);
         });
         timingTrackLatency = (track && track.getSettings && track.getSettings().latency) || 0;
         timingChannels = (track && track.getSettings && track.getSettings().channelCount) || 1;
+        try {
+            console.info('[timing] input', {
+                label: track ? track.label : null,
+                settings: track && track.getSettings ? track.getSettings() : null,
+                capabilities: track && track.getCapabilities ? track.getCapabilities() : null,
+                timingChannels: timingChannels,
+                sourceChannelCount: timingSource.channelCount,
+                sampleRate: audioCtx.sampleRate
+            });
+        } catch (e) { /* diagnostics only */ }
         timingLoadChannel();
         timingLoadSensitivity();
         timingLoadQuiet();

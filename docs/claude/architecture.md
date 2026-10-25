@@ -1,6 +1,6 @@
 # Architecture
 
-Single-file web app: all HTML, CSS, and JavaScript live in `src/index.html`. No build step — `dist/index.html` is a manual copy/deploy artifact.
+Single-file web app: all HTML, CSS, and JavaScript live in `src/index.html`. No build step — `dist/index.html` is a manual copy/deploy artifact. `scripts/build.sh` (run in Git Bash) copies it to `dist/index.html`, stamping `const APP_VERSION = 'dev';` with `<short hash>[-dirty] <UTC date>` (logged at startup as `[webmetronome] version ...`), and zips it to `dist/webmetronome-<hash>.zip`.
 
 Dependencies are CDN-only:
 - Tailwind CSS (via CDN script tag)

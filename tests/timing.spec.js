@@ -563,6 +563,28 @@ test.describe('Timing Check - latency and channel controls', () => {
     const mono = await page.evaluate(() => { timingChannels = 1; timingLoadChannel(); return document.getElementById('timingChSeg').hidden; });
     expect(mono).toBe(true);
   });
+
+  test('a chans message from the worklet widens the channel selectors; unknown types are ignored', async ({ page }) => {
+    const res = await page.evaluate(() => {
+      timingChannels = 1; timingLoadChannel();
+      timingOnWorkletMessage({ data: { type: 'bogus', n: 9 } });
+      const before = timingChannels;
+      timingOnWorkletMessage({ data: { type: 'chans', n: 3 } });
+      return { before, channels: timingChannels, buttons: document.querySelectorAll('#timingChSeg button').length,
+               hidden: document.getElementById('timingChSeg').hidden };
+    });
+    expect(res.before).toBe(1);
+    expect(res.channels).toBe(3);
+    expect(res.hidden).toBe(false);
+    expect(res.buttons).toBe(3);
+  });
+});
+
+test('the app version is logged on load', async ({ page }) => {
+  const logs = [];
+  page.on('console', m => logs.push(m.text()));
+  await navigateAndWait(page);
+  expect(logs).toContain('[webmetronome] version dev');
 });
 
 // Onset detector (OnsetCore) on synthetic 48 kHz signals, run inside the page ----
