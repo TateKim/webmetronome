@@ -897,7 +897,7 @@ test.describe('Timing Check - every hit is visible', () => {
       await expect(page.locator('#timingAvg')).toHaveText(/^\+4 ms$/); // (-72 + 80) / 2 with the real values
     });
 
-    test(`${view}: a rejected hit draws a ring, is not counted, and the status reads Off grid`, async ({ page }) => {
+    test(`${view}: a rejected hit draws a grey cross, is not counted, and the status reads Off grid`, async ({ page }) => {
       test.setTimeout(30000);
       if (view === 'beats') await page.click('#timingViewSeg [data-v="beats"]');
       await clickPlay(page);
@@ -912,14 +912,14 @@ test.describe('Timing Check - every hit is visible', () => {
         return timingHandleOnset(b.time + timingLatencyMs / 1000 + 0.25 * b.dur / 1.6, -20) !== null;
       });
       expect(accepted).toBe(false);
-      await expect(page.locator(host + ' .tm-ring')).toHaveCount(1);
+      await expect(page.locator(host + ' .tm-x')).toHaveCount(1);
       await expect(page.locator('#timingStatus')).toHaveText('Off grid');
       await expect(page.locator('#timingHitCount')).toHaveText('1');
       expect(await page.locator('#timingAvg').textContent()).toBe(before);
-      const ring = await page.evaluate(h => { const s = getComputedStyle(document.querySelector(h + ' .tm-ring')); return [s.width, s.borderTopWidth, s.borderTopColor, s.borderRadius]; }, host);
-      expect(ring[0]).toBe('8px');
-      expect(parseFloat(ring[1])).toBeGreaterThanOrEqual(1); // CSS says 1.5px; Chrome snaps to device pixels
-      expect(ring[2]).toBe('rgb(148, 163, 184)');
+      const x = await page.evaluate(h => { const e = document.querySelector(h + ' .tm-x'), s = getComputedStyle(e), b = getComputedStyle(e, '::before'); return [s.width, b.backgroundColor, b.height]; }, host);
+      expect(x[0]).toBe('9px');
+      expect(x[1]).toBe('rgb(148, 163, 184)');
+      expect(parseFloat(x[2])).toBeGreaterThanOrEqual(1); // CSS says 1.5px; Chrome snaps to device pixels
     });
   }
 });
@@ -957,7 +957,7 @@ test.describe('Timing Check - loopback measurement', () => {
     await expect(page.locator('#timingLoopApply')).toBeVisible();
     // measurement onsets never reached the matcher or the views
     expect(await page.evaluate(() => [timingHits.length, timingRejects.length])).toEqual([0, 0]);
-    await expect(page.locator('#timingTrack .tm-dot, #timingTrack .tm-ring, #timingTrack .tm-tri')).toHaveCount(0);
+    await expect(page.locator('#timingTrack .tm-dot, #timingTrack .tm-x, #timingTrack .tm-tri')).toHaveCount(0);
     await page.click('#timingLoopApply');
     expect(await page.evaluate(() => timingLatencyMs)).toBe(58);
     await expect(page.locator('#timingLatValue')).toHaveText('58 ms');
@@ -2791,19 +2791,20 @@ test.describe('Timing Check - marker shapes by grid role', () => {
     });
   }
 
-  test('the rejected ring stays a hollow grey ring, distinct from every filled shape', async ({ page }) => {
+  test('the rejected mark is a grey cross, distinct from every filled shape', async ({ page }) => {
     await page.click('#timingViewSeg [data-v="beats"]');
     const css = await page.evaluate(() => {
-      const el = document.createElement('div'); el.className = 'tm-ring'; document.getElementById('timingBeatsMarks').appendChild(el);
-      const s = getComputedStyle(el), r = { w: s.width, bw: s.borderTopWidth, bc: s.borderTopColor, rad: s.borderTopLeftRadius, bg: s.backgroundColor, before: getComputedStyle(el, '::before').content };
+      const el = document.createElement('div'); el.className = 'tm-x'; document.getElementById('timingBeatsMarks').appendChild(el);
+      const s = getComputedStyle(el), b = getComputedStyle(el, '::before'), a = getComputedStyle(el, '::after');
+      const r = { w: s.width, bw: s.borderTopWidth, bg: s.backgroundColor, bb: b.backgroundColor, ba: a.backgroundColor, tb: b.transform, ta: a.transform };
       el.remove(); return r;
     });
-    expect(css.w).toBe('8px');
-    expect(parseFloat(css.bw)).toBeGreaterThanOrEqual(1);
-    expect(css.bc).toBe('rgb(148, 163, 184)');
-    expect(parseFloat(css.rad)).toBeGreaterThan(0);
-    expect(css.bg).toBe('rgba(0, 0, 0, 0)');
-    expect(css.before).toBe('none');
+    expect(css.w).toBe('9px');
+    expect(css.bw).toBe('0px');
+    expect(css.bg).toBe('rgba(0, 0, 0, 0)');          // no fill or border on the element itself
+    expect(css.bb).toBe('rgb(148, 163, 184)');        // two grey bars
+    expect(css.ba).toBe('rgb(148, 163, 184)');
+    expect(css.tb).not.toBe(css.ta);                  // crossed (+45 / -45 deg)
   });
 });
 
@@ -2852,7 +2853,7 @@ test.describe('Timing Check - help tips', () => {
   const TIPS = {
     input: ['Input', 'The audio input to listen to — pick your audio interface. Ch 1 / Ch 2 chooses the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
     click: ['Click', "Optional. A channel that carries the metronome itself, e.g. an interface loopback. Timing is then measured against the actual clicks, so latency is tracked automatically and Measure isn't needed. Leave Off if you don't have one."],
-    detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey rings (Off grid). Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
+    detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey × marks (Off grid), higher = earlier, lower = later. Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
     latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
     live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
     trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
@@ -3232,7 +3233,7 @@ test.describe('Timing Check - same-slot merge and nearby-noise merge', () => {
   });
 
   const res = (page, r) => page.evaluate((r) => { timingRes = r; }, r);
-  const rings = (view) => view === 'timeline' ? '#timingTrack .tm-ring' : '#timingBeatsMarks .tm-ring';
+  const rings = (view) => view === 'timeline' ? '#timingTrack .tm-x' : '#timingBeatsMarks .tm-x';
   const marks = (page) => page.evaluate(() => [timingHits.length, timingRejects.length]);
 
   for (const view of ['timeline', 'beats']) {
@@ -3268,6 +3269,44 @@ test.describe('Timing Check - same-slot merge and nearby-noise merge', () => {
       await expect(page.locator(host(view))).toHaveCount(1);
       await page.evaluate(() => timingUpdateSummary());
       await expect(page.locator('#timingHitCount')).toHaveText('1');
+    });
+
+    test(`${view}: a reject cross sits at its offset from the nearest slot (early up, late down), clamps at the edge, and follows the view range`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      await res(page, '4');
+      // y (px from the centre line) of the cross, read from its inline translate
+      const crossY = () => page.evaluate((v) => {
+        const el = document.querySelector((v === 'timeline' ? '#timingTrack' : '#timingBeatsMarks') + ' .tm-x');
+        return parseFloat(/,\s*(-?[\d.]+)px/.exec(el.style.transform)[1]);
+      }, view);
+      const half = await page.evaluate((v) => v === 'timeline' ? TIMING_TL_HALF : TIMING_C_HALF, view);
+      // 0.45 beat after the slot (450 ms at 60 BPM): far beyond any range -> late, clamped at the bottom edge
+      expect(await hitAt(page, 1, 0.45, -20)).toBeNull();
+      expect(await page.evaluate(() => Math.round(timingRejects[0].offsetMs))).toBe(450);
+      expect(await crossY()).toBeCloseTo(half, 1);
+      await expect(page.locator(rings(view))).toHaveCount(1);
+      // an in-range late offset sits below the centre at the dot mapping; widening the range moves it toward the centre
+      await page.evaluate(() => { timingRejects[0].offsetMs = 20; timingSetRange(50); });
+      const y50 = await crossY();
+      expect(y50).toBeCloseTo(half * 20 / 50, 1);
+      await page.evaluate(() => timingSetRange(100));
+      const y100 = await crossY();
+      expect(y100).toBeCloseTo(half * 20 / 100, 1);
+      expect(y100).toBeLessThan(y50);
+      expect(y100).toBeGreaterThan(0);
+      // early: above the centre; beyond the range it clamps to the top edge, still a cross (no triangle)
+      await page.evaluate(() => { timingRejects[0].offsetMs = -30; timingSetRange(50); });
+      expect(await crossY()).toBeCloseTo(-half * 30 / 50, 1);
+      await page.evaluate(() => { timingRejects[0].offsetMs = -80; timingSetRange(50); });
+      expect(await crossY()).toBeCloseTo(-half, 1);
+      await expect(page.locator(rings(view))).toHaveCount(1);
+      await expect(page.locator((view === 'timeline' ? '#timingTrack' : '#timingBeatsMarks') + ' .tm-tri')).toHaveCount(0);
+      // a real early reject (0.55 beat = next slot, 450 ms early) lands on the top edge
+      await page.evaluate(() => { timingRejects.length = 0; document.querySelectorAll('.tm-x').forEach(e => e.remove()); });
+      expect(await hitAt(page, 2, 0.55, -20)).toBeNull();
+      expect(await page.evaluate(() => Math.round(timingRejects[0].offsetMs))).toBe(-450);
+      expect(await crossY()).toBeCloseTo(-half, 1);
     });
 
     test(`${view}: a quieter ring first, then a louder hit in the same cell removes the ring`, async ({ page }) => {

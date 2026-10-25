@@ -368,8 +368,10 @@
         .tm-tri { position: absolute; left: 0; width: 0; height: 0; margin-left: -5px; border-left: 5px solid transparent; border-right: 5px solid transparent; z-index: 2; }
         .tm-tri.up { top: 2px; border-bottom: 8px solid #f43f5e; }
         .tm-tri.down { bottom: 2px; border-top: 8px solid #f43f5e; }
-        /* rejected (off-grid) hit: hollow grey ring on the centre line */
-        .tm-ring { position: absolute; left: 0; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; box-sizing: border-box; border: 1.5px solid #94a3b8; border-radius: 50%; z-index: 2; }
+        /* rejected (off-grid) onset: grey cross at its signed offset from the nearest slot (early up, late down). Two 1.5px bars rotated about the centre of the 9px box inside ::before/::after, so the inline translate still positions it */
+        .tm-x { position: absolute; left: 0; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; z-index: 2; }
+        .tm-x::before, .tm-x::after { content: ""; position: absolute; left: -1.5px; top: 3.75px; width: 12px; height: 1.5px; background: #94a3b8; box-shadow: 0 0 0 1px #f8fafc; transform: rotate(45deg); }
+        .tm-x::after { transform: rotate(-45deg); }
         .tm-noinput { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: none; background: rgb(248 250 252 / 0.72); opacity: 0; transition: opacity 250ms; }
         .tm-noinput.on { opacity: 1; }
         .tm-noinput span { font-size: 0.75rem; font-weight: 700; color: #64748b; background: #fff; border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 999px; }
@@ -2262,7 +2264,7 @@
     let timingSensitivity = 5;            // 1..10, 5 = reference tuning
     let timingBeats = [];                 // ring buffer (64) of { time, beatInMeasure, n, dur }
     let timingHits = [];                  // accepted hits log
-    let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac, peakDb, cbg, cpos }
+    let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac, peakDb, cbg, cpos, offsetMs }
     let timingLastHitTime = 0;            // context time of last accepted hit
     let timingBeatSeq = 0;
     let timingToken = 0;                  // invalidates async start/switch when Timing is toggled
@@ -2484,7 +2486,7 @@
         return { cur, nxt, dur: nxt ? nxt.time - cur.time : fallbackDur, curN: cur.n !== undefined ? cur.n : k };
     }
     // Grid cell of an onset: the grid slot (beatGlobal, pos) nearest in time, i.e. slot +- half the gap to its neighbours
-    // (unweighted, unlike the matcher's role-weighted capture). Returns null before the first beat.
+    // (unweighted, unlike the matcher's role-weighted capture). `t` is the slot's time. Returns null before the first beat.
     function timingNearestCell(tComp, beats, grid, fallbackDur) {
         let k = beats.length - 1;
         while (k >= 0 && beats[k].time > tComp) k--;
@@ -2494,9 +2496,9 @@
         let best = null, bd = Infinity;
         for (let j = 0; j < grid.pos.length; j++) {
             const d = Math.abs(tComp - (cur.time + grid.pos[j] * dur));
-            if (d < bd) { bd = d; best = { bg: curN, pos: grid.pos[j] }; }
+            if (d < bd) { bd = d; best = { bg: curN, pos: grid.pos[j], t: cur.time + grid.pos[j] * dur }; }
         }
-        if (Math.abs(tComp - (cur.time + dur)) < bd) best = { bg: nxt && nxt.n !== undefined ? nxt.n : curN + 1, pos: 0 };
+        if (Math.abs(tComp - (cur.time + dur)) < bd) best = { bg: nxt && nxt.n !== undefined ? nxt.n : curN + 1, pos: 0, t: cur.time + dur };
         return best;
     }
     function matchOnsetToGrid(tComp, beats, grid, fallbackDur) {
@@ -3667,7 +3669,7 @@ registerProcessor('onset-detector', OnsetDetector);
                 while (k >= 0 && timingBeats[k].time > tComp) k--;
                 if (k >= 0) {
                     const b = timingBeats[k], dur = b.dur > 0 ? b.dur : 60 / bpm;
-                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)), peakDb, cbg: cell.bg, cpos: cell.pos };
+                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)), peakDb, cbg: cell.bg, cpos: cell.pos, offsetMs: (tComp - cell.t) * 1000 };
                     timingRejects.push(rej);
                     if (timingView === 'timeline') timingTlAddRing(rej); else timingCAddRing(rej);
                 }
@@ -3792,7 +3794,7 @@ registerProcessor('onset-detector', OnsetDetector);
     const TIMING_HELP = {
         input: ['Input', 'The audio input to listen to — pick your audio interface. Ch 1 / Ch 2 chooses the channel your instrument is on. A loopback device can carry the instrument and the metronome together (see Click).'],
         click: ['Click', "Optional. A channel that carries the metronome itself, e.g. an interface loopback. Timing is then measured against the actual clicks, so latency is tracked automatically and Measure isn't needed. Leave Off if you don't have one."],
-        detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey rings (Off grid). Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
+        detect: ['Detect', 'Which notes to check. 4 = beats only, 8 = beats and off-beats, 16 / 32 = finer. Hits between grid points show as grey × marks (Off grid), higher = earlier, lower = later. Shuffle swings the 8th or 16th positions. Shuffle and tuplet rhythms lock this.'],
         latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
         live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
         trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
@@ -4378,10 +4380,12 @@ registerProcessor('onset-detector', OnsetDetector);
             el.remove();
         });
     }
+    // y of a reject cross: the same mapping as hits (clamped to the lane's top/bottom edge line, which already leaves room for a 9px cross)
+    function timingRejY(rej, half) { return timingRangeY(rej.offsetMs, half); }
     function timingTlAddRing(rej) {
         const el = document.createElement('div');
-        el.className = 'tm-ring';
-        timingTlAdd(el, rej.t, 0, false).rej = rej;
+        el.className = 'tm-x';
+        timingTlAdd(el, rej.t, timingRejY(rej, TIMING_TL_HALF), false).rej = rej;
     }
     // Remove a dropped reject ring from whichever view holds it
     function timingRemoveRingMark(rej) {
@@ -4472,6 +4476,10 @@ registerProcessor('onset-detector', OnsetDetector);
         el.style.transform = 'translate(' + timingCX(timingMod(hit.beatInMeasure, timingC.n) + hit.posInBeat).toFixed(2) + 'px, ' + (out ? 0 : timingCY(hit.offsetMs)).toFixed(2) + 'px)';
     }
 
+    function timingCPlaceRing(el) {
+        const rej = el._rej;
+        el.style.transform = 'translate(' + timingCX(timingMod(rej.beatInMeasure, timingC.n) + rej.frac).toFixed(2) + 'px, ' + timingRejY(rej, TIMING_C_HALF).toFixed(2) + 'px)';
+    }
     function timingCClearMarks() {
         timingBeatsMarks.textContent = '';
         timingC.cells = Array.from({ length: timingC.n }, () => []);
@@ -4506,9 +4514,9 @@ registerProcessor('onset-detector', OnsetDetector);
         if (timingBeatsStrip.hidden) return;
         const bim = timingMod(rej.beatInMeasure, timingC.n);
         const el = document.createElement('div');
-        el.className = 'tm-ring';
+        el.className = 'tm-x';
         el._rej = rej;
-        el.style.transform = 'translate(' + timingCX(bim + rej.frac).toFixed(2) + 'px, 0px)';
+        timingCPlaceRing(el);
         timingBeatsMarks.appendChild(el);
         const cell = timingCCell(bim, rej.frac);
         (timingC.cells[cell] || (timingC.cells[cell] = [])).push(el);
@@ -4847,11 +4855,12 @@ registerProcessor('onset-detector', OnsetDetector);
             timingSetText(chart.querySelector('.tm-scale'), '±' + timingRangeMs + ' ms');
         });
         timingTl.items.forEach(it => {
-            if (!it.hit) return;
-            it.y = timingMarkSetup(it.el, it.hit) ? 0 : timingTlY(it.hit.offsetMs);
+            if (it.hit) it.y = timingMarkSetup(it.el, it.hit) ? 0 : timingTlY(it.hit.offsetMs);
+            else if (it.rej) it.y = timingRejY(it.rej, TIMING_TL_HALF);
+            else return;
             timingTlPlace(it);
         });
-        timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => { if (el._hit) timingCPlace(el, el._hit); });
+        timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => { if (el._hit) timingCPlace(el, el._hit); else if (el._rej) timingCPlaceRing(el); });
     }
     function timingSetRange(ms) {
         if (!TIMING_RANGES.includes(ms)) return;
