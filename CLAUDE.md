@@ -18,3 +18,5 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [BPM acceleration implementation plan](docs/superpowers/plans/2026-03-18-bpm-acceleration.md)
 - [Timing Check (mic input) design spec](docs/superpowers/specs/2026-10-23-timing-check-design.md)
 - [Timing Check implementation plan](docs/superpowers/plans/2026-10-23-timing-check.md)
+- [Practice mode (landscape) design spec](docs/superpowers/specs/2026-11-01-practice-mode-design.md)
+- [Practice mode implementation plan](docs/superpowers/plans/2026-11-01-practice-mode.md)

@@ -408,6 +408,67 @@
         @media (max-width: 420px) { .tm-set-grid { display: none; } }
         @media (max-width: 359px) { .tm-view-row { flex-wrap: wrap; } }
         @media (prefers-reduced-motion: reduce) { .tm-noinput { transition: none; } }
+
+        /* ---------- Practice mode (landscape): everything is scoped under body.wm-practice; portrait is untouched ---------- */
+        .tm-practice-btn { margin-left: auto; }
+        .tm-view-row .tm-practice-btn + .tm-pop-wrap { margin-left: 0; }
+        .tm-practice-btn svg { width: 14px; height: 14px; flex: none; }
+        .tm-practice-btn span { font: 700 0.72rem 'Noto Sans KR', sans-serif; }
+        @media (max-width: 420px) { .tm-practice-btn span { display: none; } .tm-practice-btn { padding: 6px 5px; } }
+        .pr-root { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; text-align: left; }
+        .pr-hdr { position: relative; display: flex; align-items: center; gap: 10px; flex: none; min-width: 0; }
+        .pr-grp { display: flex; align-items: center; gap: 8px; flex: none; }
+        .pr-anchor { position: relative; flex: none; }
+        .pr-grow { flex: 1; min-width: 0; }
+        .pr-ov { position: absolute; top: calc(100% + 8px); z-index: 50; display: flex; flex-direction: column; gap: 12px; max-width: calc(100vw - 24px); }
+        .pr-ov[hidden] { display: none; }
+        .pr-ov-l { left: 0; } .pr-ov-r { right: 0; }
+        .pr-lab { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #94a3b8; }
+        .pr-sec { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+        .pr-main { flex: 1; min-height: 0; display: flex; }
+        .pr-foot { display: flex; align-items: center; gap: 12px; flex: none; min-height: 44px; }
+        .pr-hint { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; pointer-events: none; font-size: 1.25rem; font-weight: 700; color: #64748b; }
+        .pr-ms { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+        .pr-msl { position: absolute; right: 6px; top: 50%; margin-top: -0.5em; font-size: 0.6rem; line-height: 1; font-weight: 700; letter-spacing: 0.02em; color: #94a3b8; }
+        .pr-msl.g { right: auto; left: 8px; color: #10b981; }
+        .pr-wave { position: absolute; top: 0; left: 0; z-index: -1; pointer-events: none; }
+        .pr-sub { font-size: 0.6rem; font-weight: 700; color: var(--q, #94a3b8); white-space: nowrap; }
+        #prStatus { font-size: 0.8rem; font-weight: 700; color: var(--q, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+        body.wm-practice { padding: 8px; height: 100dvh; min-height: 0; overflow: hidden; align-items: stretch; }
+        body.wm-practice .tm-card { max-width: 1400px; height: 100%; padding: 12px 16px; border-radius: 2rem; display: flex; flex-direction: column; }
+        body.wm-practice .tm-card > :not(#prRoot):not(#accelPreviewOverlay) { display: none !important; }
+        body.wm-practice .tm-timeline { height: auto; flex: 1; min-width: 0; }
+        body.wm-practice .tm-timeline .tm-scale { display: none; }
+        body.wm-practice #playBtn, body.wm-practice #accelStopBtn { flex: none; padding: 0 18px; height: 48px; font-size: 1rem; }
+        body.wm-practice #playBtn { min-width: 112px; }
+        body.wm-practice .pr-hdr .control-btn { flex: none; }
+        body.wm-practice #bpmDisplay { font-size: 2.25rem; letter-spacing: normal; min-width: 3ch; text-align: center; display: block; }
+        body.wm-practice #rhythmTrigger { width: 2.75rem; height: 3rem; background: transparent; box-shadow: none; border: 0; }
+        body.wm-practice #beatContainer { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 5; flex-wrap: nowrap; gap: 14px; width: max-content; }
+        body.wm-practice .beat-circle { width: 22px; height: 22px; }
+        body.wm-practice .pr-ov #rhythmMenu, body.wm-practice .pr-ov #timerMenu, body.wm-practice .pr-ov #volumeMenu { display: flex !important; position: static; margin: 0; flex-direction: row; flex-wrap: wrap; width: auto; box-shadow: none; border: 0; padding: 0; animation: none; overflow: visible; }
+        body.wm-practice .pr-ov #rhythmMenu .dropdown-item { width: 3rem; }
+        body.wm-practice .pr-ov #timerMenu .dropdown-item { width: auto; min-width: 3rem; padding: 0 8px; height: 2.25rem; }
+        body.wm-practice .pr-ov #timerTrigger, body.wm-practice .pr-ov #volumeTrigger { display: none; }
+        body.wm-practice .pr-ov > .relative { align-items: flex-start; }
+        body.wm-practice #prBpmOv { width: 340px; }
+        body.wm-practice #prBpmOv #tapBtn { flex: none; padding: 10px 0; }
+        body.wm-practice #prBpmOv > div:last-child { margin-bottom: 0; }
+        body.wm-practice #prRhythmOv { width: 470px; }
+        body.wm-practice #prRhythmOv > .flex-col { align-items: flex-start; }
+        body.wm-practice #prMoreOv { width: 340px; }
+        body.wm-practice #prMoreOv .tm-pop-wrap { margin-left: 0; }
+        body.wm-practice .tm-popover { position: fixed; top: 8px !important; right: 8px !important; max-height: calc(100dvh - 16px); overflow-y: auto; }
+        body.wm-practice .pr-foot #timingStatus, body.wm-practice .pr-foot .tm-mic-ico { display: none; }
+        body.wm-practice .pr-foot .tm-meter-wrap { width: 120px; flex: none; }
+        body.wm-practice .pr-foot #timerDisplayContainer { width: auto; margin: 0; flex: none; }
+        body.wm-practice .pr-foot #accelResetBtn { position: static; margin-left: 8px; }
+        body.wm-practice .tm-summary { display: flex; gap: 16px; flex: none; }
+        body.wm-practice .tm-sm { display: flex; align-items: baseline; gap: 6px; background: none; border: 0; padding: 0; }
+        body.wm-practice .tm-sm .v { font-size: 1.1rem; min-height: 0; }
+        @media (max-width: 760px) { body.wm-practice .pr-foot .tm-meter-wrap { display: none; } }
+        @media (max-width: 1000px), (max-height: 470px) { .pr-sub { display: none; } }
+        @media (max-width: 760px) { .pr-hdr { gap: 6px; } .pr-hdr .pr-grp { gap: 6px; } .pr-chiptxt { display: none; } body.wm-practice #playBtn { min-width: 0; padding: 0 12px; } body.wm-practice #bpmDisplay { font-size: 1.9rem; } }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
@@ -733,6 +794,9 @@
                         <button type="button" data-v="timeline" aria-pressed="true">Timeline</button>
                         <button type="button" data-v="beats" aria-pressed="false">On beats</button>
                     </div>
+                    <button id="practiceBtn" type="button" class="tm-set-btn tm-practice-btn" title="Landscape practice mode" aria-label="Practice mode">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01"></path></svg><span>Practice</span>
+                    </button>
                     <div class="tm-pop-wrap">
                         <button id="timingSetBtn" type="button" class="tm-set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="timingPopover" title="Input, detection grid, latency and sensitivity">
                             <span id="timingSetGrid" class="tm-set-vals tm-set-grid">16 ·</span>
@@ -907,6 +971,51 @@
                     <svg id="pauseIcon" class="w-5 h-5 fill-current hidden" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                 </button>
             </div>
+        </div>
+
+        <!-- Practice mode shell (landscape): empty slots; existing controls are re-parented here by practiceSetMode() -->
+        <div id="prRoot" class="pr-root" hidden>
+            <div class="pr-hdr">
+                <div id="prPlay" class="pr-grp"></div>
+                <div class="pr-anchor">
+                    <div id="prBpmRow" class="pr-grp">
+                        <button id="prBpmBtn" type="button" class="rounded-xl hover:bg-slate-100 px-1" title="BPM slider, tap tempo and acceleration" aria-haspopup="true"></button>
+                    </div>
+                    <div id="prBpmOv" class="pr-ov pr-ov-l dropdown-menu bg-white rounded-2xl shadow-xl border border-slate-100 p-4" hidden></div>
+                </div>
+                <div class="pr-grow"></div>
+                <div class="pr-anchor">
+                    <div id="prChip" class="flex items-center gap-1 bg-slate-100 rounded-2xl pr-3 h-12 cursor-pointer" role="button" tabindex="0" aria-haspopup="true" title="Rhythm and beats">
+                        <div class="text-left leading-tight pr-chiptxt"><div id="prBeatsTxt" class="text-sm font-bold text-slate-700">4 beats</div><div id="prGridTxt" class="text-xs text-slate-400 font-bold uppercase tracking-wider">Grid 1/16</div></div>
+                    </div>
+                    <div id="prRhythmOv" class="pr-ov pr-ov-r dropdown-menu bg-white rounded-2xl shadow-xl border border-slate-100 p-4" hidden></div>
+                </div>
+                <div id="prSess" class="flex flex-col items-center justify-center bg-slate-100 rounded-2xl px-3 h-12 flex-none">
+                    <span class="text-xs text-slate-400 font-bold uppercase tracking-wider leading-none">Session</span>
+                    <span class="flex items-baseline gap-2"><span id="prSessTime" class="font-bold text-slate-700 tabular-nums">0:00</span><span id="prSessSub" class="pr-sub"></span></span>
+                </div>
+                <div class="pr-anchor">
+                    <button id="prMoreBtn" type="button" class="h-12 px-3 rounded-2xl text-sm font-bold text-indigo-500 hover:bg-indigo-50 transition-colors" aria-haspopup="true">More</button>
+                    <div id="prMoreOv" class="pr-ov pr-ov-r dropdown-menu bg-white rounded-2xl shadow-xl border border-slate-100 p-4" hidden>
+                        <div class="pr-sec"><span class="pr-lab">Bars</span>
+                            <div id="prBarsSeg" class="tm-seg" role="group" aria-label="Visible bars">
+                                <button type="button" data-v="2" aria-pressed="false">2</button><button type="button" data-v="4" aria-pressed="true">4</button><button type="button" data-v="8" aria-pressed="false">8</button>
+                            </div>
+                        </div>
+                        <div id="prTimingSec" class="pr-sec"><span class="pr-lab">Timing</span></div>
+                    </div>
+                </div>
+            </div>
+            <div id="prMain" class="pr-main"></div>
+            <div id="prFoot" class="pr-foot">
+                <button id="prExit" type="button" class="control-btn w-10 h-10 flex-none rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center" aria-label="Portrait mode" title="Portrait mode">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg>
+                </button>
+                <span id="prStatus"></span>
+                <div class="pr-grow"></div>
+            </div>
+            <div id="prMs" class="pr-ms"></div>
+            <div id="prHint" class="pr-hint">Press Play</div>
         </div>
 
     </div>
@@ -2242,6 +2351,8 @@
     // =====================================================================
 
     // --- Timing state ---
+    // Practice mode state (landscape layout); the code lives in the Practice mode block before // Init
+    const practice = { on: false, bars: 4, moves: [], view: 'timeline', waveSent: false, wave: { chunks: [], tiles: new Map(), dirty: false, sig: '' }, sess: { start: 0, end: 0, n: 0, sum: 0, sumSq: 0 } };
     let timingOn = false;
     let timingView = 'timeline';          // 'timeline' | 'beats'
     let timingRes = '16';                 // detection resolution: '4' | '8' | '16' | '32'
@@ -3028,12 +3139,14 @@ class OnsetDetector extends AudioWorkletProcessor {
     this.acc = 0;
     this.rec = false; this.recBuf = null; this.recN = 0; this.recFrame = 0;
     this.clk = -1;   // shared frame clock (see frameStart)
+    this.wave = false; this.wPk = new Float32Array(16); this.wN = 0; this.wT = 0;   // practice-mode waveform peaks
     this.port.onmessage = (e) => {
       const m = e.data;
       if (m && m.type === 'config') {
         if (typeof m.channel === 'number') this.ch = m.channel | 0;
         if (typeof m.refChannel === 'number' && (m.refChannel | 0) !== this.refCh) { this.refCh = m.refChannel | 0; this.ref = this.refCh >= 0 ? new RefTemplate(sampleRate) : null; }
         if (typeof m.sensitivity === 'number') this.core.setSensitivity(m.sensitivity);
+        if (typeof m.wave === 'boolean' && m.wave !== this.wave) { this.wave = m.wave; this.wN = 0; }
         if (typeof m.record === 'boolean' && m.record !== this.rec) {
           this.rec = m.record;
           this.core.rec = m.record;
@@ -3062,12 +3175,28 @@ class OnsetDetector extends AudioWorkletProcessor {
     this.clk += n;
     return f;
   }
+  // Practice waveform: peak |x| per 64-sample block of the raw instrument channel; every 16 blocks one message, stamped from the frame clock
+  waveBlocks(x, frame) {
+    for (let o = 0; o < x.length; o += 64) {
+      const e = Math.min(o + 64, x.length);
+      let pk = 0;
+      for (let i = o; i < e; i++) { const a = x[i] < 0 ? -x[i] : x[i]; if (a > pk) pk = a; }
+      if (this.wN === 0) this.wT = (frame + o) / sampleRate;
+      this.wPk[this.wN++] = pk;
+      if (this.wN === 16) {
+        const out = new Float32Array(this.wPk);
+        this.wN = 0;
+        this.port.postMessage({ type: 'wave', time: this.wT, step: 64 / sampleRate, peaks: out }, [out.buffer]);
+      }
+    }
+  }
   process(inputs) {
     const chs = inputs[0];
     if (!chs || !chs.length) return true;
     if (chs.length !== this.nch) { this.nch = chs.length; this.port.postMessage({ type: 'chans', n: chs.length }); }
     const frame = this.frameStart(chs[0].length);
     const ons = this.core.processChannels(chs, this.ch, frame);
+    if (this.wave) this.waveBlocks(chs[this.ch] || chs[0], frame);
     for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands });
     if (this.ref) {
       const rs = this.ref.processChannels(chs, this.refCh, frame);
@@ -3155,6 +3284,7 @@ registerProcessor('onset-detector', OnsetDetector);
             timingHotShown = tooHot;
             timingHotEl.classList.toggle('on', tooHot);
             timingMeterFill.classList.toggle('hot', tooHot);
+            practiceStatus();
         }
         if (tooHot) timingQueueMeterLater(timingHotUntil - performance.now());
         const s = timingStatusState;
@@ -3169,6 +3299,7 @@ registerProcessor('onset-detector', OnsetDetector);
             timingSetText(timingStatusEl, text);
             timingSetQ(timingStatusEl, q);
             timingStatusEl.classList.toggle('wide', text.length > 9);
+            practiceStatus();
         }
         const title = 'Quiet below ' + String(timingQuietDb).replace('-', '\u2212') + ' dB';
         if (title !== timingMeterTitle) { timingMeterTitle = title; timingMeterWrap.title = title; }
@@ -3278,6 +3409,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingSetText(timingQuietValue, timingQuietDb + ' dB');
         timingQuietSince = performance.now();
         timingQueueMeter();
+        practiceWaveRedraw(false);
     }
     function timingSetQuiet(db) {
         const n = Math.max(-80, Math.min(-30, Math.round(Number(db))));
@@ -3286,6 +3418,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingLsSet('wm.timing.quiet.' + timingDeviceId, n);
         timingSetText(timingQuietValue, n + ' dB');
         timingQueueMeter();
+        practiceWaveRedraw(false);
     }
 
     function timingPostConfig() {
@@ -3293,6 +3426,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const m = { type: 'config', channel: timingChannel, sensitivity: timingSensitivity };
         // refChannel is only sent once the click ref has been used, so with it Off the message is exactly the old one
         if (timingRefOn || timingRefSent) { m.refChannel = timingRefOn ? timingRefCh : -1; timingRefSent = timingRefOn; }
+        if (practice.on || practice.waveSent) { m.wave = practice.on; practice.waveSent = practice.on; } // only after practice mode was used, so the default message is unchanged
         timingNode.port.postMessage(m);
     }
     // Shared by the instrument and click-ref channel selectors: up to TIMING_SEG_MAX options as segmented buttons, more as a compact <select>
@@ -3635,6 +3769,8 @@ registerProcessor('onset-detector', OnsetDetector);
         timingRefReset(midPlay); // a play start forgets the recorded clicks; Timing switched on mid-play keeps them
         timingRenderRef();
         timingSetNoInput(false);
+        practice.sess = { start: now, end: 0, n: 0, sum: 0, sumSq: 0 };
+        practice.wave.chunks = [];
         timingTlReset(now);
         timingCClearMarks();
         timingUpdateSummary();
@@ -3649,6 +3785,7 @@ registerProcessor('onset-detector', OnsetDetector);
         if (!timingOn) return;
         timingStopLoop();
         timingFrozenNow = audioCtx ? audioCtx.currentTime : 0;
+        practice.sess.end = timingFrozenNow;
         timingSetNoInput(false);
         timingUpdateSummary();
         timingRenderLatency();
@@ -3714,6 +3851,7 @@ registerProcessor('onset-detector', OnsetDetector);
         }
         const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb, cbg: cell.bg, cpos: cell.pos };
         timingHits.push(hit);
+        practice.sess.n++; practice.sess.sum += hit.offsetMs; practice.sess.sumSq += hit.offsetMs * hit.offsetMs;
         if (timingDbg) timingDbgMatch(time, tComp, hit, '');
         timingLastHitTime = audioCtx.currentTime;
         timingSetNoInput(false);
@@ -3802,6 +3940,8 @@ registerProcessor('onset-detector', OnsetDetector);
             if (m.clip) { timingHotUntil = performance.now() + 3000; timingQueueMeter(); }
             if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
             timingQueueMeter();
+        } else if (m.type === 'wave') {
+            practiceWaveIn(m);
         } else if (m.type === 'ref') {
             if (!timingMuteOnsets) timingHandleRef(m.sched, m.time, m.ncc);
         } else if (m.type === 'glitch') {
@@ -3857,7 +3997,7 @@ registerProcessor('onset-detector', OnsetDetector);
         if (timingHelpOpen && timingHelpOpen.btn === btn) { timingHelpClose(); return; }
         timingHelpClose();
         const pr = timingPopover.getBoundingClientRect(), br = btn.getBoundingClientRect();
-        tip.style.top = (br.bottom - pr.top + 6) + 'px';
+        tip.style.top = (br.bottom - pr.top + timingPopover.scrollTop + 6) + 'px';
         tip.setAttribute('data-open', '');
         btn.setAttribute('aria-expanded', 'true');
         timingHelpOpen = { btn, tip };
@@ -4328,16 +4468,17 @@ registerProcessor('onset-detector', OnsetDetector);
 
     // --- Summary (visible window only) ---
     function timingUpdateSummary() {
-        const bars = timingView === 'timeline' ? 2 : 1;
+        practiceTick();
+        const bars = timingView === 'timeline' ? timingTlBars() : 1;
         const barDur = timingBarDur();
         const now = timingNowSec();
-        const keepFrom = now - 4 * barDur;
+        const keepFrom = now - Math.max(4, bars + 1) * barDur;
         while (timingHits.length && timingHits[0].t < keepFrom) timingHits.shift();
         while (timingRejects.length && timingRejects[0].t < keepFrom) timingRejects.shift();
         const from = now - bars * barDur;
         const vals = [];
         for (let i = 0; i < timingHits.length; i++) if (timingHits[i].t >= from) vals.push(timingHits[i].offsetMs);
-        timingSetText(timingAvgLabel, 'Avg · last ' + bars + ' bar' + (bars > 1 ? 's' : ''));
+        timingSetText(timingAvgLabel, practice.on ? 'Avg' : 'Avg · last ' + bars + ' bar' + (bars > 1 ? 's' : ''));
         timingSetText(timingHitCountEl, vals.length ? String(vals.length) : '–');
         if (!vals.length) {
             timingSetText(timingAvgEl, '–'); timingSetQ(timingAvgEl, '');
@@ -4356,11 +4497,11 @@ registerProcessor('onset-detector', OnsetDetector);
     // ---------------------------------------------------------------
     // Timeline view (scrolling 2 bars, fixed NOW line)
     // ---------------------------------------------------------------
-    const timingTl = { w: 380, playX: 342, pps: 1, t0: 0, items: [], pred: [], drawnN: -1, predDirty: true, layoutBpm: 0, layoutBeats: 0, lastLastN: -1 };
+    const timingTl = { w: 380, playX: 342, pps: 1, h: TIMING_TL_H, half: TIMING_TL_HALF, t0: 0, items: [], pred: [], drawnN: -1, predDirty: true, layoutBpm: 0, layoutBeats: 0, lastLastN: -1 };
 
     // ms -> px from the centre line for a view whose edge (half px) is +/- timingRangeMs (shared by both views, the band and the guides)
     function timingRangeY(ms, half) { return timingClamp(ms, timingRangeMs) * half / timingRangeMs; }
-    function timingTlY(ms) { return timingRangeY(ms, TIMING_TL_HALF); }
+    function timingTlY(ms) { return timingRangeY(ms, timingTl.half); }
     // Shape/colour of an accepted hit's marker for the current range (in range: quality dot; beyond it: red edge triangle). Returns true when out of range.
     function timingMarkSetup(el, hit) {
         const out = Math.abs(hit.offsetMs) > timingRangeMs;
@@ -4377,17 +4518,24 @@ registerProcessor('onset-detector', OnsetDetector);
     }
     function timingTlPlace(it) { it.el.style.transform = 'translate(' + ((it.t - timingTl.t0) * timingTl.pps).toFixed(2) + 'px, ' + it.y + 'px)'; }
 
+    function timingTlBars() { return practice.on ? practice.bars : 2; }
     function timingTlLayout() {
         const tl = timingTl;
         const w = timingTimeline.clientWidth;
         if (w > 0) tl.w = w;
         tl.playX = tl.w * 0.9;
-        tl.pps = tl.playX / (2 * timingBarDur()); // exactly 2 bars between the left edge and NOW
+        tl.pps = tl.playX / (timingTlBars() * timingBarDur()); // exactly N bars (2 in portrait) between the left edge and NOW
+        const h = practice.on ? (timingTimeline.clientHeight || TIMING_TL_H) : TIMING_TL_H; // portrait keeps 132 / 58 exactly
+        const half = practice.on ? Math.max(20, h / 2 - 8) : TIMING_TL_HALF;
+        const resized = h !== tl.h || half !== tl.half;
+        tl.h = h; tl.half = half;
+        if (resized) timingApplyRange(); // band, guides, ms labels and markers follow the new height
         tl.layoutBpm = bpm;
         tl.layoutBeats = beatsPerMeasure;
         timingNow.style.transform = 'translateX(' + tl.playX + 'px)';
         tl.items.forEach(timingTlPlace);
         tl.pred.forEach(timingTlPlace);
+        practiceWaveRedraw(false);
     }
     // Recompute pixels-per-second after a BPM change (hook in updateBpm)
     function timingRelayoutTimeline() {
@@ -4399,6 +4547,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const tl = timingTl;
         timingTrack.textContent = '';
         tl.items = []; tl.pred = []; tl.drawnN = -1; tl.predDirty = true;
+        practice.wave.tiles = new Map(); practice.wave.sig = ''; // the canvases went with the track's children
         tl.t0 = now;
         timingTrack.style.transform = '';
         timingTlLayout();
@@ -4417,6 +4566,8 @@ registerProcessor('onset-detector', OnsetDetector);
     }
     // Remove a replaced hit's marker from whichever view holds it
     function timingRemoveHitMark(hit) {
+        const ss = practice.sess; // a hit replaced by a louder one in its cell no longer counts for the session
+        if (ss.n > 0) { ss.n--; ss.sum -= hit.offsetMs; ss.sumSq -= hit.offsetMs * hit.offsetMs; }
         timingTl.items = timingTl.items.filter(it => { if (it.hit !== hit) return true; it.el.remove(); return false; });
         timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => {
             if (el._hit !== hit) return;
@@ -4429,7 +4580,7 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingTlAddRing(rej) {
         const el = document.createElement('div');
         el.className = 'tm-x';
-        timingTlAdd(el, rej.t, timingRejY(rej, TIMING_TL_HALF), false).rej = rej;
+        timingTlAdd(el, rej.t, timingRejY(rej, timingTl.half), false).rej = rej;
     }
     // Remove a dropped reject ring from whichever view holds it
     function timingRemoveRingMark(rej) {
@@ -4490,12 +4641,13 @@ registerProcessor('onset-detector', OnsetDetector);
             if ((it.t - tl.t0) * tl.pps + shift < -20) it.el.remove(); else keep.push(it);
         });
         tl.items = keep;
+        practiceWavePrune(shift);
     }
     // Rebuild from the beat ring buffer and hit log (view switch, detect grid change)
     function timingTlRebuild() {
         const now = timingNowSec();
         timingTlReset(timingTl.t0);
-        const from = now - 2.2 * timingBarDur();
+        const from = now - (timingTlBars() + 0.2) * timingBarDur();
         for (let i = 0; i < timingBeats.length; i++) {
             const b = timingBeats[i];
             if (!(b.dur > 0)) break;
@@ -4636,6 +4788,7 @@ registerProcessor('onset-detector', OnsetDetector);
         } else {
             timingCFrame(now);
         }
+        practiceWaveFlush();
         timingRenderMeter();
         timingRefTick(now);
         const idle = now - Math.max(timingLastHitTime, timingPlayStart);
@@ -4687,6 +4840,7 @@ registerProcessor('onset-detector', OnsetDetector);
     // Microphone, devices, start / stop
     // ---------------------------------------------------------------
     function timingShowError(msg) {
+        if (msg) practiceSetMode(false);
         timingError = msg;
         timingErrorEl.textContent = msg;
         timingErrorEl.hidden = !msg;
@@ -4839,6 +4993,8 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingStop() {
         if (!timingOn) return;
         if (timingDbg) timingDbgFinish();
+        practiceSetMode(false);
+        practice.wave.chunks = [];
         timingOn = false;
         timingUpdateRefOn();
         timingClickTimes = [];
@@ -4896,7 +5052,7 @@ registerProcessor('onset-detector', OnsetDetector);
     const timingRangeSeg = document.getElementById('timingRangeSeg');
     function timingApplyRange() {
         timingRangeSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === timingRangeMs)));
-        [[timingTimeline, TIMING_TL_HALF], [timingBeatsChart, TIMING_C_HALF]].forEach(([chart, half]) => {
+        [[timingTimeline, timingTl.half], [timingBeatsChart, TIMING_C_HALF]].forEach(([chart, half]) => {
             chart.style.setProperty('--bh', (2 * timingRangeY(TIMING_GOOD_MS, half)).toFixed(2) + 'px'); // good band keeps its true +/-10 ms
             chart.querySelectorAll('.tm-rg').forEach(g => g.remove());
             const mid = chart.querySelector('.tm-mid');
@@ -4907,10 +5063,11 @@ registerProcessor('onset-detector', OnsetDetector);
                 mid.after(g);
             }));
             timingSetText(chart.querySelector('.tm-scale'), '±' + timingRangeMs + ' ms');
+            if (chart === timingTimeline) practiceBuildMs(half);
         });
         timingTl.items.forEach(it => {
             if (it.hit) it.y = timingMarkSetup(it.el, it.hit) ? 0 : timingTlY(it.hit.offsetMs);
-            else if (it.rej) it.y = timingRejY(it.rej, TIMING_TL_HALF);
+            else if (it.rej) it.y = timingRejY(it.rej, timingTl.half);
             else return;
             timingTlPlace(it);
         });
@@ -4990,6 +5147,224 @@ registerProcessor('onset-detector', OnsetDetector);
         timingViewSeg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === timingView)));
         timingTimeline.hidden = timingView !== 'timeline';
     })();
+
+    // ---------------------------------------------------------------
+    // Practice mode (landscape): body.wm-practice + existing controls re-parented into a one-line header / footer.
+    // No control is duplicated: every moved element leaves a comment placeholder and goes back to the exact spot on exit.
+    // The only new feature is the input waveform (worklet 'wave' peaks -> canvas tiles moved with the Timeline track).
+    // ---------------------------------------------------------------
+    const prEl = (id) => document.getElementById(id);
+    const prRoot = prEl('prRoot'), prStatus = prEl('prStatus'), prMs = prEl('prMs'), prHint = prEl('prHint');
+    const prOverlays = [['prBpmOv', 'prBpmBtn'], ['prRhythmOv', 'prChip'], ['prMoreOv', 'prMoreBtn']];
+    const PR_TILE = 256;                                   // waveform tile width (CSS px)
+    // [element, target id, insert before id (optional)]: order matters inside one target
+    const PR_MOVES = () => [
+        [playBtn, 'prPlay'], [accelStopBtn, 'prPlay'],
+        [decreaseBpm5Btn, 'prBpmRow', 'prBpmBtn'], [decreaseBpmBtn, 'prBpmRow', 'prBpmBtn'], [bpmDisplay, 'prBpmBtn'],
+        [increaseBpmBtn, 'prBpmRow'], [increaseBpm5Btn, 'prBpmRow'],
+        [bpmSlider.parentElement, 'prBpmOv'], [tapBtn, 'prBpmOv'], [accelStatus.parentElement, 'prBpmOv'],
+        [rhythmTrigger, 'prChip', 'prChip:first'], [rhythmMenu, 'prRhythmOv'], [beatCountDisplay.parentElement.parentElement, 'prRhythmOv'],
+        [timerTrigger.parentElement, 'prMoreOv', 'prTimingSec'], [volumeTrigger.parentElement, 'prMoreOv', 'prTimingSec'],
+        [timingSetBtn.parentElement, 'prTimingSec'],
+        [beatContainer, 'timingTimeline'],
+        [prMs, 'timingTimeline'], [prHint, 'timingTimeline'],
+        [timingTimeline, 'prMain'],
+        [document.querySelector('.tm-meter-wrap'), 'prFoot', 'prStatus'], [timerDisplayContainer, 'prFoot'], [document.querySelector('.tm-summary'), 'prFoot']
+    ];
+    function practiceSetMode(on) {
+        on = !!on && timingOn;
+        if (on === practice.on) return;
+        if (on) { timingClosePopover(); practice.view = timingView; }
+        practice.on = on;
+        document.body.classList.toggle('wm-practice', on);
+        prRoot.hidden = !on;
+        if (on) {
+            PR_MOVES().forEach(([el, target, before]) => {
+                const ph = document.createComment('practice');
+                el.parentNode.insertBefore(ph, el);
+                practice.moves.push({ el, ph });
+                const host = prEl(target);
+                const ref = before === 'prChip:first' ? host.firstChild : (before ? prEl(before) : null);
+                host.insertBefore(el, ref);
+            });
+        } else {
+            practiceCloseOv();
+            practice.moves.reverse().forEach(({ el, ph }) => { ph.parentNode.insertBefore(el, ph); ph.remove(); });
+            practice.moves = [];
+            [rhythmMenu, timerMenu, volumeMenu].forEach(m => m.classList.add('hidden')); // the menus were shown inline; portrait starts with them closed
+            closeAccelOverlay();
+            prMs.textContent = '';
+        }
+        timingSetView(on ? 'timeline' : practice.view, false); // not persisted: the stored view comes back on exit
+        if (on) timingApplyRange();
+        timingPostConfig();
+        practiceTick();
+    }
+    function practiceCloseOv(except) {
+        prOverlays.forEach(([o]) => { if (o !== except && !prEl(o).hidden) { prEl(o).hidden = true; if (o === 'prBpmOv') closeAccelOverlay(); } });
+    }
+    function practiceToggleOv(id) {
+        const el = prEl(id), open = el.hidden;
+        timingClosePopover();
+        practiceCloseOv();
+        el.hidden = !open;
+    }
+    prOverlays.forEach(([o, t]) => prEl(t).addEventListener('click', () => practiceToggleOv(o), true));
+    prEl('prChip').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); practiceToggleOv('prRhythmOv'); } });
+    document.addEventListener('click', (e) => {
+        if (!practice.on) return;
+        prOverlays.forEach(([o, t]) => { if (!prEl(o).hidden && !prEl(o).contains(e.target) && !prEl(t).contains(e.target)) { prEl(o).hidden = true; if (o === 'prBpmOv') closeAccelOverlay(); } });
+    }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && practice.on) practiceCloseOv(); });
+    prEl('practiceBtn').addEventListener('click', () => practiceSetMode(true));
+    prEl('prExit').addEventListener('click', () => practiceSetMode(false));
+
+    // Bars visible (2/4/8)
+    function practiceSetBars(n) {
+        if (n !== 2 && n !== 4 && n !== 8) return;
+        practice.bars = n;
+        timingLsSet('wm.practice.bars', n);
+        prEl('prBarsSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === n)));
+        if (practice.on && timingOn) { timingTlLayout(); timingTl.predDirty = true; timingTlRebuild(); timingUpdateSummary(); }
+    }
+    prEl('prBarsSeg').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) practiceSetBars(parseInt(b.dataset.v, 10)); });
+    (function () { const n = parseInt(timingLsGet('wm.practice.bars'), 10); if (n === 2 || n === 4 || n === 8) practiceSetBars(n); })();
+
+    // Session statistics (running sums since START; frozen at stop)
+    function practiceSessionStats() {
+        const s = practice.sess, now = audioCtx ? audioCtx.currentTime : 0;
+        const secs = s.start ? Math.max(0, (s.end || now) - s.start) : 0;
+        const mean = s.n ? s.sum / s.n : 0;
+        const sd = s.n > 1 ? Math.sqrt(Math.max(0, s.sumSq / s.n - mean * mean)) : 0;
+        return { secs, n: s.n, mean, sd };
+    }
+    function practiceFmtTime(secs) {
+        const t = Math.floor(secs), h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+        return h ? h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') : m + ':' + String(sec).padStart(2, '0');
+    }
+    // Header chip, session box and hint (called from the summary tick, so ~10 Hz while playing)
+    function practiceTick() {
+        if (!practice.on) return;
+        const st = practiceSessionStats(), g = getTimingGrid();
+        timingSetText(prEl('prSessTime'), practiceFmtTime(st.secs));
+        const sub = st.n ? st.n + ' hits \u00b7 ' + timingFmtMs(st.mean) + ' \u00b7 \u00b1' + Math.round(st.sd) + ' ms' : '';
+        timingSetText(prEl('prSessSub'), sub);
+        timingSetQ(prEl('prSessSub'), st.n > 1 ? timingSpreadQuality(st.sd) : '');
+        prEl('prSess').title = sub ? 'Session: ' + sub : 'Session';
+        timingSetText(prEl('prBeatsTxt'), beatsPerMeasure + (beatsPerMeasure === 1 ? ' beat' : ' beats'));
+        timingSetText(prEl('prGridTxt'), 'Grid ' + (/^\d+$/.test(g.name) ? '1/' + g.name : g.name));
+        prHint.hidden = isPlaying || timingBeats.length > 0;
+        practiceStatus();
+    }
+    function practiceStatus() {
+        if (!practice.on) return;
+        const opt = timingDeviceSelect.selectedOptions && timingDeviceSelect.selectedOptions[0];
+        const txt = timingHotShown ? 'input too hot' : timingStatusEl.textContent.toLowerCase();
+        timingSetText(prStatus, (opt ? opt.textContent : 'Microphone') + ' \u00b7 ' + txt);
+        timingSetQ(prStatus, timingHotShown ? 'bad' : (timingStatusEl.dataset.q || ''));
+    }
+    // Right-side ms labels (same guide lines as the chart) and the green +/-10 ms label
+    function practiceBuildMs(half) {
+        if (!practice.on) return; // (also keeps this safe before the practice block's consts exist)
+        prMs.textContent = '';
+        const add = (text, y, cls) => {
+            const el = document.createElement('span');
+            el.className = 'pr-msl' + (cls ? ' ' + cls : '');
+            el.textContent = text;
+            el.style.transform = 'translateY(' + y.toFixed(2) + 'px)';
+            prMs.appendChild(el);
+        };
+        TIMING_RANGE_GUIDES[timingRangeMs].concat([timingRangeMs]).forEach(ms => [-ms, ms].forEach(v => add((v < 0 ? '\u2212' : '+') + ms + ' ms', timingRangeY(v, half))));
+        add('\u00b1' + TIMING_GOOD_MS + ' ms', -timingRangeY(TIMING_GOOD_MS, half) - 8, 'g');
+    }
+
+    // --- Waveform: peaks (compensated by the same latency as hits) -> per-column max -> canvas tiles in track coordinates ---
+    function practiceWaveFrac(peak) {
+        if (!(peak > 0)) return 0;
+        return Math.max(0, Math.min(1, (20 * Math.log10(peak) - timingQuietDb) / (0 - timingQuietDb)));
+    }
+    function practiceWaveIn(m) {
+        if (!practice.on || !isPlaying || !audioCtx || !m.peaks) return;
+        const w = practice.wave, c = { t: m.time - timingMatchLatencyMs() / 1000, step: m.step, peaks: m.peaks };
+        w.chunks.push(c);
+        practiceWaveAdd(c);
+        const cut = c.t - Math.min(30, (practice.bars + 1) * timingBarDur());
+        let k = 0;
+        while (k < w.chunks.length && w.chunks[k].t + 0.03 < cut) k++;
+        if (k) w.chunks.splice(0, k);
+    }
+    function practiceWaveTile(k) {
+        const w = practice.wave, dpr = Math.min(2, window.devicePixelRatio || 1);
+        const el = document.createElement('canvas');
+        el.className = 'pr-wave';
+        el.width = Math.round(PR_TILE * dpr); el.height = Math.round(timingTl.h * dpr);
+        el.style.width = PR_TILE + 'px'; el.style.height = timingTl.h + 'px';
+        el.style.transform = 'translate(' + (k * PR_TILE) + 'px, 0)';
+        timingTrack.appendChild(el);
+        const tile = { k, el, dpr, col: new Float32Array(PR_TILE), max: -1, dirty: true };
+        w.tiles.set(k, tile);
+        const prev = w.tiles.get(k - 1);
+        if (prev) prev.dirty = true; // its right edge connects to this tile
+        return tile;
+    }
+    function practiceWaveAdd(c) {
+        const tl = timingTl, w = practice.wave;
+        for (let i = 0; i < c.peaks.length; i++) {
+            const x = Math.floor((c.t + i * c.step - tl.t0) * tl.pps);
+            if (x < 0) continue;
+            const k = Math.floor(x / PR_TILE), col = x - k * PR_TILE;
+            const tile = w.tiles.get(k) || practiceWaveTile(k);
+            if (c.peaks[i] > tile.col[col]) tile.col[col] = c.peaks[i];
+            if (col > tile.max) tile.max = col;
+            tile.dirty = true; w.dirty = true;
+        }
+    }
+    function practiceWaveDraw(tile) {
+        const w = practice.wave, tl = timingTl, ctx = tile.el.getContext('2d');
+        const prev = w.tiles.get(tile.k - 1), next = w.tiles.get(tile.k + 1);
+        const n = next ? PR_TILE : tile.max + 1;
+        ctx.setTransform(tile.dpr, 0, 0, tile.dpr, 0, 0);
+        ctx.clearRect(0, 0, PR_TILE, tl.h);
+        tile.dirty = false;
+        if (n <= 0) return;
+        const cy = tl.h / 2, half = tl.half;
+        const f = (i) => practiceWaveFrac(i < 0 ? (prev ? prev.col[PR_TILE - 1] : 0) : tile.col[i]) * half;
+        const edge = (sign) => { // blocky outline: one flat step per column
+            ctx.beginPath();
+            ctx.moveTo(0, cy + sign * f(-1));
+            for (let i = 0; i < n; i++) { const y = cy + sign * f(i); ctx.lineTo(i, y); ctx.lineTo(i + 1, y); }
+        };
+        edge(-1);
+        for (let i = n - 1; i >= 0; i--) { const y = cy + f(i); ctx.lineTo(i + 1, y); ctx.lineTo(i, y); }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(100,116,139,0.15)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(71,85,105,0.85)';
+        ctx.lineWidth = 1.5; ctx.lineJoin = 'round';
+        edge(-1); ctx.stroke();
+        edge(1); ctx.stroke();
+    }
+    function practiceWaveFlush() {
+        const w = practice.wave;
+        if (!practice.on || !w.dirty) return;
+        w.dirty = false;
+        w.tiles.forEach(t => { if (t.dirty) practiceWaveDraw(t); });
+    }
+    // Clear every tile and redraw from the ring when the geometry or the quiet level changed
+    function practiceWaveRedraw(force) {
+        const w = practice.wave, tl = timingTl;
+        const sig = [tl.pps.toFixed(3), tl.h, tl.half, timingQuietDb, practice.on].join('|');
+        if (!force && sig === w.sig) return;
+        w.sig = sig;
+        w.tiles.forEach(t => t.el.remove());
+        w.tiles = new Map();
+        if (!practice.on) return;
+        w.chunks.forEach(practiceWaveAdd);
+        w.dirty = true;
+    }
+    function practiceWavePrune(shift) {
+        practice.wave.tiles.forEach((t, k) => { if ((k + 1) * PR_TILE + shift < -20) { t.el.remove(); practice.wave.tiles.delete(k); } });
+    }
 
     // Init
     initBeats();
