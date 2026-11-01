@@ -119,6 +119,19 @@ itself, the headphones note, the "Tap circles" hint.
   `timingTlBars()` (practice ? `practiceBars` : 2).
 - A `ResizeObserver` (or window `resize`) on the Timeline triggers relayout while in practice mode.
 
+## Size: Fill / Fixed (added 2026-11-02)
+
+- Practice mode has two sizes, toggled in the More overlay (`SIZE` label, segmented `Fill | Fixed`):
+  - **Fill** (current behaviour): the card fills the viewport.
+  - **Fixed**: a fixed-size card centred on the page like the portrait card (same white card, `rounded-[2.5rem]`,
+    `shadow-2xl`, page background visible around it): width `min(960px, 100vw - 32px)` (shrinks to fit the
+    viewport width), height **fixed at 480 px** (never shrinks; on a shorter viewport the page scrolls vertically,
+    like portrait).
+- Default `Fill`. Saved globally (`wm.practice.size`), in the session snapshot and in the share link.
+- Switching size re-lays out the Timeline (same path as a resize) without stopping playback or clearing marks.
+- Tests: toggle switches card size (Fixed at 1600x900 = 960x480, at 844x390 = fits, no page scroll), persisted,
+  marks/playback unaffected.
+
 ## Out of scope
 - Auto-switch on device rotation, fullscreen API, screen wake lock.
 - Waveform in portrait mode.

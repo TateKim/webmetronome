@@ -93,7 +93,7 @@ test.describe('Practice mode - shell', () => {
     await expect(page.locator('#prRhythmOv')).toBeVisible();
     await page.click('#prRhythmOv #rhythmMenu .dropdown-item[data-value="2"]');
     expect(await page.evaluate(() => subdivision)).toBe('2');
-    await page.mouse.click(300, 250);
+    await page.mouse.click(4, 385);
     await expect(page.locator('#prRhythmOv')).toBeHidden();
     // 640 wide: still one line
     await page.setViewportSize({ width: 640, height: 360 });
@@ -280,4 +280,127 @@ test('worklet posts wave peaks per 64-sample block from the frame clock, only wh
   expect(res.step).toBeCloseTo(64 / res.sr, 9);
   expect(res.first).toBeCloseTo(40 * 128 / res.sr, 6);       // first block starts at the first quantum after the flag
   expect(Math.abs(res.hitTime - (6000 - (6000 % 64)) / res.sr)).toBeLessThan(1e-6); // peak 1 sits in the block that contains the impulse
+});
+
+test.describe('Practice mode - size Fill / Fixed', () => {
+  const enter = async (page) => {
+    await timingOn(page);
+    await page.click('#practiceBtn');
+    await expect(page.locator('body')).toHaveClass(/wm-practice/);
+  };
+  const setSize = async (page, v) => {
+    await page.click('#prMoreBtn');
+    await page.click('#prSizeSeg [data-v="' + v + '"]');
+    await page.keyboard.press('Escape');
+  };
+  const cardBox = (page) => page.locator('.tm-card').boundingBox();
+  const scrolls = (page) => page.evaluate(() => document.documentElement.scrollHeight > window.innerHeight + 1 || document.documentElement.scrollWidth > window.innerWidth + 1);
+
+  test('Fill is the default and fills the viewport; Fixed is a centred 960x480 card at 1600x900', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await navigateAndWait(page);
+    await enter(page);
+    expect(await page.evaluate(() => practice.size)).toBe('fill');
+    let b = await cardBox(page);
+    expect(b.width).toBeGreaterThan(1300);
+    expect(b.height).toBeGreaterThan(850);
+    await setSize(page, 'fixed');
+    b = await cardBox(page);
+    expect(Math.round(b.width)).toBe(960);
+    expect(Math.round(b.height)).toBe(480);
+    expect(Math.abs(b.x + b.width / 2 - 800)).toBeLessThan(2);
+    expect(Math.abs(b.y + b.height / 2 - 450)).toBeLessThan(2);
+    expect(await scrolls(page)).toBe(false);
+    await expect(page.locator('#prSizeSeg [aria-pressed="true"]')).toHaveText('Fixed');
+    await setSize(page, 'fill');
+    b = await cardBox(page);
+    expect(b.width).toBeGreaterThan(1300);
+  });
+
+  test('narrow viewport: width shrinks to 100vw - 32px, height stays 480 and the page scrolls vertically (844x390)', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await navigateAndWait(page);
+    await enter(page);
+    expect(await scrolls(page)).toBe(false); // Fill never scrolls
+    await setSize(page, 'fixed');
+    const b = await cardBox(page);
+    expect(Math.round(b.width)).toBe(812);
+    expect(Math.round(b.height)).toBe(480);
+    expect(await scrolls(page)).toBe(true);
+    await page.setViewportSize({ width: 600, height: 390 });
+    expect(Math.round((await cardBox(page)).width)).toBe(568);
+  });
+
+  test('switching size keeps playback and marks, re-lays out the Timeline, and persists', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await navigateAndWait(page);
+    await enter(page);
+    await clickPlay(page);
+    await page.evaluate(() => { const hit = { t: timingNowSec(), offsetMs: 12, beatGlobal: 0, beatInMeasure: 0, posInBeat: 0, role: 0, peakDb: -20 }; timingHits.push(hit); timingTlAddDot(hit); });
+    const before = await page.evaluate(() => ({ n: timingHits.length, w: timingTimeline.clientWidth }));
+    await setSize(page, 'fixed');
+    await expect.poll(() => page.evaluate(() => timingTimeline.clientWidth)).toBeLessThan(before.w);
+    expect(await page.evaluate(() => [isPlaying, timingHits.length])).toEqual([true, before.n]);
+    expect(await page.evaluate(() => localStorage.getItem('wm.practice.size'))).toBe('fixed');
+    await page.reload();
+    await page.waitForSelector('#playBtn');
+    expect(await page.evaluate(() => [practice.size, document.body.classList.contains('wm-fixed')])).toEqual(['fixed', true]);
+  });
+
+  test('the size is part of the share link', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await navigateAndWait(page);
+    await page.evaluate(() => practiceSetSize('fixed'));
+    const enc = await page.evaluate(() => stateEncodeShare(stateSnapshot()));
+    expect(enc).toMatch(/,Zx/);
+    await page.evaluate(() => practiceSetSize('fill'));
+    expect(await page.evaluate(() => stateEncodeShare(stateSnapshot()))).not.toMatch(/Z/);
+  });
+});
+
+test.describe('Practice mode - Grid in the rhythm overlay', () => {
+  test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 1200, height: 700 }); await navigateAndWait(page); });
+  const where = (page) => page.evaluate(() => {
+    const sec = timingResSeg.closest('.tm-sec');
+    return { inOv: !!sec.closest('#prRhythmOv'), inPop: !!sec.closest('#timingPopover'), idx: [...sec.parentNode.children].indexOf(sec), label: sec.querySelector('.tm-label').textContent };
+  });
+
+  test('DETECT moves into the rhythm overlay as GRID, works, and returns to the popover at its index', async ({ page }) => {
+    await timingOn(page);
+    const orig = await where(page);
+    expect(orig).toMatchObject({ inPop: true, inOv: false, label: 'Detect' });
+    await page.click('#practiceBtn');
+    expect(await where(page)).toMatchObject({ inOv: true, inPop: false, label: 'Grid' });
+    await page.click('#prChip');
+    await expect(page.locator('#prRhythmOv #timingResSeg')).toBeVisible();
+    await expect(page.locator('#prRhythmOv #timingShuffleBtn')).toBeVisible();
+    await page.click('#prRhythmOv #timingResSeg [data-v="8"]');
+    expect(await page.evaluate(() => getTimingGrid().res)).toBe('8');
+    await expect(page.locator('#prGridTxt')).toHaveText('Grid 1/8');
+    await page.click('#prRhythmOv #timingResSeg [data-v="16"]');
+    await expect(page.locator('#prGridTxt')).toHaveText('Grid 1/16');
+    // help bubble opens inside the overlay and stays within it
+    await page.click('#prRhythmOv .tm-help[data-help="detect"]');
+    const tip = page.locator('#prRhythmOv .tm-help-tip[data-open]');
+    await expect(tip).toBeVisible();
+    const ob = await page.locator('#prRhythmOv').boundingBox(), tb = await tip.boundingBox();
+    expect(tb.x).toBeGreaterThanOrEqual(ob.x - 1);
+    expect(tb.x + tb.width).toBeLessThanOrEqual(ob.x + ob.width + 1);
+    expect(tb.y + tb.height).toBeLessThanOrEqual(700);
+    await page.keyboard.press('Escape');
+    await expect(tip).toHaveCount(0);
+    await page.click('#prExit');
+    expect(await where(page)).toEqual(orig);
+  });
+
+  test('a locked tuplet rhythm disables the row and shows the hint', async ({ page }) => {
+    await timingOn(page);
+    await page.click('#practiceBtn');
+    await page.click('#prChip');
+    await page.click('#prRhythmOv #rhythmMenu [data-value="3"]');
+    await expect(page.locator('#prRhythmOv #timingDetectHint')).toBeVisible();
+    await expect(page.locator('#prRhythmOv #timingDetectHint')).toHaveText(/Locked to/);
+    await expect(page.locator('#prRhythmOv #timingResSeg button[data-v="8"]')).toBeDisabled();
+    await expect(page.locator('#prRhythmOv #timingShuffleBtn')).toBeDisabled();
+  });
 });

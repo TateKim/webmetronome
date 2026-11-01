@@ -327,14 +327,14 @@ test.describe('Timing Check - UI', () => {
         localStorage.removeItem('wm.timing.res'); localStorage.removeItem('wm.timing.shuffle');
         localStorage.setItem('wm.timing.feel', f);
       }, feel);
-      await page.reload();
+      await page.goto('/'); // no session key: the global prefs apply
       await page.waitForSelector('#playBtn');
       const r = await page.evaluate(() => ({ res: timingRes, sh: timingShuffle, s: [localStorage.getItem('wm.timing.res'), localStorage.getItem('wm.timing.shuffle')], feel: localStorage.getItem('wm.timing.feel') }));
       expect(r).toEqual({ res, sh, s: [res, String(sh)], feel: null });
     }
     // existing new keys win over a stale feel key, which is still removed
     await page.evaluate(() => { localStorage.setItem('wm.timing.res', '32'); localStorage.setItem('wm.timing.feel', 'shuffle'); });
-    await page.reload();
+    await page.goto('/');
     await page.waitForSelector('#playBtn');
     expect(await page.evaluate(() => [timingRes, localStorage.getItem('wm.timing.feel')])).toEqual(['32', null]);
   });
@@ -3070,7 +3070,7 @@ test.describe('Timing Check - view range', () => {
     await page.reload();
     await expect.poll(() => page.evaluate(() => timingRangeMs)).toBe(200);
     await page.evaluate(() => localStorage.setItem('wm.timing.range', '77'));
-    await page.reload();
+    await page.goto('/'); // no session key: the global prefs apply
     expect(await page.evaluate(() => timingRangeMs)).toBe(50);
   });
 

@@ -423,6 +423,14 @@
         .pr-ov { position: absolute; top: calc(100% + 8px); z-index: 50; display: flex; flex-direction: column; gap: 12px; max-width: calc(100vw - 24px); }
         .pr-ov[hidden] { display: none; }
         .pr-ov-l { left: 0; } .pr-ov-r { right: 0; }
+        #shareBtn { position: absolute; top: 8px; right: 12px; width: 24px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: #cbd5e1; transition: color 0.15s; }
+        #shareBtn:hover, #shareBtn:focus-visible { color: #6366f1; }
+        #shareToast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 90; padding: 8px 14px; border-radius: 12px; background: #1e293b; color: #fff; font-size: 0.875rem; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+        #shareToast.on { opacity: 1; }
+        #shareBox { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 90; width: min(92vw, 420px); padding: 12px; border-radius: 16px; background: #fff; border: 1px solid #e2e8f0; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2); }
+        #shareBox[hidden] { display: none; }
+        #shareBox .pr-lab { display: block; margin-bottom: 6px; }
+        #shareBox input { width: 100%; padding: 8px 10px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; font-size: 0.8rem; color: #334155; }
         .pr-lab { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #94a3b8; }
         .pr-sec { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
         .pr-main { flex: 1; min-height: 0; display: flex; }
@@ -436,6 +444,8 @@
         #prStatus { font-size: 0.8rem; font-weight: 700; color: var(--q, #94a3b8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         body.wm-practice { padding: 8px; height: 100dvh; min-height: 0; overflow: hidden; align-items: stretch; }
         body.wm-practice .tm-card { max-width: 1400px; height: 100%; padding: 12px 16px; border-radius: 2rem; display: flex; flex-direction: column; }
+        body.wm-practice.wm-fixed { height: auto; min-height: 100dvh; overflow: visible; padding: 16px; align-items: center; }
+        body.wm-practice.wm-fixed .tm-card { width: min(960px, calc(100vw - 32px)); max-width: none; height: 480px; flex: none; border-radius: 2.5rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
         body.wm-practice .tm-card > :not(#prRoot):not(#accelPreviewOverlay) { display: none !important; }
         body.wm-practice .tm-timeline { height: auto; flex: 1; min-width: 0; }
         body.wm-practice .tm-timeline .tm-scale { display: none; }
@@ -474,6 +484,10 @@
 <body class="bg-slate-50 text-slate-800 flex items-center justify-center min-h-screen p-4">
 
     <div class="tm-card w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 relative">
+
+        <button id="shareBtn" type="button" aria-label="Copy share link" title="Copy share link">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line></svg>
+        </button>
 
         <!-- Accel Breakdown Overlay (top, always shown while accel is open) -->
         <div id="accelPreviewOverlay" class="hidden absolute top-0 left-0 right-0 bg-white rounded-t-[2.5rem] border-b border-slate-200 z-50 px-6 py-4">
@@ -997,12 +1011,18 @@
                 <div class="pr-anchor">
                     <button id="prMoreBtn" type="button" class="h-12 px-3 rounded-2xl text-sm font-bold text-indigo-500 hover:bg-indigo-50 transition-colors" aria-haspopup="true">More</button>
                     <div id="prMoreOv" class="pr-ov pr-ov-r dropdown-menu bg-white rounded-2xl shadow-xl border border-slate-100 p-4" hidden>
+                        <div class="pr-sec"><span class="pr-lab">Size</span>
+                            <div id="prSizeSeg" class="tm-seg" role="group" aria-label="Practice size">
+                                <button type="button" data-v="fill" aria-pressed="true">Fill</button><button type="button" data-v="fixed" aria-pressed="false">Fixed</button>
+                            </div>
+                        </div>
                         <div class="pr-sec"><span class="pr-lab">Bars</span>
                             <div id="prBarsSeg" class="tm-seg" role="group" aria-label="Visible bars">
                                 <button type="button" data-v="2" aria-pressed="false">2</button><button type="button" data-v="4" aria-pressed="true">4</button><button type="button" data-v="8" aria-pressed="false">8</button>
                             </div>
                         </div>
                         <div id="prTimingSec" class="pr-sec"><span class="pr-lab">Timing</span></div>
+                        <div class="pr-sec"><button id="prShareBtn" type="button" class="h-10 px-3 rounded-xl text-sm font-bold text-indigo-500 bg-slate-100 hover:bg-indigo-50 transition-colors">Share link</button></div>
                     </div>
                 </div>
             </div>
@@ -1018,6 +1038,12 @@
             <div id="prHint" class="pr-hint">Press Play</div>
         </div>
 
+    </div>
+
+    <div id="shareToast" role="status" aria-live="polite">Link copied</div>
+    <div id="shareBox" role="dialog" aria-label="Share link" hidden>
+        <span class="pr-lab">Share link</span>
+        <input id="shareInput" type="text" readonly aria-label="Share link">
     </div>
 
 <script>
@@ -1179,7 +1205,7 @@
             const AC = window.AudioContext || window.webkitAudioContext;
             audioCtx = new AC();
             masterGainNode = audioCtx.createGain();
-            masterGainNode.gain.value = masterVolume;
+            masterGainNode.gain.value = isMuted ? 0 : masterVolume;
             masterGainNode.connect(audioCtx.destination);
         }
         if (audioCtx.state === 'suspended') {
@@ -2047,20 +2073,24 @@
     decreaseBpm5Btn.addEventListener('click', () => { updateBpm(bpm - 5); resetAccelAnchor(); });
     increaseBpm5Btn.addEventListener('click', () => { updateBpm(bpm + 5); resetAccelAnchor(); });
 
-    decreaseBeatsBtn.addEventListener('click', () => {
-        if (beatsPerMeasure > 1) {
-            beatsPerMeasure--;
-            initBeats();
-            if (isPlaying) currentBeatIndex = 0;
-        }
-    });
+    // Beats per measure (1-12): entry point for the +/- buttons and the session restore
+    function setBeats(n) {
+        n = Math.min(Math.max(Math.round(n), 1), 12);
+        if (n === beatsPerMeasure) return;
+        const fewer = n < beatsPerMeasure;
+        beatsPerMeasure = n;
+        initBeats();
+        if (fewer && isPlaying) currentBeatIndex = 0;
+    }
+    // Replace the whole accent pattern (session restore); ignored unless it fits the current beat count
+    function setBeatStates(arr) {
+        if (!Array.isArray(arr) || arr.length !== beatsPerMeasure || !arr.every(v => v === 0 || v === 1 || v === 2 || v === 3)) return;
+        beatStates = arr.slice();
+        renderBeatIndicators();
+    }
 
-    increaseBeatsBtn.addEventListener('click', () => {
-        if (beatsPerMeasure < 12) {
-            beatsPerMeasure++;
-            initBeats();
-        }
-    });
+    decreaseBeatsBtn.addEventListener('click', () => setBeats(beatsPerMeasure - 1));
+    increaseBeatsBtn.addEventListener('click', () => setBeats(beatsPerMeasure + 1));
 
     // Volume Control
     volumeTrigger.addEventListener('click', (e) => {
@@ -2071,26 +2101,35 @@
         closeAccelOverlay();
     });
 
-    volumeSlider.addEventListener('input', (e) => {
-        masterVolume = e.target.value / 100;
+    // Volume (0-100) and mute: entry points for the controls and the session restore (no audio context is created here)
+    function setVolume(pct) {
+        masterVolume = Math.min(Math.max(pct, 0), 100) / 100;
+        volumeSlider.value = Math.round(masterVolume * 100);
         if (masterVolume > 0) {
             isMuted = false;
             previousVolume = masterVolume;
         }
-        initAudioContext();
         updateMasterVolume();
-    });
-
-    muteBtn.addEventListener('click', () => {
-        isMuted = !isMuted;
+    }
+    function setMuted(m) {
+        isMuted = !!m;
         if (isMuted) {
             volumeSlider.value = 0;
         } else {
             masterVolume = previousVolume > 0 ? previousVolume : 0.5;
             volumeSlider.value = masterVolume * 100;
         }
-        initAudioContext();
         updateMasterVolume();
+    }
+
+    volumeSlider.addEventListener('input', (e) => {
+        initAudioContext();
+        setVolume(parseFloat(e.target.value));
+    });
+
+    muteBtn.addEventListener('click', () => {
+        initAudioContext();
+        setMuted(!isMuted);
     });
 
     // Rhythm Menu
@@ -2102,18 +2141,22 @@
         closeAccelOverlay();
     });
 
+    // Rhythm (subdivision) selection: entry point for the rhythm menu and the session restore
+    function setSubdivision(value) {
+        const target = Array.from(rhythmItems).find(i => i.dataset.value === String(value));
+        if (!target) return;
+        rhythmItems.forEach(i => i.classList.remove('selected'));
+        target.classList.add('selected');
+        subdivision = target.dataset.value;
+        // Replace trigger icon with selected item's SVG using safe DOM cloning
+        while (rhythmTrigger.firstChild) rhythmTrigger.removeChild(rhythmTrigger.firstChild);
+        Array.from(target.childNodes).forEach(node => rhythmTrigger.appendChild(node.cloneNode(true)));
+        rhythmMenu.classList.add('hidden');
+        timingApplyDetect();
+    }
+
     rhythmItems.forEach(item => {
-        item.addEventListener('click', (e) => {
-            rhythmItems.forEach(i => i.classList.remove('selected'));
-            const target = e.currentTarget;
-            target.classList.add('selected');
-            subdivision = target.dataset.value;
-            // Replace trigger icon with selected item's SVG using safe DOM cloning
-            while (rhythmTrigger.firstChild) rhythmTrigger.removeChild(rhythmTrigger.firstChild);
-            Array.from(target.childNodes).forEach(node => rhythmTrigger.appendChild(node.cloneNode(true)));
-            rhythmMenu.classList.add('hidden');
-            timingApplyDetect();
-        });
+        item.addEventListener('click', (e) => setSubdivision(e.currentTarget.dataset.value));
     });
 
     // Timer Menu
@@ -2125,18 +2168,22 @@
         closeAccelOverlay();
     });
 
+    // Timer choice: a preset (or 'off') or the custom length; shared by the menus and the session restore
+    function applyTimerChoice(minutes, custom) {
+        timerIsCustom = !!custom;
+        setTimer(minutes);
+    }
+
     timerItems.forEach(item => {
         item.addEventListener('click', (e) => {
-            timerIsCustom = false;
-            setTimer(e.currentTarget.dataset.time);
+            applyTimerChoice(e.currentTarget.dataset.time, false);
             timerMenu.classList.add('hidden');
         });
     });
 
     timerCustomRow.addEventListener('click', (e) => {
         e.stopPropagation();
-        timerIsCustom = true;
-        setTimer(timerCustomMinutes);
+        applyTimerChoice(timerCustomMinutes, true);
         timerMenu.classList.add('hidden');
     });
 
@@ -2203,16 +2250,14 @@
     accelTimerBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            timerIsCustom = false;
-            setTimer(e.currentTarget.dataset.time);
+            applyTimerChoice(e.currentTarget.dataset.time, false);
         });
     });
 
     // Accel overlay custom timer
     accelTimerCustomWrap.addEventListener('click', (e) => {
         e.stopPropagation();
-        timerIsCustom = true;
-        setTimer(timerCustomMinutes);
+        applyTimerChoice(timerCustomMinutes, true);
     });
 
     accelTimerCustomWrap.addEventListener('wheel', (e) => {
@@ -2224,10 +2269,10 @@
     }, { passive: false });
 
     // Accel confirm
-    accelConfirmBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        accelTargetBpm = accelEditBpm;
-        accelLastTargetBpm = accelEditBpm;
+    // Activate the acceleration toward a target BPM: entry point for Confirm and the session restore
+    function setAccelTarget(target) {
+        accelTargetBpm = target;
+        accelLastTargetBpm = target;
         if (accelPaused) {
             accelPaused = false;
             tapBtn.classList.remove('hidden');
@@ -2241,6 +2286,10 @@
             updateTimerDisplay();
         }
         updateAccelTrigger();
+    }
+    accelConfirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setAccelTarget(accelEditBpm);
         closeAccelOverlay();
     });
 
@@ -2284,11 +2333,13 @@
     accelModeWeightedBtn.addEventListener('click', (e) => { e.stopPropagation(); setAccelMode('weighted'); });
 
     // Accel weight slider
-    accelWeightSlider.addEventListener('input', (e) => {
-        accelWeight = parseFloat(e.target.value);
+    function setAccelWeight(w) {
+        accelWeight = w;
+        accelWeightSlider.value = w;
         accelWeightDisplay.textContent = accelWeight.toFixed(1);
         renderAccelPreview();
-    });
+    }
+    accelWeightSlider.addEventListener('input', (e) => setAccelWeight(parseFloat(e.target.value)));
 
     // Preview 실시간 업데이트: BPM/timer 변경 시
     accelTargetDisplay.addEventListener('accelEditChanged', () => {
@@ -2352,7 +2403,7 @@
 
     // --- Timing state ---
     // Practice mode state (landscape layout); the code lives in the Practice mode block before // Init
-    const practice = { on: false, bars: 4, moves: [], view: 'timeline', waveSent: false, wave: { chunks: [], tiles: new Map(), dirty: false, sig: '' }, sess: { start: 0, end: 0, n: 0, sum: 0, sumSq: 0 } };
+    const practice = { on: false, bars: 4, size: 'fill', moves: [], view: 'timeline', waveSent: false, wave: { chunks: [], tiles: new Map(), dirty: false, sig: '' }, sess: { start: 0, end: 0, n: 0, sum: 0, sumSq: 0 } };
     let timingOn = false;
     let timingView = 'timeline';          // 'timeline' | 'beats'
     let timingRes = '16';                 // detection resolution: '4' | '8' | '16' | '32'
@@ -3996,8 +4047,10 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingHelpToggle(btn, tip) {
         if (timingHelpOpen && timingHelpOpen.btn === btn) { timingHelpClose(); return; }
         timingHelpClose();
-        const pr = timingPopover.getBoundingClientRect(), br = btn.getBoundingClientRect();
-        tip.style.top = (br.bottom - pr.top + timingPopover.scrollTop + 6) + 'px';
+        const host = btn.closest('.pr-ov') || timingPopover; // the Grid row lives in the rhythm overlay in practice mode
+        if (tip.parentNode !== host) host.appendChild(tip);
+        const pr = host.getBoundingClientRect(), br = btn.getBoundingClientRect();
+        tip.style.top = (br.bottom - pr.top + host.scrollTop + 6) + 'px';
         tip.setAttribute('data-open', '');
         btn.setAttribute('aria-expanded', 'true');
         timingHelpOpen = { btn, tip };
@@ -4834,6 +4887,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingRenderSettingsBtn();
         timingTl.predDirty = true;
         if (timingView === 'timeline') timingTlRebuild(); else timingLayoutBeatsStrip();
+        practiceTick(); // the Grid chip follows at once (no-op outside practice mode)
     }
 
     // ---------------------------------------------------------------
@@ -5073,11 +5127,22 @@ registerProcessor('onset-detector', OnsetDetector);
         });
         timingBeatsMarks.querySelectorAll(':scope > *').forEach(el => { if (el._hit) timingCPlace(el, el._hit); else if (el._rej) timingCPlaceRing(el); });
     }
-    function timingSetRange(ms) {
+    function timingSetRange(ms, persist) {
         if (!TIMING_RANGES.includes(ms)) return;
         timingRangeMs = ms;
-        timingLsSet('wm.timing.range', ms);
+        if (persist !== false) timingLsSet('wm.timing.range', ms);
         timingApplyRange();
+    }
+
+    function timingSetRes(r, persist) {
+        timingRes = r;
+        if (persist !== false) timingLsSet('wm.timing.res', timingRes);
+        timingApplyDetect();
+    }
+    function timingSetShuffle(on, persist) {
+        timingShuffle = !!on;
+        if (persist !== false) timingLsSet('wm.timing.shuffle', timingShuffle);
+        timingApplyDetect();
     }
 
     // --- Timing event wiring ---
@@ -5094,15 +5159,11 @@ registerProcessor('onset-detector', OnsetDetector);
     timingResSeg.addEventListener('click', (e) => {
         const b = e.target.closest('button[data-v]');
         if (!b || b.disabled) return;
-        timingRes = b.dataset.v;
-        timingLsSet('wm.timing.res', timingRes);
-        timingApplyDetect();
+        timingSetRes(b.dataset.v);
     });
     timingShuffleBtn.addEventListener('click', () => {
         if (timingShuffleBtn.disabled) return;
-        timingShuffle = !timingShuffle;
-        timingLsSet('wm.timing.shuffle', timingShuffle);
-        timingApplyDetect();
+        timingSetShuffle(!timingShuffle);
     });
     timingDeviceSelect.addEventListener('change', () => timingSwitchDevice(timingDeviceSelect.value));
     timingWireChoice(timingChSeg, timingSetChannel);
@@ -5164,6 +5225,7 @@ registerProcessor('onset-detector', OnsetDetector);
         [increaseBpmBtn, 'prBpmRow'], [increaseBpm5Btn, 'prBpmRow'],
         [bpmSlider.parentElement, 'prBpmOv'], [tapBtn, 'prBpmOv'], [accelStatus.parentElement, 'prBpmOv'],
         [rhythmTrigger, 'prChip', 'prChip:first'], [rhythmMenu, 'prRhythmOv'], [beatCountDisplay.parentElement.parentElement, 'prRhythmOv'],
+        [timingResSeg.closest('.tm-sec'), 'prRhythmOv'],
         [timerTrigger.parentElement, 'prMoreOv', 'prTimingSec'], [volumeTrigger.parentElement, 'prMoreOv', 'prTimingSec'],
         [timingSetBtn.parentElement, 'prTimingSec'],
         [beatContainer, 'timingTimeline'],
@@ -5195,12 +5257,14 @@ registerProcessor('onset-detector', OnsetDetector);
             closeAccelOverlay();
             prMs.textContent = '';
         }
+        timingResSeg.closest('.tm-sec').querySelector('.tm-label').textContent = on ? 'Grid' : 'Detect';
         timingSetView(on ? 'timeline' : practice.view, false); // not persisted: the stored view comes back on exit
         if (on) timingApplyRange();
         timingPostConfig();
         practiceTick();
     }
     function practiceCloseOv(except) {
+        timingHelpClose();
         prOverlays.forEach(([o]) => { if (o !== except && !prEl(o).hidden) { prEl(o).hidden = true; if (o === 'prBpmOv') closeAccelOverlay(); } });
     }
     function practiceToggleOv(id) {
@@ -5220,15 +5284,27 @@ registerProcessor('onset-detector', OnsetDetector);
     prEl('prExit').addEventListener('click', () => practiceSetMode(false));
 
     // Bars visible (2/4/8)
-    function practiceSetBars(n) {
+    function practiceSetBars(n, persist) {
         if (n !== 2 && n !== 4 && n !== 8) return;
         practice.bars = n;
-        timingLsSet('wm.practice.bars', n);
+        if (persist !== false) timingLsSet('wm.practice.bars', n);
         prEl('prBarsSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === n)));
         if (practice.on && timingOn) { timingTlLayout(); timingTl.predDirty = true; timingTlRebuild(); timingUpdateSummary(); }
     }
     prEl('prBarsSeg').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) practiceSetBars(parseInt(b.dataset.v, 10)); });
     (function () { const n = parseInt(timingLsGet('wm.practice.bars'), 10); if (n === 2 || n === 4 || n === 8) practiceSetBars(n); })();
+
+    // Size: Fill (whole viewport) / Fixed (centred 960 x 480 card). The Timeline's ResizeObserver does the relayout.
+    function practiceSetSize(v, persist) {
+        if (v !== 'fill' && v !== 'fixed') return;
+        practice.size = v;
+        if (persist !== false) timingLsSet('wm.practice.size', v);
+        document.body.classList.toggle('wm-fixed', v === 'fixed');
+        prEl('prSizeSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === v)));
+        if (practice.on && timingOn) timingRelayoutTimeline();
+    }
+    prEl('prSizeSeg').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) practiceSetSize(b.dataset.v); });
+    (function () { const v = timingLsGet('wm.practice.size'); if (v === 'fill' || v === 'fixed') practiceSetSize(v, false); })();
 
     // Session statistics (running sums since START; frozen at stop)
     function practiceSessionStats() {
@@ -5366,8 +5442,259 @@ registerProcessor('onset-detector', OnsetDetector);
         practice.wave.tiles.forEach((t, k) => { if ((k + 1) * PR_TILE + shift < -20) { t.el.remove(); practice.wave.tiles.delete(k); } });
     }
 
+    // ---------------------------------------------------------------
+    // Session key: a random key in the URL (?s=<key>); the app state is saved in localStorage under it and restored
+    // through the normal setters when the page is opened again with the same key. Local only. Never touches the scheduler.
+    // ---------------------------------------------------------------
+    const SESS_KEY_RE = /^[a-z0-9]{4,32}$/;
+    const SESS_MAX = 50;
+    let sessKey = '';
+    let sessLast = null;     // JSON of the last written snapshot (without the timestamp)
+    let sessPending = null;  // { timing, practice } saved flags that could not be restored yet (no mic permission)
+
+    function sessNewKey() {
+        const a = new Uint8Array(8);
+        crypto.getRandomValues(a);
+        return Array.from(a, v => 'abcdefghijklmnopqrstuvwxyz0123456789'[v % 36]).join('');
+    }
+    // The key is the URL hash (index.html#k7f3q9xa)
+    function sessHashKey() {
+        const k = location.hash.slice(1);
+        return SESS_KEY_RE.test(k) ? k : '';
+    }
+    function sessSetHash(k) {
+        try { history.replaceState(history.state, '', location.pathname + location.search + '#' + k); } catch (e) { /* history unavailable: the key still works for this page load */ }
+    }
+    // Use the key in the URL when valid, otherwise add a new one (replaceState: no reload, no history entry)
+    function sessEnsureKey() {
+        const k = sessHashKey();
+        if (k) return k;
+        const nk = sessNewKey();
+        sessSetHash(nk);
+        return nk;
+    }
+
+    function stateSnapshot() {
+        return {
+            v: 1,
+            bpm: (isPlaying && accelOriginalBpm !== null) ? accelOriginalBpm : bpm, // not the running ramp value
+            beats: beatsPerMeasure,
+            beatStates: beatStates.slice(),
+            sub: subdivision,
+            vol: Math.round(masterVolume * 100),
+            muted: isMuted,
+            timer: isTimerActive ? targetDuration : 0,
+            timerCustom: isTimerActive && timerIsCustom,
+            timerCustomMin: timerCustomMinutes,
+            accel: { target: accelTargetBpm, last: accelLastTargetBpm, mode: accelMode, weight: accelWeight },
+            tView: practice.on ? practice.view : timingView, // practice mode forces the Timeline; keep the stored view
+            tRes: timingRes,
+            tShuffle: timingShuffle,
+            tRange: timingRangeMs,
+            timing: sessPending ? sessPending.timing : timingOn,
+            practice: sessPending ? sessPending.practice : practice.on,
+            bars: practice.bars,
+            size: practice.size
+        };
+    }
+
+    function sessIndexTouch(at) {
+        let idx = [];
+        try { idx = JSON.parse(localStorage.getItem('wm.s.index')); } catch (e) { idx = []; }
+        if (!Array.isArray(idx)) idx = [];
+        idx = idx.filter(e => e && typeof e.k === 'string' && SESS_KEY_RE.test(e.k) && e.k !== sessKey);
+        idx.push({ k: sessKey, at });
+        idx.sort((a, b) => (b.at || 0) - (a.at || 0));
+        idx.slice(SESS_MAX).forEach(e => { try { localStorage.removeItem('wm.s.' + e.k); } catch (err) { /* ignore */ } });
+        try { localStorage.setItem('wm.s.index', JSON.stringify(idx.slice(0, SESS_MAX))); } catch (e) { /* storage unavailable */ }
+    }
+
+    // Writes only when the snapshot changed since the last write (force = also refresh the index entry)
+    function stateSave(force) {
+        if (!sessKey) return;
+        const snap = stateSnapshot(), json = JSON.stringify(snap);
+        if (!force && json === sessLast) return;
+        sessLast = json;
+        const at = Date.now();
+        try { localStorage.setItem('wm.s.' + sessKey, JSON.stringify(Object.assign({ v: 1, at }, snap))); } catch (e) { return; }
+        sessIndexTouch(at);
+    }
+
+    function stateLoad(key) {
+        try {
+            const o = JSON.parse(localStorage.getItem('wm.s.' + key));
+            return o && typeof o === 'object' && o.v === 1 ? o : null;
+        } catch (e) { return null; }
+    }
+
+    // Apply a snapshot through the existing setters; every field is validated on its own and ignored when invalid
+    function stateRestore(o) {
+        const num = (v, lo, hi) => (typeof v === 'number' && isFinite(v)) ? Math.min(Math.max(v, lo), hi) : null;
+        const bpmV = num(o.bpm, 30, 250); if (bpmV !== null) updateBpm(Math.round(bpmV));
+        const beatsV = num(o.beats, 1, 12); if (beatsV !== null) setBeats(beatsV);
+        setBeatStates(o.beatStates);
+        if (typeof o.sub === 'string') setSubdivision(o.sub);
+        const volV = num(o.vol, 0, 100); if (volV !== null) setVolume(volV);
+        if (o.muted === true) setMuted(true);
+        const cm = num(o.timerCustomMin, 1, 240); if (cm !== null) timerCustomMinutes = Math.round(cm);
+        const tm = num(o.timer, 0, 240);
+        if (tm !== null && tm >= 1) applyTimerChoice(Math.round(tm), o.timerCustom === true);
+        const a = o.accel && typeof o.accel === 'object' ? o.accel : {};
+        if (a.mode === 'linear' || a.mode === 'count' || a.mode === 'weighted') setAccelMode(a.mode);
+        const aw = num(a.weight, 1, 5); if (aw !== null) setAccelWeight(Math.round(aw * 2) / 2);
+        const al = num(a.last, 30, 250); if (al !== null) accelLastTargetBpm = Math.round(al);
+        const at = num(a.target, 30, 250); if (at !== null && isTimerActive) setAccelTarget(Math.round(at));
+        if (o.tView === 'timeline' || o.tView === 'beats') timingSetView(o.tView, false);
+        if (['4', '8', '16', '32'].includes(o.tRes)) timingSetRes(o.tRes, false);
+        if (typeof o.tShuffle === 'boolean') timingSetShuffle(o.tShuffle, false);
+        if (typeof o.tRange === 'number') timingSetRange(o.tRange, false);
+        if (typeof o.bars === 'number') practiceSetBars(o.bars, false);
+        if (o.size === 'fill' || o.size === 'fixed') practiceSetSize(o.size, false);
+    }
+
+    // Timing (and Practice) are only brought back when the microphone permission is already granted (no prompt without a gesture)
+    async function stateRestoreTiming(o) {
+        if (o.timing !== true) return;
+        sessPending = { timing: true, practice: o.practice === true }; // keeps the saved flags until we know
+        let granted = false;
+        try { granted = (await navigator.permissions.query({ name: 'microphone' })).state === 'granted'; } catch (e) { /* unsupported */ }
+        if (!granted) return;
+        sessPending = null;
+        await timingStart();
+        if (o.practice === true) practiceSetMode(true);
+    }
+
+    // 1 s diff check; also resolves the pending flags once the user turns Timing on themselves
+    function sessTick() {
+        if (sessPending && timingOn) {
+            const wantPractice = sessPending.practice;
+            sessPending = null;
+            if (wantPractice) practiceSetMode(true);
+        }
+        stateSave(false);
+    }
+
+    // ---- Share link: #~1,<bpm>,<beats>,<beat states>,<rhythm>[,<letter><value>...]  (defaults omitted) ----
+    // One table drives both directions; the values come from / go to the stateSnapshot() object (accel.* are nested).
+    const SHARE_SUB = { '1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', shuffle: 's', '16shuffle': 'S', '4e': 'e' };
+    const SHARE_DEF = () => ({
+        v: 1, bpm: 120, beats: 4, beatStates: [2, 0, 0, 0], sub: '1', vol: 80, muted: false, timer: 0, timerCustom: false, timerCustomMin: 15,
+        accel: { target: null, last: null, mode: 'linear', weight: 2 },
+        tView: 'timeline', tRes: '16', tShuffle: false, tRange: 50, timing: false, practice: false, bars: 4, size: 'fill'
+    });
+    // [letter, path, kind, enum map]: n number, b flag, e enum, s digit string
+    const SHARE_TOKENS = [
+        ['v', 'vol', 'n'], ['m', 'muted', 'b'], ['t', 'timer', 'n'], ['c', 'timerCustom', 'b'], ['u', 'timerCustomMin', 'n'],
+        ['a', 'accel.target', 'n'], ['l', 'accel.last', 'n'], ['x', 'accel.mode', 'e', { linear: 'l', count: 'c', weighted: 'w' }], ['w', 'accel.weight', 'n'],
+        ['V', 'tView', 'e', { timeline: 't', beats: 'b' }], ['R', 'tRes', 's'], ['H', 'tShuffle', 'b'], ['G', 'tRange', 'n'],
+        ['T', 'timing', 'b'], ['P', 'practice', 'b'], ['B', 'bars', 'n'],
+        ['Z', 'size', 'e', { fill: 'f', fixed: 'x' }]
+    ];
+    const shareGet = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
+    const shareSet = (o, path, v) => { const p = path.split('.'), last = p.pop(); p.reduce((a, k) => a[k], o)[last] = v; };
+    const shareNum = (s) => /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
+
+    function stateEncodeShare(o) {
+        const d = SHARE_DEF();
+        const out = ['~1', o.bpm, o.beats, o.beatStates.join(''), SHARE_SUB[o.sub] || '1'];
+        SHARE_TOKENS.forEach(([ch, path, kind, map]) => {
+            const v = shareGet(o, path);
+            if (v === shareGet(d, path) || v == null) return;
+            if (kind === 'b') out.push(v ? ch : null);
+            else if (kind === 'e') out.push(map[v] ? ch + map[v] : null);
+            else out.push(ch + v);
+        });
+        return out.filter(x => x !== null).join(',');
+    }
+
+    // Tolerant: unknown tokens and bad values are skipped; an unknown version gives null (no state)
+    function stateDecodeShare(s) {
+        const parts = String(s).replace(/^#/, '').split(',');
+        if (parts[0] !== '~1') return null;
+        const o = SHARE_DEF();
+        const bpmV = shareNum(parts[1] || ''); if (bpmV !== null) o.bpm = bpmV;
+        const beatsV = shareNum(parts[2] || ''); if (beatsV !== null) o.beats = Math.min(Math.max(Math.round(beatsV), 1), 12);
+        o.beatStates = Array.from({ length: o.beats }, (_, i) => i === 0 ? 2 : 0);
+        if (/^[0-3]+$/.test(parts[3] || '') && parts[3].length === o.beats) o.beatStates = parts[3].split('').map(Number);
+        const subV = Object.keys(SHARE_SUB).find(k => SHARE_SUB[k] === parts[4]); if (subV) o.sub = subV;
+        parts.slice(5).forEach(tok => {
+            const def = SHARE_TOKENS.find(d => d[0] === tok[0]);
+            if (!def) return;
+            const path = def[1], kind = def[2], map = def[3], val = tok.slice(1);
+            if (kind === 'b') { if (val === '') shareSet(o, path, true); }
+            else if (kind === 'e') { const k = Object.keys(map).find(x => map[x] === val); if (k) shareSet(o, path, k); }
+            else if (kind === 's') { if (['4', '8', '16', '32'].includes(val)) shareSet(o, path, val); }
+            else { const n = shareNum(val); if (n !== null) shareSet(o, path, n); }
+        });
+        return o;
+    }
+
+    function shareUrl() {
+        return location.href.split('#')[0] + '#' + stateEncodeShare(stateSnapshot());
+    }
+    let shareToastTimer = 0;
+    function shareToast() {
+        const el = document.getElementById('shareToast');
+        el.classList.add('on');
+        clearTimeout(shareToastTimer);
+        shareToastTimer = setTimeout(() => el.classList.remove('on'), 1800);
+    }
+    function shareBoxClose() { document.getElementById('shareBox').hidden = true; }
+    function shareBoxOpen(url) {
+        const box = document.getElementById('shareBox'), inp = document.getElementById('shareInput');
+        inp.value = url;
+        box.hidden = false;
+        inp.focus();
+        inp.select();
+    }
+    // Copy the share link; without a usable clipboard show it in a read-only, selected field
+    async function shareCopy() {
+        const url = shareUrl();
+        try {
+            await navigator.clipboard.writeText(url);
+            shareToast();
+        } catch (e) {
+            shareBoxOpen(url);
+        }
+    }
+    document.getElementById('shareBtn').addEventListener('click', shareCopy);
+    document.getElementById('prShareBtn').addEventListener('click', shareCopy);
+    document.addEventListener('click', (e) => { const b = document.getElementById('shareBox'); if (!b.hidden && !b.contains(e.target) && !e.target.closest('#shareBtn, #prShareBtn')) shareBoxClose(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') shareBoxClose(); });
+
+    function sessInit() {
+        let snap = null;
+        if (location.hash.slice(1, 2) === '~') {
+            // Opening a share link: it becomes a normal local key right away
+            snap = stateDecodeShare(location.hash.slice(1));
+            sessKey = sessNewKey();
+            sessSetHash(sessKey);
+        } else {
+            sessKey = sessEnsureKey();
+            snap = stateLoad(sessKey);
+        }
+        if (snap) {
+            stateRestore(snap);
+            stateRestoreTiming(snap);
+        }
+        stateSave(true);
+        // Another key typed into the same tab: save this one, then reload so the new key loads cleanly. Junk puts the current key back.
+        window.addEventListener('hashchange', () => {
+            if (location.hash.slice(1, 2) === '~') { stateSave(true); location.reload(); return; } // a share link typed into this tab
+            const k = sessHashKey();
+            if (!k) { sessSetHash(sessKey); return; }
+            if (k === sessKey) return;
+            stateSave(true);
+            location.reload();
+        });
+        setInterval(sessTick, 1000);
+        window.addEventListener('pagehide', () => stateSave(false));
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stateSave(false); });
+    }
+
     // Init
     initBeats();
+    sessInit();
     updatePendulumSpeed();
     window.addEventListener('resize', updatePendulumSpeed);
 
