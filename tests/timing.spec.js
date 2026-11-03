@@ -2879,7 +2879,7 @@ test.describe('Timing Check - help tips', () => {
     latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
     live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
     trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
-    sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks.'],
+    sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks. Clean line inputs (audio interfaces) are detected automatically and use a lower gate, so soft notes are caught; the settings button then shows "Line".'],
     quiet: ['Quiet below', 'Below this input level the status shows Quiet. Lower it if your signal is soft but fine.'],
   };
   const btn = (page, k) => page.locator(`#timingPopover .tm-help[data-help="${k}"]`);
@@ -3481,5 +3481,236 @@ test.describe('Timing Check - many input channels', () => {
       return [0, 1, 2, 3].map(count);
     });
     expect(r).toEqual([0, 0, 0, 3]);
+  });
+});
+
+// Clean-input auto tuning (OnsetCore.setAutoClean) ---------------------------------
+
+test.describe('Timing Check - clean input auto tuning (core)', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'signals.js') });
+  });
+
+  test('user sensitivity maps to core sensitivity: identity up to 5, 10 -> 8, monotonic', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const out = [];
+      for (let v = 1; v <= 10; v++) {
+        const c = timingMakeOnsetCore(48000, { sensitivity: v });
+        c.setClean(true);
+        const first = c.params().sensitivity;
+        c.setSensitivity(v); // later calls keep mapping from the user's value
+        out.push(c.params().sensitivity === first ? first : 'remap-mismatch');
+      }
+      return out;
+    });
+    expect(r.slice(0, 5)).toEqual([1, 2, 3, 4, 5]);
+    expect(r[9]).toBeCloseTo(8, 9);
+    for (let i = 1; i < 10; i++) expect(r[i]).toBeGreaterThan(r[i - 1]);
+  });
+
+  test('setBaseGateDb moves the absolute gate; NaN restores -55; defaults are unchanged', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const c = timingMakeOnsetCore(48000);
+      const a = c.params().minGateDbfs;
+      c.setBaseGateDb(-90); const b = c.params().minGateDbfs;
+      c.setBaseGateDb(NaN); const d = c.params().minGateDbfs;
+      return { a, b, d, auto: c.auto, clean: c.clean, lvl: Object.keys(c.takeLevel()) };
+    });
+    expect(r.a).toBeCloseTo(-55, 6);
+    expect(r.b).toBeCloseTo(-90, 6);
+    expect(r.d).toBeCloseTo(-55, 6);
+    expect(r.auto).toBe(false);
+    expect(r.clean).toBe(false);
+    expect(r.lvl).toEqual(['db', 'thDb', 'rawDb', 'clip', 'zeroRuns']); // takeLevel shape unchanged unless auto-clean is on
+  });
+
+  test('digital silence and near-silent noise latch clean only after warm-up + hold (0.5 s + 0.5 s)', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const res = {};
+      for (const [name, noiseDb] of [['silence', null], ['n100', -100], ['n95', -95]]) {
+        const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true);
+        const buf = sig.zeros(4); if (noiseDb !== null) sig.whiteNoise(buf, sig.db(noiseDb), sig.rng(5));
+        let at = null;
+        for (let i = 0; i < buf.length; i += 128) {
+          core.process(buf.subarray(i, i + 128), i);
+          if (core.clean && at === null) at = i / sig.SR;
+        }
+        res[name] = { at, events: core.takeCleanEvents() };
+      }
+      return res;
+    });
+    for (const k of ['silence', 'n100', 'n95']) {
+      expect(r[k].at).toBeGreaterThanOrEqual(0.99); // 0.5 s warm-up + 0.5 s below -80 dBFS
+      expect(r[k].at).toBeLessThan(1.2);
+      expect(r[k].events.length).toBe(1);
+      expect(r[k].events[0].clean).toBe(true);
+    }
+  });
+
+  test('white noise at -60 dBFS is never clean', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true);
+      const buf = sig.zeros(15); sig.whiteNoise(buf, sig.db(-60), sig.rng(6));
+      sig.run(core, buf);
+      return { clean: core.clean, noiseDb: core.takeLevel().noiseDb, ev: core.takeCleanEvents() };
+    });
+    expect(r.clean).toBe(false);
+    expect(r.noiseDb).toBeGreaterThan(-80);
+    expect(r.ev).toEqual([]);
+  });
+
+  test('white noise at -75 dBFS is never clean; at -82 dBFS it latches (boundary is about -77 dBFS rms)', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const res = {};
+      for (const db of [-75, -82]) {
+        const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true);
+        const buf = sig.zeros(15); sig.whiteNoise(buf, sig.db(db), sig.rng(6));
+        sig.run(core, buf);
+        res[db] = { clean: core.clean, noiseDb: core.noiseDb };
+      }
+      return res;
+    });
+    expect(r[-75].clean).toBe(false);
+    expect(r[-82].clean).toBe(true);
+  });
+
+  test('white noise at -75 dBFS does not latch in its first 3 s (the rising floor passes -80 only briefly)', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true);
+      const buf = sig.zeros(3); sig.whiteNoise(buf, sig.db(-75), sig.rng(6));
+      let first = null;
+      for (let i = 0; i < buf.length; i += 128) { core.process(buf.subarray(i, i + 128), i); if (core.clean && first === null) first = i / sig.SR; }
+      return { first, events: core.takeCleanEvents().length };
+    });
+    expect(r.first).toBeNull();
+    expect(r.events).toBe(0);
+  });
+
+  test('nothing latches before warm-up + hold (1 s) even though the floor starts at -100', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true);
+      sig.run(core, sig.zeros(0.95));
+      return { clean: core.clean, noise: core.takeLevel().noiseDb };
+    });
+    expect(r.clean).toBe(false);
+    expect(r.noise).toBeLessThan(-80);
+  });
+
+  test('a latched clean stream stays clean through continuous loud sustain; a hint starts clean', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true);
+      sig.run(core, sig.zeros(3.3));
+      const latched = core.clean;
+      const loud = sig.zeros(8); sig.whiteNoise(loud, sig.db(-30), sig.rng(7));
+      sig.run(core, loud);
+      const after = { clean: core.clean, noiseDb: core.takeLevel().noiseDb };
+      const h = timingMakeOnsetCore(sig.SR); h.setAutoClean(true); h.setCleanHint(true);
+      return { latched, after, hint: h.clean, hintGate: h.params().minGateDbfs };
+    });
+    expect(r.latched).toBe(true);
+    expect(r.after.clean).toBe(true);
+    expect(r.after.noiseDb).toBeGreaterThan(-60); // the floor did climb
+    expect(r.hint).toBe(true);
+    expect(r.hintGate).toBeCloseTo(-90, 6);
+  });
+
+  test('a hinted stream never measured clean gets a clean:false verdict after 60 s (not before) but keeps its tuning', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true); core.setCleanHint(true);
+      const buf = sig.zeros(62); sig.whiteNoise(buf, sig.db(-60), sig.rng(8));
+      sig.run(core, buf.subarray(0, 59 * sig.SR));
+      const early = core.takeCleanEvents().length;
+      sig.run(core, buf.subarray(59 * sig.SR));
+      return { early, clean: core.clean, ev: core.takeCleanEvents() };
+    });
+    expect(r.early).toBe(0);
+    expect(r.clean).toBe(true);
+    expect(r.ev.length).toBe(1);
+    expect(r.ev[0].clean).toBe(false);
+  });
+
+  test('a hinted interface played continuously for 20 s gets no clean:false verdict and stays clean', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const core = timingMakeOnsetCore(sig.SR); core.setAutoClean(true); core.setCleanHint(true);
+      const buf = sig.zeros(20);
+      for (let t = 0.1; t < 19.5; t += 0.25) sig.addSine(buf, t, 220, sig.db(-20), 0.4, 0.002, 0.3);
+      sig.run(core, buf);
+      return { clean: core.clean, ev: core.takeCleanEvents(), noise: core.takeLevel().noiseDb };
+    });
+    expect(r.ev).toEqual([]);
+    expect(r.clean).toBe(true);
+    expect(r.noise).toBeGreaterThan(-80); // the sustain floor is high, as the verdict reasoning assumes
+  });
+
+  test('benefit: soft upper-band notes over silence are missed by the web tuning and caught by the clean tuning', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const times = [3.4, 3.9, 4.4, 4.9];
+      const build = () => {
+        const b = sig.zeros(6);
+        for (const t of times) sig.addSine(b, t, 1500, sig.db(-62), 0.12, 0.002, 0.4);
+        return b;
+      };
+      const web = sig.run(timingMakeOnsetCore(sig.SR), build()).length;
+      const auto = timingMakeOnsetCore(sig.SR); auto.setAutoClean(true);
+      const on = sig.run(auto, build()).map(o => +(o.time * 1000).toFixed(1));
+      const hinted = timingMakeOnsetCore(sig.SR); hinted.setAutoClean(true); hinted.setCleanHint(true);
+      const onH = sig.run(hinted, build()).length;
+      return { web, on, onH, clean: auto.clean };
+    });
+    expect(r.web).toBe(0);
+    expect(r.clean).toBe(true);
+    expect(r.on.length).toBe(4);
+    r.on.forEach((t, i) => expect(Math.abs(t - [3400, 3900, 4400, 4900][i])).toBeLessThan(6));
+    expect(r.onH).toBe(4);
+  });
+});
+
+test.describe('Timing Check - clean input auto tuning (page)', () => {
+  test('stream attach sends the stored hint per device; a clean report is stored; the summary shows Line', async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream && !!timingNode)).toBe(true);
+    const r = await page.evaluate(() => {
+      const sent = [];
+      const orig = timingNode.port.postMessage.bind(timingNode.port);
+      timingNode.port.postMessage = m => { sent.push(m); orig(m); };
+      const id = timingDeviceId;
+      localStorage.removeItem('wm.timing.clean.' + id);
+      const before = { clean: timingClean, text: document.getElementById('timingSetVals').textContent };
+      timingOnWorkletMessage({ data: { type: 'clean', clean: true, noiseDb: -97 } });
+      const afterReport = { clean: timingClean, stored: localStorage.getItem('wm.timing.clean.' + id), text: document.getElementById('timingSetVals').textContent, noise: timingNoiseDb };
+      timingAttachStream(timingStream); // a new attach re-sends the hint from storage
+      const hintMsg = sent.find(m => m.type === 'config' && 'cleanHint' in m);
+      timingSetSensitivity(6);
+      const plain = sent[sent.length - 1];
+      timingOnWorkletMessage({ data: { type: 'clean', clean: false, noiseDb: -60 } }); // hinted stream never measured clean
+      return { before, afterReport, hintMsg, plain, storedAfterVerdict: localStorage.getItem('wm.timing.clean.' + id) };
+    });
+    expect(r.before.clean).toBe(false);
+    expect(r.before.text).not.toContain('Line');
+    expect(r.afterReport.clean).toBe(true);
+    expect(r.afterReport.stored).toBe('1');
+    expect(r.afterReport.text).toMatch(/S5 . Line$/);
+    expect(r.afterReport.noise).toBe(-97);
+    expect(r.hintMsg).toMatchObject({ type: 'config', cleanHint: true, sensitivity: 5 });
+    expect(r.plain.cleanHint).toBeUndefined();
+    expect(r.storedAfterVerdict).toBeNull();
+  });
+
+  test('a device without the stored flag sends cleanHint false; the sensitivity help mentions audio interfaces', async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream && !!timingNode)).toBe(true);
+    const r = await page.evaluate(() => {
+      const sent = [];
+      const orig = timingNode.port.postMessage.bind(timingNode.port);
+      timingNode.port.postMessage = m => { sent.push(m); orig(m); };
+      localStorage.removeItem('wm.timing.clean.' + timingDeviceId);
+      timingAttachStream(timingStream);
+      return { hint: sent.find(m => 'cleanHint' in m).cleanHint, help: TIMING_HELP.sens[1] };
+    });
+    expect(r.hint).toBe(false);
+    expect(r.help).toContain('audio interfaces');
   });
 });

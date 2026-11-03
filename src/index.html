@@ -2448,6 +2448,9 @@
     let timingRef = timingRefNewState();  // click-ref lock/track state
     let timingChannels = 1;               // channels actually received
     let timingSensitivity = 5;            // 1..10, 5 = reference tuning
+    let timingClean = false;              // clean line input (audio interface): worklet uses gate -90 dBFS (see OnsetCore); stored per device
+    let timingNoiseDb = null;             // measured noise floor (max band floor, dBFS) from the worklet, diagnostics
+    let timingCleanHinted = false;        // this stream started with the stored hint
     let timingBeats = [];                 // ring buffer (64) of { time, beatInMeasure, n, dur }
     let timingHits = [];                  // accepted hits log
     let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac, peakDb, cbg, cpos, offsetMs }
@@ -2735,6 +2738,15 @@
 // Clipping detection: a real clip is a flat top of several consecutive full-scale samples; a lone peak at 1.0 is not.
 const CLIP_LEVEL = 0.998, CLIP_RUN = 4;
 const FLUX_LOOK = 6; // BPM detect feed: frames (256 samples) of look-back for the rise reference
+// Clean-input tuning (audio interface / DI): a noise floor near digital silence lets the absolute gate drop from -55 to -90 dBFS.
+// Core sensitivity = the user's up to 5, above 5 it rises at 0.6 per step (10 -> 8): core 10 fired on sustain and finger noise.
+// Measured on a DI bass capture: -55 gate muted the upper bands (54 % of 8th notes caught).
+const WEB_GATE_DB = -55, CLEAN_GATE_DB = -90;
+const CLEAN_NOISE_DB = -80;   // floor of every band below this = clean input
+const CLEAN_WARM_SEC = 0.5;     // floor-update time before the floor means anything (it starts at -100 dBFS)
+const CLEAN_HOLD_SEC = 0.5;     // consecutive floor-update time below CLEAN_NOISE_DB that latches clean
+const CLEAN_VERDICT_SEC = 60; // a hinted stream not measured clean after this much floor-update time gets a clean:false verdict
+function cleanCoreSensitivity(s) { s = Math.max(1, Math.min(10, +s || 5)); return s <= 5 ? s : 5 + (s - 5) * 0.6; }
 class OnsetCore {
   constructor(sr, opts) {
     opts = opts || {};
@@ -2747,6 +2759,10 @@ class OnsetCore {
     this.L = this.W + this.G;
     this.baseJumps = opts.jumps || [3, 2.5, 1.7, 1.7]; // per-band single-band rise ratio at sensitivity 5 (upper bands: +4.5 dB)
     this.baseCombDb = opts.combDb || 10;               // summed positive rise over bands (dB) at sensitivity 5
+    this.baseGateDb = WEB_GATE_DB; this.userSens = 5;
+    // clean-input auto tuning (off unless setAutoClean(true)): see cleanBlock()
+    this.auto = false; this.clean = false; this.hinted = false; this.measured = false; this.verdict = false;
+    this.cFu = 0; this.cQuiet = 0; this.noiseDb = -100; this.cEvents = [];
     this.setSensitivity(opts.sensitivity || 5);
     this.floorCoef = 1 - Math.exp(-64 / (0.5 * sr));
     this.holdSamples = Math.round(0.030 * sr);
@@ -2832,18 +2848,50 @@ class OnsetCore {
   }
   takeLevel() {
     const r = { db: 20 * Math.log10(this.lvl > 1e-9 ? this.lvl : 1e-9), thDb: 20 * Math.log10(this.thMin), rawDb: 20 * Math.log10(this.raw > 1e-9 ? this.raw : 1e-9), clip: this.clip, zeroRuns: this.zeroRuns };
+    if (this.auto) { r.clean = this.clean; r.noiseDb = this.noiseDb; }
     this.lvl = 0; this.raw = 0; this.clip = false;
     return r;
   }
   // Sensitivity 1..10 (5 = reference tuning). f scales the required rises: 1.5 at 1, 1.0 at 5, 0.35 at 10.
+  setBaseGateDb(db) { this.baseGateDb = isFinite(db) ? +db : WEB_GATE_DB; this.setSensitivity(this.userSens); }
+  // Opt-in clean-input detector. While on, blocks that update the noise floor are timed; once the floor of every band has stayed below
+  // CLEAN_NOISE_DB for CLEAN_HOLD_SEC (after CLEAN_WARM_SEC) the clean tuning is latched for the rest of the stream.
+  setAutoClean(on) { this.auto = !!on; this.cFu = 0; this.cQuiet = 0; this.measured = false; this.verdict = false; if (!on) this.setClean(false); }
+  // Start a stream with a known verdict (hint = clean before anything was measured) and restart the measurement.
+  setCleanHint(h) { this.hinted = !!h; this.cFu = 0; this.cQuiet = 0; this.measured = false; this.verdict = false; this.setClean(!!h); }
+  setClean(c) {
+    c = !!c;
+    if (c === this.clean) return;
+    this.clean = c;
+    this.baseGateDb = c ? CLEAN_GATE_DB : WEB_GATE_DB;
+    this.setSensitivity(this.userSens);
+  }
+  takeCleanEvents() { const r = this.cEvents; this.cEvents = []; return r; }
+  cleanBlock() {
+    const bands = this.bands;
+    let mx = 0;
+    for (let b = 0; b < this.nb; b++) if (bands[b].floor > mx) mx = bands[b].floor;
+    this.noiseDb = 20 * Math.log10(mx);
+    this.cFu += 64 / this.sr;
+    if (this.cFu < CLEAN_WARM_SEC) return;
+    if (this.noiseDb < CLEAN_NOISE_DB) this.cQuiet += 64 / this.sr; else this.cQuiet = 0;
+    if (!this.measured && this.cQuiet >= CLEAN_HOLD_SEC) {
+      this.measured = true; this.setClean(true);
+      this.cEvents.push({ type: 'clean', clean: true, noiseDb: this.noiseDb });
+    } else if (this.hinted && !this.measured && !this.verdict && this.cFu >= CLEAN_VERDICT_SEC) {
+      this.verdict = true; // tuning stays as hinted for this stream
+      this.cEvents.push({ type: 'clean', clean: false, noiseDb: this.noiseDb });
+    }
+  }
   setSensitivity(v) {
-    v = Math.max(1, Math.min(10, +v || 5));
+    this.userSens = Math.max(1, Math.min(10, +v || 5));
+    v = this.clean ? cleanCoreSensitivity(this.userSens) : this.userSens;
     const f = v >= 5 ? 1 - (v - 5) * 0.13 : 1 + (5 - v) * 0.125;
     this.sens = v; this.f = f;
     this.jumps = this.baseJumps.map(j => Math.pow(j, f)); // jump dB x f
     this.combDb = this.baseCombDb * f;
     this.thRatio = Math.pow(2, f);                     // gate: floor + 6 dB x f
-    this.minTh = Math.pow(10, (-55 + (5 - v) * 2) / 20); // absolute gate, -55 dBFS shifted 2 dB per step
+    this.minTh = Math.pow(10, (this.baseGateDb + (5 - v) * 2) / 20); // absolute gate (base -55 dBFS, -90 on clean input) shifted 2 dB per step
     this.drop = v >= 5 ? 0.7 + (v - 5) * 0.03 : 0.7 - (5 - v) * 0.025; // re-trigger drop: 0.6 at 1, 0.85 at 10
     if (this.thMin !== undefined) this.thMin = this.minTh;
   }
@@ -2942,6 +2990,7 @@ class OnsetCore {
         B.floor += (B.bmax - B.floor) * this.floorCoef;
         if (B.floor < 1e-5) B.floor = 1e-5;
       }
+      if (this.auto) this.cleanBlock();
     }
     for (let b = 0; b < nb; b++) bands[b].hist[this.hi] = bands[b].bmax;
     this.hi = (this.hi + 1) % L;
@@ -3241,6 +3290,7 @@ class OnsetDetector extends AudioWorkletProcessor {
   constructor() {
     super();
     this.core = new OnsetCore(sampleRate);
+    this.core.setAutoClean(true);
     this.ch = 0;
     this.refCh = -1; this.ref = null;
     this.acc = 0;
@@ -3253,6 +3303,7 @@ class OnsetDetector extends AudioWorkletProcessor {
         if (typeof m.channel === 'number') this.ch = m.channel | 0;
         if (typeof m.refChannel === 'number' && (m.refChannel | 0) !== this.refCh) { this.refCh = m.refChannel | 0; this.ref = this.refCh >= 0 ? new RefTemplate(sampleRate) : null; }
         if (typeof m.sensitivity === 'number') this.core.setSensitivity(m.sensitivity);
+        if (typeof m.cleanHint === 'boolean') this.core.setCleanHint(m.cleanHint);   // sent once per stream attach
         if (typeof m.wave === 'boolean' && m.wave !== this.wave) { this.wave = m.wave; this.wN = 0; }
         if (typeof m.flux === 'boolean' && m.flux !== this.core.fluxOn) this.core.setFlux(m.flux);
         if (typeof m.record === 'boolean' && m.record !== this.rec) {
@@ -3324,13 +3375,15 @@ class OnsetDetector extends AudioWorkletProcessor {
       const fl = this.core.takeFlux();
       for (let i = 0; i < fl.length; i++) this.port.postMessage(fl[i], [fl[i].v.buffer]);
     }
+    const ce = this.core.takeCleanEvents();
+    for (let i = 0; i < ce.length; i++) this.port.postMessage(ce[i]);
     const gl = this.core.takeGlitches();
     for (let i = 0; i < gl.length; i++) this.port.postMessage(gl[i]);
     this.acc += chs[0].length;
     if (this.acc >= 1024) {
       this.acc = 0;
       const l = this.core.takeLevel();
-      this.port.postMessage({ type: 'level', db: l.db, thDb: l.thDb, rawDb: l.rawDb, clip: l.clip, zeroRuns: l.zeroRuns });
+      this.port.postMessage({ type: 'level', db: l.db, thDb: l.thDb, rawDb: l.rawDb, clip: l.clip, zeroRuns: l.zeroRuns, clean: l.clean, noiseDb: l.noiseDb });
     }
     return true;
   }
@@ -3533,9 +3586,29 @@ registerProcessor('onset-detector', OnsetDetector);
         practiceWaveRedraw(false);
     }
 
-    function timingPostConfig() {
+    // Clean-input state per device ('1' = measured clean on this device). The hint is sent once per stream (timingAttachStream) and
+    // restarts the worklet's measurement; the worklet latches clean for the rest of the stream.
+    function timingLoadClean() {
+        timingClean = timingLsGet('wm.timing.clean.' + timingDeviceId) === '1';
+        timingCleanHinted = timingClean;
+        timingNoiseDb = null;
+    }
+    function timingOnClean(m) {
+        if (m.clean) {
+            timingClean = true;
+            timingLsSet('wm.timing.clean.' + timingDeviceId, '1');
+        } else {
+            // never measured clean on a hinted stream: forget it for next time, this stream keeps its tuning
+            timingLsRemove('wm.timing.clean.' + timingDeviceId);
+            timingCleanHinted = false;
+        }
+        if (typeof m.noiseDb === 'number') timingNoiseDb = m.noiseDb;
+        timingRenderSettingsBtn();
+    }
+    function timingPostConfig(hint) {
         if (!timingNode) return;
         const m = { type: 'config', channel: timingChannel, sensitivity: timingSensitivity };
+        if (hint) m.cleanHint = timingClean;
         // refChannel is only sent once the click ref has been used, so with it Off the message is exactly the old one
         if (timingRefOn || timingRefSent) { m.refChannel = timingRefOn ? timingRefCh : -1; timingRefSent = timingRefOn; }
         if (practice.on || practice.waveSent) { m.wave = practice.on; practice.waveSent = practice.on; } // only after practice mode was used, so the default message is unchanged
@@ -4044,6 +4117,7 @@ registerProcessor('onset-detector', OnsetDetector);
         } else if (m.type === 'level') {
             timingLevelDb = m.db;
             timingThDb = m.thDb;
+            if (typeof m.noiseDb === 'number') timingNoiseDb = m.noiseDb;
             timingLevelCount++;
             if (typeof m.rawDb === 'number') {
                 if (m.rawDb < timingQuietDb && performance.now() >= timingSwapUntil) { if (!timingQuietSince) timingQuietSince = performance.now(); }
@@ -4053,6 +4127,8 @@ registerProcessor('onset-detector', OnsetDetector);
             if (m.clip) { timingHotUntil = performance.now() + 3000; timingQueueMeter(); }
             if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
             timingQueueMeter();
+        } else if (m.type === 'clean') {
+            timingOnClean(m);
         } else if (m.type === 'wave') {
             practiceWaveIn(m);
         } else if (m.type === 'flux') {
@@ -4081,7 +4157,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const g = getTimingGrid();
         timingSetText(timingSetGrid, g.name + ' \u00b7');
         const ref = timingRefOn;
-        timingSetText(timingSetVals, (ref ? 'Live ' + (!timingRef.confirmed ? '\u2014' : Math.round(timingRef.liveL * 1000) + ' ms') : Math.round(timingEffectiveLatencyMs()) + ' ms') + ' \u00b7 S' + timingSensitivity);
+        timingSetText(timingSetVals, (ref ? 'Live ' + (!timingRef.confirmed ? '\u2014' : Math.round(timingRef.liveL * 1000) + ' ms') : Math.round(timingEffectiveLatencyMs()) + ' ms') + ' \u00b7 S' + timingSensitivity + (timingClean ? ' \u00b7 Line' : ''));
         timingSetEst.hidden = ref || !timingLatencyEst;
         const rm = !ref && timingNeedsRemeasure();
         if (timingSetRemeasure.hidden === rm) timingSetRemeasure.hidden = !rm;
@@ -4097,7 +4173,7 @@ registerProcessor('onset-detector', OnsetDetector);
         latency: ['Latency', "How long the sound takes to reach your ears and come back from your instrument. It is subtracted from every hit. Use Measure with a cable from an output to an input to set it exactly. Re-measure after reloading or switching devices. \"+N ms auto\" is added when the browser's input buffer slips."],
         live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
         trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
-        sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks.'],
+        sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks. Clean line inputs (audio interfaces) are detected automatically and use a lower gate, so soft notes are caught; the settings button then shows "Line".'],
         range: ['View range', "How far early or late the chart's top and bottom edges are. Hits beyond it are drawn as red triangles at the edge. Widen it to see big misses; narrow it to see small differences."],
         quiet: ['Quiet below', 'Below this input level the status shows Quiet. Lower it if your signal is soft but fine.'],
     };
@@ -4488,7 +4564,7 @@ registerProcessor('onset-detector', OnsetDetector);
                 bpm, subdivision, beatsPerMeasure, isPlaying,
                 grid: { key: g.key, name: g.name, res: g.res, shuffle: g.shuffle, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
                 trackLabel: track ? track.label : '', trackSettings: track && track.getSettings ? track.getSettings() : {},
-                sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity), userAgent: navigator.userAgent
+                sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, cleanInput: timingClean, noiseFloorDb: timingNoiseDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity), userAgent: navigator.userAgent
             }
         };
         timingNode.port.postMessage({ type: 'config', record: true });
@@ -5033,7 +5109,8 @@ registerProcessor('onset-detector', OnsetDetector);
         timingLoadQuiet();
         timingLoadLatency();
         timingLoadRef(); // a new stream has a new offset: the ref lock starts over
-        timingPostConfig();
+        timingLoadClean();
+        timingPostConfig(true);
         timingLiveDot.hidden = false;
     }
 
