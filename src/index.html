@@ -2792,7 +2792,9 @@ const CLEAN_WARM_SEC = 0.5;     // floor-update time before the floor means anyt
 const CLEAN_HOLD_SEC = 0.5;     // consecutive floor-update time below CLEAN_NOISE_DB that latches clean
 const REFINE_BLOOM_MS = 70;   // setRefine: a low-band-only onset this soon after a top-band onset is the same note's body
 const REFINE_BACK_MS = 30;    // setRefine: how far back a low-band-only onset looks for its pick (top-band spark)
-const REFINE_REL = Math.pow(10, -30 / 20);   // setRefine: drop onsets 30 dB below the median raw peak of the last 16 accepted ones
+const REFINE_REL = Math.pow(10, -30 / 20);
+const REFINE_MED_DB = 10;
+const REFINE_MED_FLOOR = Math.pow(10, 15 / 20);   // setRefine: ... and only 15 dB or more above the top band's noise floor     // setRefine: the top band also triggers this far (x the sensitivity factor f) above its window's median   // setRefine: drop onsets 30 dB below the median raw peak of the last 16 accepted ones
 const CLEAN_VERDICT_SEC = 60; // a hinted stream not measured clean after this much floor-update time gets a clean:false verdict
 function cleanCoreSensitivity(s) { s = Math.max(1, Math.min(10, +s || 5)); return s <= 5 ? s : 5 + (s - 5) * 0.6; }
 class OnsetCore {
@@ -2819,7 +2821,7 @@ class OnsetCore {
     //  note's body swelling, not a new attack
     //  relative gate: an onset whose raw peak is REFINE_REL_DB below the median of the recent accepted onsets is dropped (bursty noise)
     this.refine = false; this.lastTop = -1e12; this.pvTop = -1e12; this.repFrame = 0; this.bloomLog = -1e12; this.bloomHold = false;
-    this.rPk = []; this.bloomSamples = Math.round(REFINE_BLOOM_MS / 1000 * sr); this.backBlocks = Math.round(REFINE_BACK_MS / 1000 * sr / 64);
+    this.medBuf = new Float32Array(this.L); this.rPk = []; this.bloomSamples = Math.round(REFINE_BLOOM_MS / 1000 * sr); this.backBlocks = Math.round(REFINE_BACK_MS / 1000 * sr / 64);
     this.setSensitivity(opts.sensitivity || 5);
     this.floorCoef = 1 - Math.exp(-64 / (0.5 * sr));
     this.holdSamples = Math.round(0.030 * sr);
@@ -3004,6 +3006,20 @@ class OnsetCore {
       for (let a = this.G; a < L; a++) { // ages G .. L-1 blocks back
         const v = B.hist[(this.hi - 1 - a + 2 * L) % L];
         if (v > ref) ref = v;
+      }
+      if (this.refine && b === nb - 1) {
+        // top band: a pick also counts when it stands REFINE_MED_DB (x f) above the window's median. The window max alone lets the
+        // flicker of a sustained note's string noise (+-5..10 dB per block) hide a pick of about the same peak level.
+        const w = this.medBuf, n = L - this.G;
+        for (let a = this.G, k = 0; a < L; a++, k++) {
+          const v = B.hist[(this.hi - 1 - a + 2 * L) % L];
+          let j = k;
+          while (j > 0 && w[j - 1] > v) { w[j] = w[j - 1]; j--; }
+          w[j] = v;
+        }
+        const alt = w[n >> 1] * Math.pow(10, (REFINE_MED_DB * this.f - 20 * Math.log10(this.jumps[b])) / 20);
+        // only well above the band's noise floor: on a DI the top band is mostly noise whose flicker would pass the median test
+        if (alt < ref && B.bmax >= B.floor * REFINE_MED_FLOOR) ref = alt;
       }
       B.ref = ref;
       let th = B.floor * this.thRatio;
@@ -3393,7 +3409,7 @@ class RefTemplate {
         const c = timingMakeOnsetCore(sr, { sensitivity });
         if (clean) c.setClean(true);
         c.setQuietGateDb(quietDb);
-        return Object.assign({ refine: { bloomMs: 70, backMs: 30, relDb: -30 }, cleanTuning: !!clean, userSensitivity: sensitivity, quietGateDb: typeof quietDb === 'number' ? quietDb : null }, { bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
+        return Object.assign({ refine: { bloomMs: 70, backMs: 30, relDb: -30, topMedianDb: 10, topMedianAboveFloorDb: 15 }, cleanTuning: !!clean, userSensitivity: sensitivity, quietGateDb: typeof quietDb === 'number' ? quietDb : null }, { bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
     }
     function timingMakeOnsetCore(sr, opts) {
         const Core = new Function(TIMING_ONSET_CORE_SRC + '; return OnsetCore;')();
