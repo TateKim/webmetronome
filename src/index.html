@@ -6224,6 +6224,7 @@ registerProcessor('onset-detector', OnsetDetector);
         if (!practice.on) return;
         w.chunks.forEach(practiceWaveAdd);
         w.dirty = true;
+        practiceWaveFlush(); // paint now: the frame loop only runs while playing, so a zoom or Quiet change while stopped would leave empty tiles
     }
     function practiceWavePrune(cutT) { // drop tiles that lie wholly before the retained history
         const x = (cutT - timingTl.t0) * timingTl.pps - 20;

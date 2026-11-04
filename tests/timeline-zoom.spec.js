@@ -155,6 +155,39 @@ test.describe('Timeline zoom - practice mode', () => {
     expect(await page.evaluate(() => timingLsGet('wm.practice.bars'))).toBe('2');
   });
 
+  test('waveform stays painted after zoom (ctrl+wheel, presets) and a Quiet change while stopped', async ({ page }) => {
+    await clickPlay(page);
+    await expect.poll(() => page.evaluate(() => timingBeats.length)).toBeGreaterThan(8);
+    await page.evaluate(() => {
+      const step = 64 / audioCtx.sampleRate;
+      for (let i = 0; i < 40; i++) {
+        const t = audioCtx.currentTime - 0.6 + i * 16 * step + timingMatchLatencyMs() / 1000;
+        timingOnWorkletMessage({ data: { type: 'wave', time: t, step, peaks: new Float32Array(16).fill(0.5) } });
+      }
+    });
+    await flush(page);
+    await clickPlay(page); // stopped: no frame loop any more
+    expect(await page.evaluate(() => practice.wave.chunks.length)).toBeGreaterThan(0); // Stop keeps the take's chunks
+    // total ink (alpha sum) over all waveform canvases
+    const inkSum = () => page.evaluate(() => {
+      let sum = 0;
+      document.querySelectorAll('canvas.pr-wave').forEach(c => { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; for (let i = 3; i < d.length; i += 4) sum += d[i]; });
+      return sum;
+    });
+    expect(await inkSum()).toBeGreaterThan(0);
+    await wheel(page, 200, -100, { ctrlKey: true }); await flush(page);
+    expect(await inkSum()).toBeGreaterThan(0);
+    await wheel(page, 200, 300, { ctrlKey: true }); await flush(page);
+    expect(await inkSum()).toBeGreaterThan(0);
+    await page.click('#prMoreBtn');
+    for (const v of ['8', '2', '4']) {
+      await page.click(`#prBarsSeg button[data-v="${v}"]`); await flush(page);
+      expect(await inkSum(), `preset ${v}`).toBeGreaterThan(0);
+    }
+    await page.evaluate(() => timingSetQuiet(-40));
+    expect(await inkSum()).toBeGreaterThan(0);
+  });
+
   test('Now button and gestures survive practice mode re-parenting', async ({ page }) => {
     await clickPlay(page);
     await expect.poll(() => page.evaluate(() => timingBeats.length)).toBeGreaterThan(8);
