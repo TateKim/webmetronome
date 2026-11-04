@@ -86,6 +86,41 @@ test.describe('BPM detect - estimator', () => {
     expect(Math.abs(r - 104)).toBeLessThan(0.6);
   });
 
+  // Grid floor: the Detect grid is the shortest note the player plays, so the tempo is at least pulseRate / stepsPerBeat.
+  // It is a floor only: it fixes "found an octave too slow" (fast quarters), it cannot choose between 75 and 150 for 16ths.
+  test('the detect grid is a lower bound on the tempo (opts.stepsPerBeat)', async ({ page }) => {
+    test.setTimeout(120000);
+    const r = await page.evaluate(() => {
+      const pulses = (bpmV, perBeat, secs) => { // evenly spaced hits, perBeat per beat, the beat accented a little
+        const rand = sig.rng(5), buf = sig.zeros(secs);
+        sig.whiteNoise(buf, sig.db(-70), rand);
+        const gap = 60 / bpmV / perBeat;
+        for (let k = 0, t = 0.3; t < secs - 0.3; k++, t = 0.3 + k * gap) addHit(buf, t, sig.db(k % perBeat === 0 ? -12 : -15), rand);
+        return buf;
+      };
+      const est = (buf, spb) => { const { env, fps } = envOf(buf); const e = bpmEstimate(env.slice(-Math.round(8 * fps)), fps, spb ? { stepsPerBeat: spb } : undefined); return e && +e.bpm.toFixed(1); };
+      const cases = {
+        q200: [pulses(200, 1, 9), 1], q180: [pulses(180, 1, 9), 1],   // grid 4: quarters are the fastest pulse
+        s75: [pulses(75, 4, 9), 4], q90g16: [pulses(90, 1, 9), 4],    // grid 16
+        e150: [pulses(150, 2, 9), 2], t70: [pulses(70, 3, 9), 3],     // grid 8, triplet grid (3 steps per beat)
+        q150g32: [pulses(150, 1, 9), 8],                              // floor above hi (1200 / 8 > 240 is impossible): ignored
+      };
+      const out = {};
+      for (const k in cases) out[k] = { grid: est(cases[k][0], cases[k][1]), none: est(cases[k][0]) };
+      return out;
+    });
+    console.log('grid floor', JSON.stringify(r));
+    expect(r.q200.none).toBeLessThan(110);                   // today: the 120 prior halves it
+    expect(Math.abs(r.q200.grid - 200)).toBeLessThan(1.5);
+    expect(r.q180.none).toBeLessThan(100);
+    expect(Math.abs(r.q180.grid - 180)).toBeLessThan(1.5);
+    for (const k of ['s75', 'q90g16', 'e150', 't70', 'q150g32']) expect(r[k].grid, k).toBe(r[k].none); // the floor never changes a result it does not bound
+    expect(Math.abs(r.q90g16.grid - 90)).toBeLessThan(1);
+    expect(r.s75.grid % 75 < 1 || Math.abs((r.s75.grid % 75) - 75) < 1).toBe(true); // 75 or its double (the user's half/double choice)
+    expect(Math.abs(r.e150.grid - 150)).toBeLessThan(1);
+    expect(r.t70.grid).toBeGreaterThanOrEqual(70 * 0.97 - 1);  // never above the true tempo's bound, never a floor too high
+  });
+
   test('noise only is not a steady beat', async ({ page }) => {
     const r = await page.evaluate(() => {
       const rand = sig.rng(5), buf = sig.zeros(9);

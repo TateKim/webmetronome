@@ -289,7 +289,7 @@
         .tm-hist-copied { font-weight: 700; color: #16a34a; }
         .tm-view-row { flex-wrap: nowrap; gap: 8px; }
         .tm-view-row .tm-seg { flex: none; flex-wrap: nowrap; }
-        .tm-pop-wrap { position: relative; margin-left: auto; flex: none; }
+        .tm-pop-wrap { position: relative; margin-left: auto; flex: 0 1 auto; min-width: 0; }
         .tm-sec { display: flex; flex-direction: column; gap: 4px; }
         .tm-nowrap { flex-wrap: nowrap; }
         .tm-seg.tm-pick { background: none; padding: 0; flex: 1 1 100%; min-width: 0; }
@@ -404,14 +404,41 @@
             .tm-hdr #beatCountDisplay { width: 28px; }
             .tm-hdr .text-xs { font-size: 0.65rem; letter-spacing: 0.02em; }
         }
+        /* 320 px phones: the Timer / Volume / Timing / Rhythm / Beats row and the Timing header must fit without sideways scroll */
+        @media (max-width: 340px) {
+            .tm-hdr > div.gap-2 { gap: 3px; }
+            .tm-hdr button.w-12 { width: 38px; height: 38px; }
+            .tm-hdr .h-12 { height: 38px; }
+            .tm-hdr #decreaseBeats, .tm-hdr #increaseBeats { width: 28px; height: 28px; }
+            .tm-hdr #beatCountDisplay { width: 22px; }
+            .tm-hdr .text-xs { font-size: 0.58rem; letter-spacing: 0; }
+            .tm-view-row { gap: 4px; }
+            .tm-view-row .tm-seg button { padding-left: 4px; padding-right: 4px; font-size: 0.66rem; }
+            .tm-set-vals { font-size: 0.64rem; }
+            .tm-set-btn { padding: 6px 6px; gap: 3px; }
+        }
         /* narrow screens (kept after the base rules so they win) */
-        @media (max-width: 420px) { .tm-set-grid { display: none; } }
-        @media (max-width: 359px) { .tm-view-row { flex-wrap: wrap; } }
         @media (prefers-reduced-motion: reduce) { .tm-noinput { transition: none; } }
 
         /* ---------- Practice mode (landscape): everything is scoped under body.wm-practice; portrait is untouched ---------- */
-        .tm-practice-btn { margin-left: auto; }
-        .tm-view-row .tm-practice-btn + .tm-pop-wrap { margin-left: 0; }
+        /* portrait header: row 1 view + settings, row 2 detect grid, row 3 practice icon + meter. The summary button shrinks (ellipsis), its badges stay. */
+        .tm-pop-wrap > .tm-set-btn { max-width: 100%; min-width: 0; }
+        .tm-set-vals { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        .tm-set-est, .tm-remeasure-dot, .tm-pulse { flex: none; }
+        .tm-detect-row { position: relative; }
+        body.wm-practice .tm-detect-row { display: none; }
+        /* grid: [4|8|16|32 Shuffle] [?] on row 1 (the "?" is never orphaned), the Locked hint as one unit on row 2 */
+        .tm-detect-row > .tm-sec { display: grid; grid-template-columns: auto auto; justify-content: start; align-items: center; gap: 4px 8px; min-width: 0; }
+        .tm-detect-row > .tm-sec .tm-row { grid-column: 1; grid-row: 1; }
+        .tm-detect-row > .tm-sec .tm-lab { grid-column: 2; grid-row: 1; }
+        .tm-detect-row > .tm-sec .tm-lab .tm-label { display: none; } /* the segment has an aria-label; the label returns as "Grid" in practice mode */
+        .tm-detect-row > .tm-sec .tm-hint-ind { grid-column: 1 / -1; grid-row: 2; }
+        .tm-set-live { flex: none; width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
+        .tm-set-live[data-q="sync"] { background: #cbd5e1; }
+        .tm-view-row .tm-pop-wrap { flex: 1 1 0; display: flex; justify-content: flex-end; }
+        .tm-meter-row { flex-wrap: nowrap; gap: 8px; align-items: center; }
+        .tm-meter-row > .tm-meter-wrap { flex: 1 1 0; width: auto; min-width: 0; }
+        body.wm-practice #practiceBtn, body.wm-practice .tm-meter-row { display: none; }
         .tm-bpm-btn { flex: none; padding: 4px 7px; font: 700 0.66rem 'Noto Sans KR', sans-serif; letter-spacing: 0.03em; }
         .tm-bpm-btn[aria-pressed="true"] { background: #e0e7ff; color: #4f46e5; }
         body.wm-practice .tm-bpm-btn { display: none; }
@@ -423,9 +450,8 @@
         .tm-bpm-state { font: 600 0.7rem 'Noto Sans KR', sans-serif; color: #64748b; flex: 1 1 auto; min-width: 5rem; }
         .tm-bpm-state[data-q="ok"] { color: #059669; }
         .tm-bpm-acts { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
-        .tm-practice-btn svg { width: 14px; height: 14px; flex: none; }
-        .tm-practice-btn span { font: 700 0.72rem 'Noto Sans KR', sans-serif; }
-        @media (max-width: 420px) { .tm-practice-btn span { display: none; } .tm-practice-btn { padding: 6px 5px; } }
+        .tm-practice-btn { flex: none; padding: 4px 7px; }
+        .tm-practice-btn svg { width: 16px; height: 16px; flex: none; }
         .pr-root { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; text-align: left; }
         .pr-hdr { position: relative; display: flex; align-items: center; gap: 10px; flex: none; min-width: 0; }
         .pr-grp { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -819,12 +845,9 @@
                         <button type="button" data-v="timeline" aria-pressed="true">Timeline</button>
                         <button type="button" data-v="beats" aria-pressed="false">On beats</button>
                     </div>
-                    <button id="practiceBtn" type="button" class="tm-set-btn tm-practice-btn" title="Landscape practice mode" aria-label="Practice mode">
-                        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01"></path></svg><span>Practice</span>
-                    </button>
                     <div class="tm-pop-wrap">
                         <button id="timingSetBtn" type="button" class="tm-set-btn" aria-haspopup="true" aria-expanded="false" aria-controls="timingPopover" title="Input, detection grid, latency and sensitivity">
-                            <span id="timingSetGrid" class="tm-set-vals tm-set-grid">16 ·</span>
+                            <span id="timingSetLive" class="tm-set-live" hidden aria-hidden="true"></span>
                             <span id="timingSetVals" class="tm-set-vals">0 ms · S5</span>
                             <span id="timingSetEst" class="tm-set-est" hidden>est.</span>
                             <span id="timingSetRemeasure" class="tm-remeasure-dot" hidden title="Re-measure latency" aria-label="Re-measure latency"></span>
@@ -842,21 +865,6 @@
                                     <span class="tm-label">Click</span>
                                     <div id="timingRefSeg" class="tm-seg" role="group" aria-label="Click reference channel"></div><button type="button" class="tm-help" data-help="click">?</button>
                                 </div>
-                            </div>
-                            <div class="tm-sec">
-                                <div class="tm-lab"><span class="tm-label">Detect</span><button type="button" class="tm-help" data-help="detect">?</button></div>
-                                <div class="tm-row tm-nowrap">
-                                    <div id="timingResSeg" class="tm-seg" role="group" aria-label="Detection resolution">
-                                        <button type="button" data-v="4" aria-pressed="false" aria-label="Quarter notes">4</button>
-                                        <button type="button" data-v="8" aria-pressed="false" aria-label="8th notes">8</button>
-                                        <button type="button" data-v="16" aria-pressed="true" aria-label="16th notes">16</button>
-                                        <button type="button" data-v="32" aria-pressed="false" aria-label="32nd notes">32</button>
-                                    </div>
-                                    <div class="tm-seg">
-                                        <button id="timingShuffleBtn" type="button" aria-pressed="false">Shuffle</button>
-                                    </div>
-                                </div>
-                                <span id="timingDetectHint" class="tm-hint-ind" hidden>Locked to Triplet</span>
                             </div>
                             <div class="tm-sec">
                                 <div class="tm-lab"><span class="tm-label">View range</span><button type="button" class="tm-help" data-help="range">?</button></div>
@@ -949,14 +957,36 @@
                         </div>
                     </div>
                 </div>
-                <div class="tm-meter-wrap" title="Quiet below −60 dB">
-                    <svg class="tm-mic-ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>
-                    <div class="tm-meter-area">
-                        <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterQuiet" class="tm-meter-q"></div><div id="timingMeterFlash" class="tm-meter-flash" data-flash="0"></div></div>
-                        <div id="timingMeterQuietTri" class="tm-meter-triwrap"><span class="tm-meter-tri"></span></div>
+                <div class="tm-detect-row">
+            <div class="tm-sec">
+                <div class="tm-lab"><span class="tm-label">Detect</span><button type="button" class="tm-help" data-help="detect">?</button></div>
+                <div class="tm-row tm-nowrap">
+                    <div id="timingResSeg" class="tm-seg" role="group" aria-label="Detection resolution">
+                        <button type="button" data-v="4" aria-pressed="false" aria-label="Quarter notes">4</button>
+                        <button type="button" data-v="8" aria-pressed="false" aria-label="8th notes">8</button>
+                        <button type="button" data-v="16" aria-pressed="true" aria-label="16th notes">16</button>
+                        <button type="button" data-v="32" aria-pressed="false" aria-label="32nd notes">32</button>
                     </div>
-                    <span id="timingStatus" class="tm-status">Quiet</span>
-                    <button id="bpmDetBtn" type="button" class="tm-set-btn tm-bpm-btn" aria-pressed="false" aria-controls="bpmDetPanel" title="Detect the tempo of the input signal" aria-label="Detect BPM">BPM</button>
+                    <div class="tm-seg">
+                        <button id="timingShuffleBtn" type="button" aria-pressed="false">Shuffle</button>
+                    </div>
+                </div>
+                <span id="timingDetectHint" class="tm-hint-ind" hidden>Locked to Triplet</span>
+            </div>
+                </div>
+                <div class="tm-row tm-meter-row">
+                    <button id="practiceBtn" type="button" class="tm-set-btn tm-practice-btn" title="Landscape practice mode" aria-label="Practice mode">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"></rect><path d="M6 10h.01"></path></svg>
+                    </button>
+                    <div class="tm-meter-wrap" title="Quiet below −60 dB">
+                        <svg class="tm-mic-ico" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v4"></path></svg>
+                        <div class="tm-meter-area">
+                            <div class="tm-meter"><div id="timingMeterFill" class="tm-meter-fill"></div><div id="timingMeterQuiet" class="tm-meter-q"></div><div id="timingMeterFlash" class="tm-meter-flash" data-flash="0"></div></div>
+                            <div id="timingMeterQuietTri" class="tm-meter-triwrap"><span class="tm-meter-tri"></span></div>
+                        </div>
+                        <span id="timingStatus" class="tm-status">Quiet</span>
+                        <button id="bpmDetBtn" type="button" class="tm-set-btn tm-bpm-btn" aria-pressed="false" aria-controls="bpmDetPanel" title="Detect the tempo of the input signal" aria-label="Detect BPM">BPM</button>
+                    </div>
                 </div>
                 <div id="bpmDetPanel" class="tm-bpm" role="group" aria-label="Detected tempo" hidden>
                     <div class="tm-bpm-read"><span id="bpmDetValue" class="tm-bpm-val" aria-live="polite">–</span><span class="tm-bpm-unit">BPM</span></div>
@@ -2519,8 +2549,7 @@
     const timingQuietInput = document.getElementById('timingQuietInput');
     const timingSetBtn = document.getElementById('timingSetBtn');
     const timingPopover = document.getElementById('timingPopover');
-    const timingSetVals = document.getElementById('timingSetVals');
-    const timingSetGrid = document.getElementById('timingSetGrid');
+    const timingSetVals = document.getElementById('timingSetVals'), timingSetLive = document.getElementById('timingSetLive');
     const timingSetEst = document.getElementById('timingSetEst');
     const timingSetBusy = document.getElementById('timingSetBusy');
     const timingLoopOpen = document.getElementById('timingLoopOpen');
@@ -4179,10 +4208,16 @@ registerProcessor('onset-detector', OnsetDetector);
 
     // --- Settings popover (latency, loopback measurement, sensitivity) ---
     function timingRenderSettingsBtn() {
-        const g = getTimingGrid();
-        timingSetText(timingSetGrid, g.name + ' \u00b7');
         const ref = timingRefOn;
-        timingSetText(timingSetVals, (ref ? 'Live ' + (!timingRef.confirmed ? '\u2014' : Math.round(timingRef.liveL * 1000) + ' ms') : Math.round(timingEffectiveLatencyMs()) + ' ms') + ' \u00b7 S' + timingSensitivity + (timingClean ? ' \u00b7 Line' : ''));
+        timingSetText(timingSetVals, (ref ? (!timingRef.confirmed ? '\u2014 ms' : Math.round(timingRef.liveL * 1000) + ' ms') : Math.round(timingEffectiveLatencyMs()) + ' ms') + ' \u00b7 S' + timingSensitivity + (timingClean ? ' \u00b7 Line' : ''));
+        // the "Live" word became a small dot (green = locked, grey = syncing); the full wording lives in title / aria-label
+        const ok = ref && timingRef.confirmed;
+        if (timingSetLive.hidden === ref) timingSetLive.hidden = !ref;
+        const q = ok ? '' : 'sync';
+        if ((timingSetLive.dataset.q || '') !== q) { if (q) timingSetLive.dataset.q = q; else delete timingSetLive.dataset.q; }
+        const lat = timingSetVals.textContent.split(' \u00b7 ')[0];
+        const ttl = 'Input, latency, sensitivity and view range: ' + (ref ? 'live latency ' + (ok ? lat : 'syncing') : lat + (timingLatencyEst ? ' (estimated latency)' : '')) + ', sensitivity ' + timingSensitivity + (timingClean ? ', clean line input' : '');
+        if (timingSetBtn.title !== ttl) { timingSetBtn.title = ttl; timingSetBtn.setAttribute('aria-label', ttl); }
         timingSetEst.hidden = ref || !timingLatencyEst;
         const rm = !ref && timingNeedsRemeasure();
         if (timingSetRemeasure.hidden === rm) timingSetRemeasure.hidden = !rm;
@@ -4212,7 +4247,7 @@ registerProcessor('onset-detector', OnsetDetector);
     function timingHelpToggle(btn, tip) {
         if (timingHelpOpen && timingHelpOpen.btn === btn) { timingHelpClose(); return; }
         timingHelpClose();
-        const host = btn.closest('.pr-ov') || timingPopover; // the Grid row lives in the rhythm overlay in practice mode
+        const host = btn.closest('.pr-ov') || btn.closest('.tm-detect-row') || timingPopover; // Detect lives in the header row (portrait) or the rhythm overlay (practice mode)
         if (tip.parentNode !== host) host.appendChild(tip);
         const pr = host.getBoundingClientRect(), br = btn.getBoundingClientRect();
         tip.style.top = (br.bottom - pr.top + host.scrollTop + 6) + 'px';
@@ -4220,14 +4255,14 @@ registerProcessor('onset-detector', OnsetDetector);
         btn.setAttribute('aria-expanded', 'true');
         timingHelpOpen = { btn, tip };
     }
-    document.querySelectorAll('#timingPopover .tm-help').forEach(btn => {
+    document.querySelectorAll('#timingPopover .tm-help, .tm-detect-row .tm-help').forEach(btn => {
         const [name, text] = TIMING_HELP[btn.dataset.help];
         const tip = document.createElement('div');
         tip.id = 'timingHelp-' + btn.dataset.help;
         tip.className = 'tm-help-tip';
         tip.setAttribute('role', 'tooltip');
         tip.textContent = text;
-        timingPopover.appendChild(tip);
+        (btn.closest('.tm-detect-row') || timingPopover).appendChild(tip);
         btn.setAttribute('aria-label', 'Help: ' + name);
         btn.setAttribute('aria-expanded', 'false');
         btn.setAttribute('aria-controls', tip.id);
@@ -5432,11 +5467,29 @@ registerProcessor('onset-detector', OnsetDetector);
             return s / w;
         };
         const prior = (b) => { const o = Math.log2(b / 120); return Math.exp(-0.5 * o * o); };
+        // Grid floor (opts.stepsPerBeat = beat / shortest gap of the Detect grid): the player never plays notes closer than one grid step,
+        // so the fastest steady pulse p (the shortest-lag autocorrelation peak that is a local max, >= BPM_DET_STEADY and >= 0.6 of the
+        // highest peak: the fraction keeps weak spurious peaks and sparse / accented patterns from raising the floor, which then only
+        // ever errs low) bounds the tempo from below: bpm >= p / stepsPerBeat (3 % tolerance). A floor above hi is ignored.
+        let minB = 0;
+        if (opts.stepsPerBeat >= 1) {
+            let top = 0;
+            for (let L = minLag + 1; L <= maxLag; L++) if (R[L] > R[L - 1] && R[L] >= R[L + 1] && R[L] > top) top = R[L];
+            for (let L = minLag + 1; L <= maxLag && top > 0; L++) {
+                if (R[L] > R[L - 1] && R[L] >= R[L + 1] && R[L] >= Math.max(0.6 * top, BPM_DET_STEADY)) {
+                    const d = R[L - 1] - 2 * R[L] + R[L + 1], lag = L + (d < 0 ? 0.5 * (R[L - 1] - R[L + 1]) / d : 0);
+                    minB = 60 * fps / lag / opts.stepsPerBeat * 0.97;
+                    break;
+                }
+            }
+            if (minB > hi) minB = 0;
+        }
         const step = 0.1, nC = Math.round((hi - lo) / step), sc = new Float64Array(nC + 1);
         let best = -1, bestV = -Infinity;
         for (let c = 0; c <= nC; c++) {
             const b = lo + c * step, s = score(b);
             sc[c] = s;
+            if (b < minB) continue;
             const v = s > 0 ? s * prior(b) : s;
             if (v > bestV) { bestV = v; best = c; }
         }
@@ -5510,7 +5563,8 @@ registerProcessor('onset-detector', OnsetDetector);
         const fps = d.step > 0 ? 1 / d.step : 0, keep = Math.ceil(BPM_DET_WIN * fps);
         const secs = fps ? Math.min(d.env.length, keep) / fps : 0;
         d.secs = secs;
-        d.est = secs >= BPM_DET_MIN ? bpmEstimate(d.env.slice(-keep), fps) : null;
+        const g = getTimingGrid(); // the finest note the player plays: a floor for the tempo (bpmEstimate stepsPerBeat)
+        d.est = secs >= BPM_DET_MIN ? bpmEstimate(d.env.slice(-keep), fps, { stepsPerBeat: g.gap > 0 ? 1 / g.gap : 1 }) : null;
         bpmDetRender();
     }
     function bpmDetRender() {

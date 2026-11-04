@@ -225,7 +225,7 @@ test.describe('Timing Check - UI', () => {
     expect(errors).toEqual([]);
   });
 
-  test('Detect row (in the settings popover) follows the rhythm menu locks', async ({ page }) => {
+  test('Detect row (in the header) follows the rhythm menu locks', async ({ page }) => {
     await page.click('#timingBtn');
     const pick = async v => {
       await page.click('#rhythmTrigger');
@@ -256,7 +256,6 @@ test.describe('Timing Check - UI', () => {
     expect(f.hint).toBe('');
     expect(await page.evaluate(() => getTimingGrid().key)).toBe('8triplet');
     await pick('2');
-    await page.click('#timingSetBtn');
     await page.click('#timingResSeg [data-v="32"]');
     await pick('shuffle'); // user chose 32: the rhythm's default (8) is used
     f = await detect();
@@ -1173,8 +1172,8 @@ test.describe('Timing Check - settings popover', () => {
     await page.click('#timingSetBtn');
     await expect(page.locator('#timingPopover')).toBeVisible();
     await expect(page.locator('#timingSetBtn')).toHaveAttribute('aria-expanded', 'true');
-    // sections in order: input, detect, latency, sensitivity
-    const order = await page.evaluate(() => ['timingDeviceSelect', 'timingResSeg', 'timingLatValue', 'timingSensValue']
+    // sections in order: input, latency, sensitivity (Detect lives in the header row now)
+    const order = await page.evaluate(() => ['timingDeviceSelect', 'timingLatValue', 'timingSensValue']
       .map(id => document.getElementById(id).getBoundingClientRect().top));
     expect(order).toEqual([...order].sort((a, b) => a - b));
     await page.click('#timingSetBtn');
@@ -1200,10 +1199,10 @@ test.describe('Timing Check - settings popover', () => {
   });
 
   test('the button label follows the detection grid, latency and sensitivity', async ({ page }) => {
-    await expect(page.locator('#timingSetBtn')).toContainText('16');
-    await expect(page.locator('#timingSetGrid')).toHaveText('16 \u00b7');
+    expect(await page.evaluate(() => getTimingGrid().name)).toBe('16');
+    await expect(page.locator('#timingSetGrid')).toHaveCount(0); // the grid is shown in the Detect row, no longer in the button
     await page.evaluate(() => { timingSetLatency(99); timingSetSensitivity(7); });
-    await expect(page.locator('#timingSetBtn')).toHaveText(/^\s*16 \u00b7\s*99 ms \u00b7 S7/);
+    await expect(page.locator('#timingSetBtn')).toHaveText(/^\s*99 ms \u00b7 S7/);
     await expect(page.locator('#timingSetVals')).toHaveText('99 ms \u00b7 S7');
     await expect(page.locator('#timingSetEst')).toBeHidden();
     await page.evaluate(() => timingResetLatency());
@@ -1211,13 +1210,13 @@ test.describe('Timing Check - settings popover', () => {
     for (const [v, text] of [['shuffle', '8 Triplet'], ['16shuffle', '16 Shuffle'], ['3', 'Triplet'], ['2', '16']]) {
       await page.click('#rhythmTrigger');
       await page.click(`#rhythmMenu [data-value="${v}"]`);
-      await expect(page.locator('#timingSetGrid')).toHaveText(text + ' \u00b7');
+      expect(await page.evaluate(() => getTimingGrid().name)).toBe(text);
     }
     await page.click('#timingSetBtn');
     for (const [r, sh, text] of [['8', false, '8'], ['8', true, '8 Shuffle'], ['4', false, '4'], ['32', false, '32'], ['16', true, '16 Shuffle']]) {
       await page.click(`#timingResSeg [data-v="${r}"]`);
       if ((await page.evaluate(() => timingShuffle)) !== sh && !(await page.locator('#timingShuffleBtn').isDisabled())) await page.click('#timingShuffleBtn');
-      await expect(page.locator('#timingSetGrid')).toHaveText(text + ' \u00b7');
+      expect(await page.evaluate(() => getTimingGrid().name)).toBe(text);
     }
   });
 
@@ -1266,16 +1265,14 @@ test.describe('Timing Check - settings popover', () => {
       const r = document.getElementById('timingPopover').getBoundingClientRect();
       return { left: r.left, right: r.right, vw: window.innerWidth, scrollW: document.documentElement.scrollWidth,
                addonRight: document.getElementById('timingAddon').getBoundingClientRect().right, cardRight: document.querySelector('.max-w-md').getBoundingClientRect().right,
-               gridShown: getComputedStyle(document.getElementById('timingSetGrid')).display !== 'none',
                detect: (() => { const rr = document.getElementById('timingResSeg').parentElement; const kids = [...rr.children].map(e => e.getBoundingClientRect());
-                 return { oneLine: kids.every(k => Math.abs(k.top - kids[0].top) < 1), right: Math.max(...kids.map(k => k.right)), popRight: r.right, sw: rr.scrollWidth, cw: rr.clientWidth }; })() };
+                 return { oneLine: kids.every(k => Math.abs(k.top - kids[0].top) < 1), right: Math.max(...kids.map(k => k.right)), popRight: document.getElementById('timingAddon').getBoundingClientRect().right, sw: rr.scrollWidth, cw: rr.clientWidth }; })() };
     });
     expect(geo.left).toBeGreaterThanOrEqual(0);
     expect(geo.right).toBeLessThanOrEqual(geo.vw);
     expect(geo.scrollW).toBeLessThanOrEqual(baseScrollW); // the popover adds no horizontal overflow
     expect(geo.addonRight).toBeLessThanOrEqual(geo.cardRight + 0.5);
-    expect(geo.gridShown).toBe(false); // the grid name drops out of the button on narrow screens
-    expect(geo.detect.oneLine).toBe(true); // Detect row (segment + Shuffle) does not wrap
+    expect(geo.detect.oneLine).toBe(true); // Detect row (segment + Shuffle, now in the header, not the popover) does not wrap
     expect(geo.detect.right).toBeLessThanOrEqual(geo.detect.popRight);
     expect(geo.detect.sw).toBeLessThanOrEqual(geo.detect.cw);
     // still usable
@@ -2655,12 +2652,16 @@ test.describe('Timing Check - click ref UI', () => {
     await expect(page.locator('#timingRefMeasureOff')).toBeDisabled();
     await expect(page.locator('#timingRefMeasureOff')).toHaveAttribute('title', 'Not needed with a click ref channel');
     await expect(page.locator('#timingRefLive')).toHaveText('Live —');
-    await expect(page.locator('#timingSetGrid')).toHaveText('16 ·');
-    await expect(page.locator('#timingSetVals')).toHaveText('Live — · S5');
+    await expect(page.locator('#timingSetGrid')).toHaveCount(0); // the grid is shown in the Detect row, no longer in the button
+    await expect(page.locator('#timingSetVals')).toHaveText('— ms · S5'); // "Live" is the small dot (data-q=sync until the lock) + title
+    await expect(page.locator('#timingSetLive')).toHaveAttribute('data-q', 'sync');
     await expect(page.locator('#timingSetEst')).toBeHidden();
     await lockRef(page);
     await expect(page.locator('#timingRefLive')).toHaveText('Live 89.0 ms');
-    await expect(page.locator('#timingSetVals')).toHaveText('Live 89 ms · S5');
+    await expect(page.locator('#timingSetVals')).toHaveText('89 ms · S5');
+    await expect(page.locator('#timingSetLive')).toBeVisible();
+    expect(await page.evaluate(() => document.getElementById('timingSetLive').dataset.q || '')).toBe('');
+    await expect(page.locator('#timingSetBtn')).toHaveAttribute('title', /live latency 89 ms/);
     // trim stepper
     await expect(page.locator('#timingRefTrimValue')).toHaveText('0 ms');
     await page.click('#timingRefTrimPlus');
@@ -2692,7 +2693,7 @@ test.describe('Timing Check - click ref UI', () => {
       const ids = ['timingRefLive', 'timingRefMeasureOff', 'timingRefTrimValue', 'timingRefTrimPlus', 'timingRefSeg'];
       return { sw: document.documentElement.scrollWidth, iw: window.innerWidth, popL: pop.left, popR: pop.right, inside: ids.map(i => [rect(i).left >= pop.left - 0.5, rect(i).right <= pop.right + 0.5]), btnR: rect('timingSetBtn').right, text: document.getElementById('timingSetVals').textContent };
     });
-    expect(r.text).toBe('Live 123 ms · S5');
+    expect(r.text).toBe('123 ms · S5');
     expect(r.sw).toBeLessThanOrEqual(r.iw);
     expect(r.popL).toBeGreaterThanOrEqual(0);
     expect(r.popR).toBeLessThanOrEqual(r.iw);
@@ -2724,7 +2725,7 @@ test.describe('Timing Check - click ref Off keeps the classic path', () => {
     const s = await page.evaluate(() => ({ ch: timingRefCh, on: timingRefOn, eff: timingEffectiveLatencyMs(), used: timingMatchLatencyMs() }));
     expect(s).toEqual({ ch: -1, on: false, eff: 99, used: 99 });
     await page.click('#timingSetBtn');
-    await expect(page.locator('#timingSetGrid')).toHaveText('16 ·');
+    await expect(page.locator('#timingSetGrid')).toHaveCount(0); // the grid is shown in the Detect row, no longer in the button
     await expect(page.locator('#timingSetVals')).toHaveText('99 ms · S5');
     await expect(page.locator('#timingLatRow')).toBeVisible();
     await expect(page.locator('#timingLoopOpen')).toBeVisible();
@@ -2760,9 +2761,7 @@ test.describe('Timing Check - marker shapes by grid role', () => {
     await page.click('#timingBtn');
     await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
     await page.evaluate(() => { timingMuteOnsets = true; timingNode.port.onmessage = null; updateBpm(60); });
-    await page.click('#timingSetBtn');
-    await page.click('#timingResSeg [data-v="32"]');
-    await page.keyboard.press('Escape');
+    await page.click('#timingResSeg [data-v="32"]'); // Detect is in the header row now: no popover needed
   });
   // one hit per role on the 32 grid: pos 0 (beat), 1/8 (finest), 1/4 (other), 1/2 (main off-beat), all exactly on time
   const injectRoles = (page) => page.evaluate(() => {
@@ -2882,7 +2881,7 @@ test.describe('Timing Check - help tips', () => {
     sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks. Clean line inputs (audio interfaces) are detected automatically and use a lower gate, so soft notes are caught; the settings button then shows "Line".'],
     quiet: ['Quiet below', 'Below this input level the status shows Quiet, and attacks quieter than this are ignored (so a noisy input does not make hits). Lower it if your signal is soft but fine.'],
   };
-  const btn = (page, k) => page.locator(`#timingPopover .tm-help[data-help="${k}"]`);
+  const btn = (page, k) => page.locator(`#timingAddon .tm-help[data-help="${k}"]`); // Detect's "?" sits in the header row, the rest in the popover
   const tip = (page, k) => page.locator('#timingHelp-' + k);
   test.beforeEach(async ({ page }) => {
     await navigateAndWait(page);
@@ -2895,6 +2894,7 @@ test.describe('Timing Check - help tips', () => {
 
   for (const k of ['input', 'click', 'detect', 'latency', 'sens', 'quiet']) {
     test(`${k}: "?" has the right label and its bubble shows the exact text`, async ({ page }) => {
+      if (k === 'detect') await page.click('#timingSetBtn'); // Detect's "?" is in the header row: close the popover that covers it
       await expect(btn(page, k)).toHaveAttribute('aria-label', 'Help: ' + TIPS[k][0]);
       await expect(btn(page, k)).toHaveAttribute('aria-expanded', 'false');
       await expect(btn(page, k)).toHaveAttribute('aria-controls', 'timingHelp-' + k);
@@ -2904,10 +2904,11 @@ test.describe('Timing Check - help tips', () => {
       await expect(tip(page, k)).toHaveAttribute('role', 'tooltip');
       await expect(tip(page, k)).toHaveText(TIPS[k][1]);
       await expect(btn(page, k)).toHaveAttribute('aria-expanded', 'true');
-      const inside = await page.evaluate((id) => {
-        const t = document.getElementById(id).getBoundingClientRect(), p = document.getElementById('timingPopover').getBoundingClientRect();
+      const inside = await page.evaluate(([id, k]) => {
+        // the Detect "?" lives in the header row (its bubble stays inside the add-on); the others in the popover
+        const t = document.getElementById(id).getBoundingClientRect(), p = document.getElementById(k === 'detect' ? 'timingAddon' : 'timingPopover').getBoundingClientRect();
         return t.left >= p.left && t.right <= p.right && t.right <= window.innerWidth && t.left >= 0;
-      }, 'timingHelp-' + k);
+      }, ['timingHelp-' + k, k]);
       expect(inside).toBe(true);
     });
   }
@@ -2939,21 +2940,21 @@ test.describe('Timing Check - help tips', () => {
   });
 
   test('pressing "?" again, Escape and an outside click each close the bubble; the popover stays open', async ({ page }) => {
-    await btn(page, 'detect').click();
-    await expect(tip(page, 'detect')).toBeVisible();
-    await btn(page, 'detect').click();
-    await expect(tip(page, 'detect')).toBeHidden();
+    await btn(page, 'sens').click();
+    await expect(tip(page, 'sens')).toBeVisible();
+    await btn(page, 'sens').click();
+    await expect(tip(page, 'sens')).toBeHidden();
     await expect(page.locator('#timingPopover')).toBeVisible();
-    await btn(page, 'detect').click();
-    await tip(page, 'detect').click(); // tapping the bubble dismisses it; the popover stays open
-    await expect(tip(page, 'detect')).toBeHidden();
+    await btn(page, 'sens').click();
+    await tip(page, 'sens').click(); // tapping the bubble dismisses it; the popover stays open
+    await expect(tip(page, 'sens')).toBeHidden();
     await expect(page.locator('#timingPopover')).toBeVisible();
-    await btn(page, 'detect').click();
-    await expect(tip(page, 'detect')).toBeVisible();
+    await btn(page, 'sens').click();
+    await expect(tip(page, 'sens')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(tip(page, 'detect')).toBeHidden();
+    await expect(tip(page, 'sens')).toBeHidden();
     await expect(page.locator('#timingPopover')).toBeVisible();
-    await expect(btn(page, 'detect')).toBeFocused();
+    await expect(btn(page, 'sens')).toBeFocused();
     await btn(page, 'quiet').click();
     await page.click('#timingDeviceSelect'); // outside the bubble, inside the popover
     await expect(tip(page, 'quiet')).toBeHidden();
@@ -3022,7 +3023,7 @@ test.describe('Timing Check - help tips layout', () => {
       await page.click('#timingSetBtn');
       // show the optional "Re-measure" pill and the "+N ms auto" note too: the "?" stays right-most
       await page.evaluate(() => { document.getElementById('timingLatRemeasure').hidden = false; const c = document.getElementById('timingLatComp'); c.hidden = false; c.textContent = '+20 ms auto (1 glitch)'; });
-      for (const r of await rightMost(page, ['input', 'click', 'detect', 'latency', 'sens', 'quiet'])) {
+      for (const r of await rightMost(page, ['input', 'click', 'latency', 'sens', 'quiet'])) {
         expect(r.dRight, r.k + ' right edge').toBeLessThanOrEqual(1);
         expect(r.sameLine, r.k + ' same line').toBe(true);
       }
@@ -3815,5 +3816,99 @@ test.describe('Timing Check - quiet gate on onsets (page)', () => {
     expect(r.p.minGateDbfs).toBeCloseTo(-90, 6);
     expect(r.p.quietGateDb).toBe(-70);
     expect(r.p.cleanTuning).toBe(true);
+  });
+});
+
+// Portrait header layout: nothing overflows the add-on at any phone width ---------------------
+
+test.describe('Timing Check - portrait header layout', () => {
+  for (const width of [320, 360, 375, 414]) {
+    test(`no element extends past the add-on's right edge at ${width} px (long summary, badges, Locked hint)`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await navigateAndWait(page);
+      await page.click('#timingBtn');
+      await expect.poll(() => page.evaluate(() => !!timingStream && !!timingNode)).toBe(true);
+      await page.evaluate(() => {
+        timingNode.port.onmessage = null;
+        timingClean = true; timingRefOn = true; timingRef.confirmed = false; timingLatencyEst = false;
+        timingSetSensitivity(10);
+      });
+      await page.click('#rhythmTrigger');
+      await page.click('#rhythmMenu [data-value="3"]'); // tuplet: "Locked to Triplet" hint
+      await expect(page.locator('#timingDetectHint')).toBeVisible();
+      await expect(page.locator('#timingSetVals')).toContainText('S10');
+      await page.evaluate(() => { // badges last: a re-render would hide them again
+        document.getElementById('timingSetRemeasure').hidden = false;
+        document.getElementById('timingSetBusy').hidden = false;
+        document.getElementById('timingSetEst').hidden = false;
+      });
+      const r = await page.evaluate(() => {
+        const addon = document.getElementById('timingAddon'), ar = addon.getBoundingClientRect();
+        const bad = [];
+        addon.querySelectorAll('*').forEach(e => {
+          if (e.closest('#timingPopover') || e.closest('[hidden]') || e.classList.contains('tm-help-tip')) return;
+          const b = e.getBoundingClientRect();
+          if (b.width === 0 || b.height === 0) return;
+          if (getComputedStyle(e).position === 'absolute' && e.closest('.tm-chart')) return; // chart internals are clipped by the chart
+          if (b.right > ar.right + 0.5 || b.left < ar.left - 0.5) bad.push((e.id || e.className || e.tagName) + ' ' + Math.round(b.left) + '..' + Math.round(b.right) + ' vs ' + Math.round(ar.left) + '..' + Math.round(ar.right));
+        });
+        const btn = document.getElementById('timingSetBtn');
+        return { bad, sw: document.documentElement.scrollWidth, vw: window.innerWidth, btnClipped: btn.scrollWidth > btn.clientWidth, title: btn.title };
+      });
+      expect(r.bad).toEqual([]);
+      expect(r.sw).toBeLessThanOrEqual(r.vw); // no horizontal page scroll at all (the top Timer..Beats row fits at 320 too)
+      expect(r.title).toContain('syncing'); // the Live word is in the title; the button shows a dot
+      if (process.env.WM_SHOTS) await page.locator('.max-w-md').first().screenshot({ path: `tmp/layout/portrait-${width}.png` });
+    });
+  }
+
+  for (const width of [320, 375]) {
+    test(`at ${width} px the Detect "?" stays on Shuffle's line and the Locked hint wraps as one unit; the usual summary is not truncated`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await navigateAndWait(page);
+      await page.click('#timingBtn');
+      await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+      await page.evaluate(() => { timingNode.port.onmessage = null; timingClean = true; timingSetLatency(102); });
+      await page.click('#rhythmTrigger');
+      await page.click('#rhythmMenu [data-value="3"]');
+      await expect(page.locator('#timingDetectHint')).toBeVisible();
+      const r = await page.evaluate(() => {
+        const sh = document.getElementById('timingShuffleBtn').getBoundingClientRect(), q = document.querySelector('.tm-detect-row .tm-help').getBoundingClientRect(), h = document.getElementById('timingDetectHint').getBoundingClientRect();
+        const v = document.getElementById('timingSetVals');
+        return { qSame: Math.abs((q.top + q.bottom) / 2 - (sh.top + sh.bottom) / 2) < 3, qRight: q.left >= sh.right - 1, hintBelow: h.top >= sh.bottom - 1, text: v.textContent, clipped: v.scrollWidth > v.clientWidth };
+      });
+      expect(r.qSame).toBe(true);
+      expect(r.qRight).toBe(true);
+      expect(r.hintBelow).toBe(true);
+      expect(r.text).toBe('102 ms · S5 · Line');
+      expect(r.clipped).toBe(false);
+    });
+  }
+
+  test('the Detect row, practice icon and meter sit in order below the view row', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    const y = await page.evaluate(() => ['timingViewSeg', 'timingResSeg', 'practiceBtn', 'timingStatus'].map(id => document.getElementById(id).getBoundingClientRect().top));
+    expect(y[0]).toBeLessThan(y[1]);
+    expect(y[1]).toBeLessThan(y[2]);
+    expect(Math.abs(y[3] - y[2])).toBeLessThan(20); // same row as the meter
+    await expect(page.locator('#practiceBtn')).toHaveText('');
+    await expect(page.locator('#practiceBtn')).toHaveAttribute('aria-label', 'Practice mode');
+  });
+
+  test('practice mode hides the practice icon and returns the Detect section to the header row', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 420 });
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream)).toBe(true);
+    await page.click('#practiceBtn');
+    await expect(page.locator('#prFoot #practiceBtn')).toHaveCount(0);
+    await expect(page.locator('#practiceBtn')).toBeHidden();
+    if (process.env.WM_SHOTS) await page.screenshot({ path: 'tmp/layout/landscape-practice.png' });
+    await page.click('#prExit');
+    expect(await page.evaluate(() => !!timingResSeg.closest('.tm-detect-row'))).toBe(true);
+    await expect(page.locator('#practiceBtn')).toBeVisible();
   });
 });

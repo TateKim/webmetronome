@@ -362,15 +362,15 @@ test.describe('Practice mode - Grid in the rhythm overlay', () => {
   test.beforeEach(async ({ page }) => { await page.setViewportSize({ width: 1200, height: 700 }); await navigateAndWait(page); });
   const where = (page) => page.evaluate(() => {
     const sec = timingResSeg.closest('.tm-sec');
-    return { inOv: !!sec.closest('#prRhythmOv'), inPop: !!sec.closest('#timingPopover'), idx: [...sec.parentNode.children].indexOf(sec), label: sec.querySelector('.tm-label').textContent };
+    return { inOv: !!sec.closest('#prRhythmOv'), inRow: !!sec.closest('.tm-detect-row'), idx: [...sec.parentNode.children].indexOf(sec), label: sec.querySelector('.tm-label').textContent };
   });
 
-  test('DETECT moves into the rhythm overlay as GRID, works, and returns to the popover at its index', async ({ page }) => {
+  test('DETECT moves into the rhythm overlay as GRID, works, and returns to the header row at its index', async ({ page }) => {
     await timingOn(page);
     const orig = await where(page);
-    expect(orig).toMatchObject({ inPop: true, inOv: false, label: 'Detect' });
+    expect(orig).toMatchObject({ inRow: true, inOv: false, label: 'Detect' });
     await page.click('#practiceBtn');
-    expect(await where(page)).toMatchObject({ inOv: true, inPop: false, label: 'Grid' });
+    expect(await where(page)).toMatchObject({ inOv: true, inRow: false, label: 'Grid' });
     await page.click('#prChip');
     await expect(page.locator('#prRhythmOv #timingResSeg')).toBeVisible();
     await expect(page.locator('#prRhythmOv #timingShuffleBtn')).toBeVisible();
