@@ -382,6 +382,11 @@
         .tm-timeline .tm-side { left: 8px; }
         .tm-timeline .tm-side.t { top: 5px; } .tm-timeline .tm-side.b { bottom: 5px; } .tm-timeline .tm-scale { top: 19px; }
         .tm-track { position: absolute; inset: 0; will-change: transform; }
+        .tm-timeline { touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; }
+        .tm-timeline.grabbing { cursor: grabbing; }
+        .tm-timeline:focus-visible { outline: 2px solid #6366f1; outline-offset: -2px; }
+        .tm-nowbtn { position: absolute; right: 6px; bottom: 6px; z-index: 6; border: 0; border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 0.7rem; font-weight: 700; color: #fff; background: #6366f1; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); cursor: pointer; }
+        .tm-nowbtn[hidden] { display: none; }
         .tm-now { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; background: #6366f1; z-index: 4; will-change: transform; }
         .tm-now::after { content: "NOW"; position: absolute; top: 4px; right: 5px; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.08em; color: #6366f1; }
 
@@ -997,12 +1002,13 @@
                         <button id="bpmDetApply" type="button" class="tm-cal-btn" title="Set the metronome to this tempo" disabled>Set</button>
                     </span>
                 </div>
-                <div id="timingTimeline" class="tm-chart tm-timeline">
+                <div id="timingTimeline" class="tm-chart tm-timeline" tabindex="0" role="group" aria-label="Timing timeline. Drag or use the left and right arrow keys to scroll back, pinch, Ctrl and mouse wheel, or plus and minus keys to zoom, End to return to now.">
                     <div class="tm-band"></div><div class="tm-mid"></div>
                     <span class="tm-side t">EARLY</span><span class="tm-side b">LATE</span><span class="tm-side tm-scale">±50 ms</span>
                     <div id="timingTrack" class="tm-track"></div>
                     <div id="timingNow" class="tm-now"></div>
                     <div id="timingNoInputB" class="tm-noinput"><span>No input</span></div>
+                    <button id="timingNowBtn" type="button" class="tm-nowbtn" hidden>Now</button>
                 </div>
                 <div class="tm-summary">
                     <div class="tm-sm"><div id="timingAvgLabel" class="k">Avg · last 2 bars</div><div id="timingAvg" class="v">–</div></div>
@@ -2481,7 +2487,7 @@
     let timingClean = false;              // clean line input (audio interface): worklet uses gate -90 dBFS (see OnsetCore); stored per device
     let timingNoiseDb = null;             // measured noise floor (max band floor, dBFS) from the worklet, diagnostics
     let timingCleanHinted = false;        // this stream started with the stored hint
-    let timingBeats = [];                 // ring buffer (64) of { time, beatInMeasure, n, dur }
+    let timingBeats = [];                 // time-pruned log (last TIMING_HISTORY_BARS+1 bars) of { time, beatInMeasure, n, dur }
     let timingHits = [];                  // accepted hits log
     let timingRejects = [];               // off-grid (rejected) hits: { t, beatInMeasure, frac, peakDb, cbg, cpos, offsetMs }
     let timingLastHitTime = 0;            // context time of last accepted hit
@@ -2520,7 +2526,9 @@
     let timingLastSummaryTs = 0;
     let timingLastPruneTs = 0;
 
-    const TIMING_BEAT_BUFFER = 64;
+    const TIMING_HISTORY_BARS = 20;       // Timeline history kept (beats, hits, rejects, waveform) and the maximum zoom-out, in bars
+    const TIMING_BEAT_CAP = 2048;         // hard cap of the beat log (20 bars x any meter at any tempo stays far below it)
+    const TIMING_TL_MIN_BARS = 1;
     const TIMING_RANGES = [50, 100, 200]; // selectable +/- ms mapped to the top/bottom edge of both views
     let timingRangeMs = 50;               // current range (persisted as wm.timing.range)
     const TIMING_GOOD_MS = 10;            // +/- ms of the green "good" band (quality threshold; independent of the range)
@@ -2594,6 +2602,7 @@
     const timingTimeline = document.getElementById('timingTimeline');
     const timingTrack = document.getElementById('timingTrack');
     const timingNow = document.getElementById('timingNow');
+    const timingNowBtn = document.getElementById('timingNowBtn');
     const timingNoInputB = document.getElementById('timingNoInputB');
     const timingNoInputC = document.getElementById('timingNoInputC');
     const timingAvgLabel = document.getElementById('timingAvgLabel');
@@ -3991,7 +4000,11 @@ registerProcessor('onset-detector', OnsetDetector);
         if (prev) prev.dur = time - prev.time;
         timingBeats.push({ time, beatInMeasure, n: timingBeatSeq++, dur: 0 });
         if (timingDbg) timingDbg.beats.push({ time, beatInMeasure, n: timingBeatSeq - 1, bpm, subdivision, grid: getTimingGrid().key });
-        if (timingBeats.length > TIMING_BEAT_BUFFER) timingBeats.shift();
+        const cut = time - (TIMING_HISTORY_BARS + 1) * timingBarDur(); // time-based: the history is N bars at the current meter/tempo
+        let k = 0;
+        while (k < timingBeats.length - 1 && timingBeats[k].time < cut) k++;
+        if (k) timingBeats.splice(0, k);
+        if (timingBeats.length > TIMING_BEAT_CAP) timingBeats.splice(0, timingBeats.length - TIMING_BEAT_CAP);
     }
 
     // --- Session hooks (togglePlay) ---
@@ -4009,6 +4022,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingSetNoInput(false);
         practice.sess = { start: now, end: 0, n: 0, sum: 0, sumSq: 0 };
         practice.wave.chunks = [];
+        timingTl.live = true; timingTlStopAnim(); // a new take follows NOW again
         timingTlReset(now);
         timingCClearMarks();
         timingUpdateSummary();
@@ -4286,8 +4300,25 @@ registerProcessor('onset-detector', OnsetDetector);
         timingHelpClose();
         timingPopover.hidden = true;
         timingPopover.style.right = '';
+        ['left', 'top', 'right'].forEach(k => timingPopover.style.removeProperty(k));
         timingSetBtn.setAttribute('aria-expanded', 'false');
     }
+    // Practice mode: the popover is fixed; put it just left of the More overlay, top aligned with the button, kept inside the viewport.
+    // No room on the left: below the button (clamped). The popover keeps max-height + scroll for short screens.
+    function timingPlacePracticePopover() {
+        const pop = timingPopover, M = 8;
+        const b = timingSetBtn.getBoundingClientRect(), ov = timingSetBtn.closest('.pr-ov'), o = ov ? ov.getBoundingClientRect() : b;
+        ['left', 'top', 'right'].forEach(k => pop.style.removeProperty(k));
+        pop.style.setProperty('right', 'auto', 'important');
+        const w = pop.offsetWidth, h = pop.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+        let x = o.left - M - w, y = b.top;
+        if (x < M) { x = b.left; y = b.bottom + 4; } // not enough room on the left: under the button
+        x = Math.max(M, Math.min(x, vw - M - w));
+        y = Math.max(M, Math.min(y, vh - M - Math.min(h, vh - 2 * M)));
+        pop.style.setProperty('left', x + 'px', 'important');
+        pop.style.setProperty('top', y + 'px', 'important');
+    }
+    window.addEventListener('resize', () => { if (practice.on && timingPopoverOpen()) timingPlacePracticePopover(); });
     function timingOpenPopover() {
         // follow the existing menu pattern: opening this closes the other app menus
         rhythmMenu.classList.add('hidden');
@@ -4296,6 +4327,7 @@ registerProcessor('onset-detector', OnsetDetector);
         closeAccelOverlay();
         timingPopover.hidden = false;
         timingSetBtn.setAttribute('aria-expanded', 'true');
+        if (practice.on) { timingPlacePracticePopover(); return; }
         timingPopover.style.right = '0px';
         const r = timingPopover.getBoundingClientRect();
         let dx = 0;
@@ -4722,16 +4754,22 @@ registerProcessor('onset-detector', OnsetDetector);
     // --- Summary (visible window only) ---
     function timingUpdateSummary() {
         practiceTick();
-        const bars = timingView === 'timeline' ? timingTlBars() : 1;
+        const tlView = timingView === 'timeline';
+        const bars = tlView ? timingTlBars() : 1;
         const barDur = timingBarDur();
         const now = timingNowSec();
-        const keepFrom = now - Math.max(4, bars + 1) * barDur;
+        const keepFrom = now - TIMING_HISTORY_BARS * barDur;
         while (timingHits.length && timingHits[0].t < keepFrom) timingHits.shift();
         while (timingRejects.length && timingRejects[0].t < keepFrom) timingRejects.shift();
-        const from = now - bars * barDur;
+        // window: the visible Timeline span (left edge .. right edge) while scrolled back, else the last N bars up to NOW
+        const scrolled = tlView && !timingTl.live;
+        let from = now - bars * barDur, to = Infinity;
+        if (scrolled) { from = timingTl.viewT - timingTl.playX / timingTl.pps; to = timingTl.viewT + (timingTl.w - timingTl.playX) / timingTl.pps; }
         const vals = [];
-        for (let i = 0; i < timingHits.length; i++) if (timingHits[i].t >= from) vals.push(timingHits[i].offsetMs);
-        timingSetText(timingAvgLabel, practice.on ? 'Avg' : 'Avg · last ' + bars + ' bar' + (bars > 1 ? 's' : ''));
+        for (let i = 0; i < timingHits.length; i++) if (timingHits[i].t >= from && timingHits[i].t <= to) vals.push(timingHits[i].offsetMs);
+        const nb = Math.max(1, Math.round(bars));
+        timingSetText(timingAvgLabel, (practice.on ? 'Avg' : 'Avg · last ' + nb + ' bar' + (nb > 1 ? 's' : ''))); 
+        if (scrolled) timingSetText(timingAvgLabel, 'Avg · visible');
         timingSetText(timingHitCountEl, vals.length ? String(vals.length) : '–');
         if (!vals.length) {
             timingSetText(timingAvgEl, '–'); timingSetQ(timingAvgEl, '');
@@ -4750,7 +4788,8 @@ registerProcessor('onset-detector', OnsetDetector);
     // ---------------------------------------------------------------
     // Timeline view (scrolling 2 bars, fixed NOW line)
     // ---------------------------------------------------------------
-    const timingTl = { w: 380, playX: 342, pps: 1, h: TIMING_TL_H, half: TIMING_TL_HALF, t0: 0, items: [], pred: [], drawnN: -1, predDirty: true, layoutBpm: 0, layoutBeats: 0, lastLastN: -1 };
+    const timingTl = { w: 380, playX: 342, pps: 1, h: TIMING_TL_H, half: TIMING_TL_HALF, t0: 0, items: [], pred: [], drawnN: -1, predDirty: true, layoutBpm: 0, layoutBeats: 0, lastLastN: -1,
+        barsP: 2, live: true, viewT: 0, nowShown: false, anim: 0, pending: 0, pendLayout: false, saveTimer: 0 };
 
     // ms -> px from the centre line for a view whose edge (half px) is +/- timingRangeMs (shared by both views, the band and the guides)
     function timingRangeY(ms, half) { return timingClamp(ms, timingRangeMs) * half / timingRangeMs; }
@@ -4771,7 +4810,27 @@ registerProcessor('onset-detector', OnsetDetector);
     }
     function timingTlPlace(it) { it.el.style.transform = 'translate(' + ((it.t - timingTl.t0) * timingTl.pps).toFixed(2) + 'px, ' + it.y + 'px)'; }
 
-    function timingTlBars() { return practice.on ? practice.bars : 2; }
+    // Zoom (visible span in bars): portrait keeps its own value (timingTl.barsP), landscape practice mode uses practice.bars (2/4/8 presets + free zoom)
+    function timingTlBars() { return practice.on ? practice.bars : timingTl.barsP; }
+    function timingTlPpsFor(bars) { return timingTl.playX / (bars * timingBarDur()); }
+    // Oldest time the view may show at its left edge: the retained history, never past NOW
+    function timingTlMinViewT(now) {
+        const tl = timingTl, hist = now - TIMING_HISTORY_BARS * timingBarDur();
+        const oldest = Math.max(hist, timingBeats.length ? timingBeats[0].time : now);
+        return Math.min(now, oldest + tl.playX / tl.pps);
+    }
+    // Position the track (and the live NOW line) for the view time. The view follows `now` while live, else it stays at viewT.
+    function timingTlRender(now) {
+        const tl = timingTl;
+        if (!tl.live) {
+            tl.viewT = Math.max(timingTlMinViewT(now), Math.min(tl.viewT, now));
+            if (tl.viewT >= now) tl.live = true;
+        }
+        const vt = tl.live ? now : tl.viewT;
+        timingTrack.style.transform = 'translate3d(' + (tl.playX - (vt - tl.t0) * tl.pps).toFixed(2) + 'px,0,0)';
+        timingNow.style.transform = 'translateX(' + (tl.playX + (now - vt) * tl.pps).toFixed(2) + 'px)'; // slides off to the right while scrolled back
+        if (tl.nowShown === tl.live) { tl.nowShown = !tl.live; timingNowBtn.hidden = tl.live; }
+    }
     function timingTlLayout() {
         const tl = timingTl;
         const w = timingTimeline.clientWidth;
@@ -4785,10 +4844,10 @@ registerProcessor('onset-detector', OnsetDetector);
         if (resized) timingApplyRange(); // band, guides, ms labels and markers follow the new height
         tl.layoutBpm = bpm;
         tl.layoutBeats = beatsPerMeasure;
-        timingNow.style.transform = 'translateX(' + tl.playX + 'px)';
         tl.items.forEach(timingTlPlace);
         tl.pred.forEach(timingTlPlace);
         practiceWaveRedraw(false);
+        timingTlRender(timingNowSec());
     }
     // Recompute pixels-per-second after a BPM change (hook in updateBpm)
     function timingRelayoutTimeline() {
@@ -4883,24 +4942,24 @@ registerProcessor('onset-detector', OnsetDetector);
             tl.predDirty = false;
             tl.lastLastN = last.n;
         }
-        const shift = tl.playX - (now - tl.t0) * tl.pps;
-        timingTrack.style.transform = 'translate3d(' + shift.toFixed(2) + 'px,0,0)';
+        timingTlRender(now);
     }
+    // History is kept by time (the last TIMING_HISTORY_BARS bars): per-frame work stays O(new items); old items go in this 500 ms sweep
     function timingTlPrune(now) {
         const tl = timingTl;
-        const shift = tl.playX - (now - tl.t0) * tl.pps;
+        const cut = now - (TIMING_HISTORY_BARS + 0.1) * timingBarDur();
         const keep = [];
         tl.items.forEach(it => {
-            if ((it.t - tl.t0) * tl.pps + shift < -20) it.el.remove(); else keep.push(it);
+            if (it.t < cut) it.el.remove(); else keep.push(it);
         });
         tl.items = keep;
-        practiceWavePrune(shift);
+        practiceWavePrune(cut);
     }
     // Rebuild from the beat ring buffer and hit log (view switch, detect grid change)
     function timingTlRebuild() {
         const now = timingNowSec();
         timingTlReset(timingTl.t0);
-        const from = now - (timingTlBars() + 0.2) * timingBarDur();
+        const from = now - (TIMING_HISTORY_BARS + 0.1) * timingBarDur();
         for (let i = 0; i < timingBeats.length; i++) {
             const b = timingBeats[i];
             if (!(b.dur > 0)) break;
@@ -4909,9 +4968,159 @@ registerProcessor('onset-detector', OnsetDetector);
         }
         timingHits.forEach(h => { if (h.t >= from) timingTlAddDot(h); });
         timingRejects.forEach(r => { if (r.t >= from) timingTlAddRing(r); });
-        const shift = timingTl.playX - (now - timingTl.t0) * timingTl.pps;
-        timingTrack.style.transform = 'translate3d(' + shift.toFixed(2) + 'px,0,0)';
+        timingTlRender(now);
     }
+
+    // --- Timeline scroll and zoom ---
+    // State: timingTl.live (view follows NOW) / timingTl.viewT (context time under the NOW anchor x while scrolled back);
+    // zoom = timingTlBars() (portrait: timingTl.barsP, practice: practice.bars). All DOM items of the retained history exist and move
+    // only with the track transform, so scrolling is one transform write; zoom re-places the items once per animation frame.
+    const TIMING_TL_SNAP_PX = 4, TIMING_TL_DRAG_PX = 5;
+    function timingTlSchedule(layout) {
+        const tl = timingTl;
+        if (layout) tl.pendLayout = true;
+        if (tl.pending) return;
+        tl.pending = requestAnimationFrame(timingTlFlush);
+    }
+    function timingTlFlush() {
+        const tl = timingTl;
+        if (tl.pending) { cancelAnimationFrame(tl.pending); tl.pending = 0; }
+        if (!timingOn || timingView !== 'timeline') { tl.pendLayout = false; return; }
+        if (tl.pendLayout) { tl.pendLayout = false; timingTlLayout(); tl.predDirty = true; }
+        timingTlRender(timingNowSec());
+        timingUpdateSummary();
+    }
+    function timingTlSyncPresets() {
+        prEl('prBarsSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Math.abs(parseFloat(b.dataset.v) - practice.bars) < 0.005)));
+    }
+    // Set the zoom (visible bars, clamped 1..20). anchorX = x inside the timeline kept still (stopped or scrolled back); while live and playing NOW stays put.
+    // persist: 'now' | 'later' (debounced) | false. sync: re-layout immediately instead of on the next frame.
+    function timingTlSetBars(n, anchorX, persist, sync) {
+        const tl = timingTl;
+        n = Math.max(TIMING_TL_MIN_BARS, Math.min(TIMING_HISTORY_BARS, n));
+        const old = timingTlBars();
+        if (!(Math.abs(n - old) > 1e-6)) return;
+        const now = timingNowSec();
+        const ax = (anchorX == null || (isPlaying && tl.live)) ? tl.playX : Math.max(0, Math.min(tl.w, anchorX));
+        const oldPps = timingTlPpsFor(old), newPps = timingTlPpsFor(n);
+        const vt = tl.live ? now : tl.viewT;
+        const tA = vt - (tl.playX - ax) / oldPps;
+        let nvt = tA + (tl.playX - ax) / newPps;
+        if (practice.on) practice.bars = n; else tl.barsP = n;
+        tl.pps = newPps; // the clamp below needs the new scale; the items follow in the layout
+        nvt = Math.max(timingTlMinViewT(now), Math.min(nvt, now));
+        if (nvt >= now - TIMING_TL_SNAP_PX / newPps) tl.live = true; else { tl.live = false; tl.viewT = nvt; }
+        if (practice.on) timingTlSyncPresets();
+        const key = practice.on ? 'wm.practice.bars' : 'wm.timing.tlbars';
+        clearTimeout(tl.saveTimer);
+        if (persist === 'now') timingLsSet(key, +n.toFixed(3));
+        else if (persist === 'later') tl.saveTimer = setTimeout(() => timingLsSet(key, +timingTlBars().toFixed(3)), 400);
+        if (sync) { tl.pendLayout = true; timingTlFlush(); } else timingTlSchedule(true);
+    }
+    // Scroll so that vt is under the NOW anchor x. Clamped to the retained history; within a few px of the live edge it snaps back to live.
+    function timingTlScrollTo(vt) {
+        const tl = timingTl, now = timingNowSec();
+        vt = Math.max(timingTlMinViewT(now), Math.min(vt, now));
+        if (vt >= now - TIMING_TL_SNAP_PX / tl.pps) tl.live = true; else { tl.live = false; tl.viewT = vt; }
+        timingTlRender(now);
+        timingTlSchedule(false);
+    }
+    function timingTlStopAnim() { if (timingTl.anim) { cancelAnimationFrame(timingTl.anim); timingTl.anim = 0; } }
+    // Back to following NOW (animated unless reduced motion / animate === false)
+    function timingTlGoLive(animate) {
+        const tl = timingTl;
+        timingTlStopAnim();
+        if (tl.live) return;
+        if (animate === false || timingReduceMotion) { tl.live = true; timingTlRender(timingNowSec()); timingTlSchedule(false); return; }
+        const t0 = performance.now(), from = tl.viewT;
+        const step = (ts) => {
+            const k = Math.min(1, (ts - t0) / 200), e = 1 - Math.pow(1 - k, 3), now = timingNowSec();
+            tl.anim = 0;
+            if (k >= 1 || !timingOn) { tl.live = true; timingTlRender(now); timingTlSchedule(false); return; }
+            tl.viewT = from + (now - from) * e;
+            timingTlRender(now);
+            tl.anim = requestAnimationFrame(step);
+        };
+        tl.anim = requestAnimationFrame(step);
+    }
+    timingNowBtn.addEventListener('click', () => timingTlGoLive(true));
+    timingNowBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+
+    (function timingTlGestures() {
+        const ptrs = new Map();
+        let drag = null, pinch = null;
+        const localX = (cx) => cx - timingTimeline.getBoundingClientRect().left;
+        const active = () => timingOn && timingView === 'timeline';
+        timingTimeline.addEventListener('pointerdown', (e) => {
+            if (!active() || e.target.closest('.tm-nowbtn') || (e.pointerType === 'mouse' && e.button !== 0)) return;
+            timingTlStopAnim();
+            ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            if (ptrs.size === 1) drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, vt0: 0, on: false };
+            else if (ptrs.size === 2) {
+                const [a, b] = [...ptrs.values()];
+                pinch = { d0: Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), bars0: timingTlBars() };
+                drag = null;
+                timingTimeline.classList.remove('grabbing');
+            }
+        });
+        timingTimeline.addEventListener('pointermove', (e) => {
+            const p = ptrs.get(e.pointerId);
+            if (!p) return;
+            p.x = e.clientX; p.y = e.clientY;
+            if (pinch && ptrs.size >= 2) {
+                const [a, b] = [...ptrs.values()];
+                const d = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
+                timingTlSetBars(pinch.bars0 * pinch.d0 / d, localX((a.x + b.x) / 2), 'later', false);
+                return;
+            }
+            if (!drag || drag.id !== e.pointerId) return;
+            const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+            if (!drag.on) {
+                if (Math.abs(dx) < TIMING_TL_DRAG_PX || Math.abs(dx) < Math.abs(dy)) return;
+                drag.on = true;
+                drag.x0 = e.clientX; // the drag starts from here: no jump
+                drag.vt0 = timingTl.live ? timingNowSec() : timingTl.viewT;
+                try { timingTimeline.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+                timingTimeline.classList.add('grabbing');
+                return;
+            }
+            timingTlScrollTo(drag.vt0 - (e.clientX - drag.x0) / timingTl.pps);
+        });
+        const end = (e) => {
+            ptrs.delete(e.pointerId);
+            if (ptrs.size < 2) pinch = null;
+            if (drag && drag.id === e.pointerId) drag = null;
+            if (ptrs.size === 0) timingTimeline.classList.remove('grabbing');
+        };
+        timingTimeline.addEventListener('pointerup', end);
+        timingTimeline.addEventListener('pointercancel', end);
+        timingTimeline.addEventListener('wheel', (e) => {
+            if (!active()) return;
+            const k = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+            if (e.ctrlKey || e.metaKey) { // Ctrl + wheel, and trackpad pinch (arrives as ctrl + wheel)
+                e.preventDefault();
+                timingTlSetBars(timingTlBars() * Math.exp(e.deltaY * k * 0.0025), localX(e.clientX), 'later', false);
+            } else if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) { // horizontal wheel / shift + wheel / trackpad swipe
+                e.preventDefault();
+                timingTlStopAnim();
+                const d = (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * k;
+                timingTlScrollTo((timingTl.live ? timingNowSec() : timingTl.viewT) + d / timingTl.pps);
+            }
+        }, { passive: false });
+        timingTimeline.addEventListener('keydown', (e) => {
+            if (!active() || e.ctrlKey || e.altKey || e.metaKey) return;
+            const tl = timingTl, step = e.shiftKey ? timingBarDur() : 60 / bpm;
+            const vt = tl.live ? timingNowSec() : tl.viewT;
+            timingTlStopAnim();
+            if (e.key === 'ArrowLeft') timingTlScrollTo(vt - step);
+            else if (e.key === 'ArrowRight') timingTlScrollTo(vt + step);
+            else if (e.key === '+' || e.key === '=') timingTlSetBars(timingTlBars() / 1.25, null, 'now', false);
+            else if (e.key === '-' || e.key === '_') timingTlSetBars(timingTlBars() * 1.25, null, 'now', false);
+            else if (e.key === 'End') timingTlGoLive(true);
+            else return;
+            e.preventDefault(); e.stopPropagation(); // the metronome's own Arrow / +/- shortcuts must not fire
+        });
+    })();
 
     // ---------------------------------------------------------------
     // On beats view (1 bar under the beat circles, sweeping position bar)
@@ -5269,6 +5478,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingBeats = []; timingHits = []; timingRejects = [];
         timingTrack.textContent = '';
         timingTl.items = []; timingTl.pred = [];
+        timingTl.live = true; timingTlStopAnim();
         timingCClearMarks();
         timingLevelDb = -120;
         timingHotUntil = 0; timingHotShown = false; timingHotEl.classList.remove('on'); timingMeterFill.classList.remove('hot');
@@ -5679,15 +5889,16 @@ registerProcessor('onset-detector', OnsetDetector);
     prEl('prExit').addEventListener('click', () => practiceSetMode(false));
 
     // Bars visible (2/4/8)
+    // The 2 / 4 / 8 buttons are zoom presets of the Timeline (1..20 bars, free zoom by pinch / Ctrl+wheel); lit only while the zoom equals one
     function practiceSetBars(n, persist) {
-        if (n !== 2 && n !== 4 && n !== 8) return;
+        if (typeof n !== 'number' || !(n >= TIMING_TL_MIN_BARS && n <= TIMING_HISTORY_BARS)) return;
+        if (practice.on && timingOn) { timingTlSetBars(n, null, persist === false ? false : 'now', true); return; }
         practice.bars = n;
         if (persist !== false) timingLsSet('wm.practice.bars', n);
-        prEl('prBarsSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(parseInt(b.dataset.v, 10) === n)));
-        if (practice.on && timingOn) { timingTlLayout(); timingTl.predDirty = true; timingTlRebuild(); timingUpdateSummary(); }
+        timingTlSyncPresets();
     }
     prEl('prBarsSeg').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) practiceSetBars(parseInt(b.dataset.v, 10)); });
-    (function () { const n = parseInt(timingLsGet('wm.practice.bars'), 10); if (n === 2 || n === 4 || n === 8) practiceSetBars(n); })();
+    (function () { const n = parseFloat(timingLsGet('wm.practice.bars')); if (n >= TIMING_TL_MIN_BARS && n <= TIMING_HISTORY_BARS) practiceSetBars(n, false); const m = parseFloat(timingLsGet('wm.timing.tlbars')); if (m >= TIMING_TL_MIN_BARS && m <= TIMING_HISTORY_BARS) timingTl.barsP = m; })();
 
     // Size: Fill (whole viewport) / Fixed (centred 960 x 480 card). The Timeline's ResizeObserver does the relayout.
     function practiceSetSize(v, persist) {
@@ -5759,7 +5970,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const w = practice.wave, c = { t: m.time - timingMatchLatencyMs() / 1000, step: m.step, peaks: m.peaks };
         w.chunks.push(c);
         practiceWaveAdd(c);
-        const cut = c.t - Math.min(30, (practice.bars + 1) * timingBarDur());
+        const cut = c.t - Math.min(90, (TIMING_HISTORY_BARS + 1) * timingBarDur());
         let k = 0;
         while (k < w.chunks.length && w.chunks[k].t + 0.03 < cut) k++;
         if (k) w.chunks.splice(0, k);
@@ -5833,8 +6044,9 @@ registerProcessor('onset-detector', OnsetDetector);
         w.chunks.forEach(practiceWaveAdd);
         w.dirty = true;
     }
-    function practiceWavePrune(shift) {
-        practice.wave.tiles.forEach((t, k) => { if ((k + 1) * PR_TILE + shift < -20) { t.el.remove(); practice.wave.tiles.delete(k); } });
+    function practiceWavePrune(cutT) { // drop tiles that lie wholly before the retained history
+        const x = (cutT - timingTl.t0) * timingTl.pps - 20;
+        practice.wave.tiles.forEach((t, k) => { if ((k + 1) * PR_TILE < x) { t.el.remove(); practice.wave.tiles.delete(k); } });
     }
 
     // ---------------------------------------------------------------
