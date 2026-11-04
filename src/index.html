@@ -954,6 +954,13 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="tm-sec">
+                                <div class="tm-lab"><span class="tm-label">Capture</span><button type="button" class="tm-help" data-help="capture">?</button></div>
+                                <div class="tm-row">
+                                    <button id="timingCaptureBtn" type="button" class="tm-text-btn" disabled>Save last 30 s</button>
+                                    <span id="timingCaptureMsg" class="tm-hist-copied" aria-live="polite"></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2997,7 +3004,7 @@ class OnsetCore {
         if (this.qGate > 0 && this.qPk < this.qGate) {
           // too quiet overall: forget this onset. The previous onsetFrame returns (refractory and the 150 ms floor freeze see no onset)
           // and the bands are re-armed (peak = now, dropped) so the next real attack can trigger at once.
-          if (this.rec) this.qDrops.push({ type: 'quietdrop', time: this.onsetFrame / this.sr, rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9) });
+          if (this.qDrops.length < 256) this.qDrops.push({ type: 'quietdrop', time: this.onsetFrame / this.sr, rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9) });
           this.onsetFrame = this.pvOnset;
           for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = true; }
         } else {
@@ -3332,6 +3339,7 @@ class RefTemplate {
         return new Ref(sr);
     }
 
+    const TIMING_CAP_SEC = 30;   // rolling capture length (worklet ring + export log)
     // --- Worklet (inline string, loaded through a Blob URL so the app stays single-file) ---
     const TIMING_WORKLET_SRC = TIMING_ONSET_CORE_SRC + `
 class OnsetDetector extends AudioWorkletProcessor {
@@ -3344,15 +3352,18 @@ class OnsetDetector extends AudioWorkletProcessor {
     this.acc = 0;
     this.rec = false; this.recBuf = null; this.recN = 0; this.recFrame = 0;
     this.clk = -1;   // shared frame clock (see frameStart)
+    // Rolling capture: the last 30 s of the instrument channel (one set() copy per quantum), posted on {dump:true}
+    this.cap = new Float32Array(Math.round(sampleRate * ${TIMING_CAP_SEC})); this.cw = 0; this.cn = 0; this.cEnd = 0;
     this.wave = false; this.wPk = new Float32Array(16); this.wN = 0; this.wT = 0;   // practice-mode waveform peaks
     this.port.onmessage = (e) => {
       const m = e.data;
       if (m && m.type === 'config') {
-        if (typeof m.channel === 'number') this.ch = m.channel | 0;
+        if (typeof m.channel === 'number') { if ((m.channel | 0) !== this.ch) this.cn = 0; this.ch = m.channel | 0; }
         if (typeof m.refChannel === 'number' && (m.refChannel | 0) !== this.refCh) { this.refCh = m.refChannel | 0; this.ref = this.refCh >= 0 ? new RefTemplate(sampleRate) : null; }
         if (typeof m.sensitivity === 'number') this.core.setSensitivity(m.sensitivity);
         if ('quietDb' in m) this.core.setQuietGateDb(m.quietDb);   // number = ignore onsets whose raw peak is below it; null = off
-        if (typeof m.cleanHint === 'boolean') this.core.setCleanHint(m.cleanHint);   // sent once per stream attach
+        if (typeof m.cleanHint === 'boolean') { this.core.setCleanHint(m.cleanHint); this.cn = 0; }   // sent once per stream attach: the capture restarts with the stream
+        if (m.dump === true) this.dumpCap();
         if (typeof m.wave === 'boolean' && m.wave !== this.wave) { this.wave = m.wave; this.wN = 0; }
         if (typeof m.flux === 'boolean' && m.flux !== this.core.fluxOn) this.core.setFlux(m.flux);
         if (typeof m.record === 'boolean' && m.record !== this.rec) {
@@ -3366,6 +3377,27 @@ class OnsetDetector extends AudioWorkletProcessor {
         else if (m.type === 'track') this.ref.setTrack(m.lag, m.locked);   // lag to expect in seconds (null = none); locked false = only a hint
       }
     };
+  }
+  capPut(x) {
+    const N = this.cap.length, n = x.length, r = N - this.cw;
+    if (n <= r) this.cap.set(x, this.cw); else { this.cap.set(x.subarray(0, r), this.cw); this.cap.set(x.subarray(r), 0); }
+    this.cw = (this.cw + n) % N; this.cn = Math.min(N, this.cn + n);
+  }
+  capWrite(x, frame) {
+    const N = this.cap.length;
+    if (this.cn > 0 && frame !== this.cEnd) {   // a real gap in the frame clock: keep the ring chronological with silence, or restart if it is huge
+      const g = frame - this.cEnd;
+      if (g > 0 && g < N) { for (let o = 0; o < g; o += 128) this.capPut(new Float32Array(Math.min(128, g - o))); } else this.cn = 0;
+    }
+    if (this.cn === 0) this.cw = 0;
+    this.capPut(x);
+    this.cEnd = frame + x.length;
+  }
+  dumpCap() {
+    const N = this.cap.length, n = this.cn, start = (this.cw - n + N) % N, out = new Float32Array(n);
+    out.set(this.cap.subarray(start, Math.min(N, start + n)), 0);
+    if (start + n > N) out.set(this.cap.subarray(0, start + n - N), N - start);
+    this.port.postMessage({ type: 'capture', frame: this.cEnd - n, sr: sampleRate, samples: out }, [out.buffer]);
   }
   flushRaw() {
     if (this.recBuf && this.recN > 0) {
@@ -3404,6 +3436,7 @@ class OnsetDetector extends AudioWorkletProcessor {
     if (chs.length !== this.nch) { this.nch = chs.length; this.port.postMessage({ type: 'chans', n: chs.length }); }
     const frame = this.frameStart(chs[0].length);
     const ons = this.core.processChannels(chs, this.ch, frame);
+    this.capWrite(chs[this.ch] || chs[0], frame);
     if (this.wave) this.waveBlocks(chs[this.ch] || chs[0], frame);
     for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands, rawDb: ons[i].rawDb });
     if (this.ref) {
@@ -3424,7 +3457,7 @@ class OnsetDetector extends AudioWorkletProcessor {
       const fl = this.core.takeFlux();
       for (let i = 0; i < fl.length; i++) this.port.postMessage(fl[i], [fl[i].v.buffer]);
     }
-    if (this.rec) { const qd = this.core.takeQuietDrops(); for (let i = 0; i < qd.length; i++) this.port.postMessage(qd[i]); }
+    const qd = this.core.takeQuietDrops(); for (let i = 0; i < qd.length; i++) this.port.postMessage(qd[i]);   // rare: always reported (capture log)
     const ce = this.core.takeCleanEvents();
     for (let i = 0; i < ce.length; i++) this.port.postMessage(ce[i]);
     const gl = this.core.takeGlitches();
@@ -3654,6 +3687,7 @@ registerProcessor('onset-detector', OnsetDetector);
             timingCleanHinted = false;
         }
         if (typeof m.noiseDb === 'number') timingNoiseDb = m.noiseDb;
+        timingCapPush(timingCap.events, { type: 'clean', t: audioCtx ? audioCtx.currentTime : 0, clean: !!m.clean, noiseDb: typeof m.noiseDb === 'number' ? m.noiseDb : null });
         timingRenderSettingsBtn();
     }
     function timingPostConfig(hint, quiet) {
@@ -3842,7 +3876,9 @@ registerProcessor('onset-detector', OnsetDetector);
         const r = timingRefMatch(timingRef, sched, time);
         timingRef = r.state;
         timingPostTrack();
-        if (timingDbg) timingDbg.refs.push({ sched, time, ncc, kind: r.kind, offsetMs: r.offset === undefined ? null : r.offset * 1000, liveLms: timingRef.liveL === null ? null : timingRef.liveL * 1000 });
+        const refEv = { sched, time, ncc, kind: r.kind, offsetMs: r.offset === undefined ? null : r.offset * 1000, liveLms: timingRef.liveL === null ? null : timingRef.liveL * 1000 };
+        timingCapPush(timingCap.events, Object.assign({ type: 'ref', t: time }, refEv));
+        if (timingDbg) timingDbg.refs.push(refEv);
         if (r.kind === 'lock' || r.kind === 'accept' || r.kind === 'jump') {
             timingRefHist.push({ t: time, ms: timingRef.liveL * 1000, kind: r.kind });
             if (timingRefHist.length > 200) timingRefHist.shift();
@@ -3990,7 +4026,9 @@ registerProcessor('onset-detector', OnsetDetector);
         const prev = timingBeats[timingBeats.length - 1];
         if (prev) prev.dur = time - prev.time;
         timingBeats.push({ time, beatInMeasure, n: timingBeatSeq++, dur: 0 });
-        if (timingDbg) timingDbg.beats.push({ time, beatInMeasure, n: timingBeatSeq - 1, bpm, subdivision, grid: getTimingGrid().key });
+        const gk = getTimingGrid().key;
+        timingCapPush(timingCap.beats, { time, beatInMeasure, n: timingBeatSeq - 1, bpm, beatsPerMeasure, subdivision, grid: gk });
+        if (timingDbg) timingDbg.beats.push({ time, beatInMeasure, n: timingBeatSeq - 1, bpm, subdivision, grid: gk });
         if (timingBeats.length > TIMING_BEAT_BUFFER) timingBeats.shift();
     }
 
@@ -4060,19 +4098,20 @@ registerProcessor('onset-detector', OnsetDetector);
     // Entry point for detected hits (the worklet message handler calls this; tests inject synthetic onsets here).
     function timingHandleOnset(time, peakDb) {
         if (!timingOn || !audioCtx) return null;
-        if (!isPlaying) { if (timingDbg) timingDbgMatch(time, null, null, 'not-playing'); return null; }
+        const rec = timingCapRec(time, peakDb);
+        if (!isPlaying) { timingLogMatch(rec, time, null, null, 'not-playing'); return null; }
         // click ref mode: nothing is judged before the ref is locked (2 agreeing clicks); the fallback latency could be wrong
-        if (timingRefOn && !timingRef.confirmed) { if (timingDbg) timingDbgMatch(time, null, null, 'syncing'); return null; }
+        if (timingRefOn && !timingRef.confirmed) { timingLogMatch(rec, time, null, null, 'syncing'); return null; }
         const tComp = time - timingMatchLatencyMs() / 1000;
         // One marker per detect-grid cell: only the loudest sound (hit or ring) in a cell is shown
         const cell = timingNearestCell(tComp, timingBeats, getTimingGrid(), 60 / bpm);
         const ex = cell && timingFindCellMark(cell);
-        if (ex && !(peakDb > (ex.hit || ex.rej).peakDb)) { if (timingDbg) timingDbgMatch(time, tComp, null, 'merged'); return null; }
-        if (ex) timingRemoveCellMark(ex);
+        if (ex && !(peakDb > (ex.hit || ex.rej).peakDb)) { timingLogMatch(rec, time, tComp, null, 'merged'); return null; }
+        if (ex) { const old = timingCapByMark.get(ex.hit || ex.rej); if (old) old.verdict = 'replaced'; timingRemoveCellMark(ex); }
         const m = matchOnsetToGrid(tComp, timingBeats, getTimingGrid(), 60 / bpm);
         if (!m) {
             const reason = timingLastMatchReason;
-            if (timingDbg) timingDbgMatch(time, tComp, null, reason);
+            timingLogMatch(rec, time, tComp, null, reason);
             if (reason === 'ambiguous' || reason === 'too-far') {
                 // fractional position inside the bar from the beat ring buffer
                 let k = timingBeats.length - 1;
@@ -4081,6 +4120,7 @@ registerProcessor('onset-detector', OnsetDetector);
                     const b = timingBeats[k], dur = b.dur > 0 ? b.dur : 60 / bpm;
                     const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)), peakDb, cbg: cell.bg, cpos: cell.pos, offsetMs: (tComp - cell.t) * 1000 };
                     timingRejects.push(rej);
+                    rec.offsetMs = rej.offsetMs; timingCapByMark.set(rej, rec);
                     if (timingView === 'timeline') timingTlAddRing(rej); else timingCAddRing(rej);
                 }
             }
@@ -4090,7 +4130,8 @@ registerProcessor('onset-detector', OnsetDetector);
         const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb, cbg: cell.bg, cpos: cell.pos };
         timingHits.push(hit);
         practice.sess.n++; practice.sess.sum += hit.offsetMs; practice.sess.sumSq += hit.offsetMs * hit.offsetMs;
-        if (timingDbg) timingDbgMatch(time, tComp, hit, '');
+        timingLogMatch(rec, time, tComp, hit, '');
+        timingCapByMark.set(hit, rec);
         timingLastHitTime = audioCtx.currentTime;
         timingSetNoInput(false);
         timingSetStatus('Detected', 'good', 2);
@@ -4180,7 +4221,10 @@ registerProcessor('onset-detector', OnsetDetector);
             if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
             timingQueueMeter();
         } else if (m.type === 'quietdrop') {
-            if (timingDbg) (timingDbg.quietDrops = timingDbg.quietDrops || []).push(m); // debug recorder only
+            timingCapPush(timingCap.drops, { t: m.time, rawDb: m.rawDb });
+            if (timingDbg) (timingDbg.quietDrops = timingDbg.quietDrops || []).push(m);
+        } else if (m.type === 'capture') {
+            timingCapOnDump(m);
         } else if (m.type === 'clean') {
             timingOnClean(m);
         } else if (m.type === 'wave') {
@@ -4199,8 +4243,9 @@ registerProcessor('onset-detector', OnsetDetector);
             if (timingDbg) timingDbgFinish();
         } else if (m.type === 'onset') {
             if (timingDbg) timingDbg.onsets.push({ time: m.time, peakDb: m.peakDb, thDb: m.thDb, bands: m.bands, ctxNow: audioCtx ? audioCtx.currentTime : null });
-            if (timingLoop && timingLoop.running) { timingLoopOnset(m.time); return; } // measurement clicks never reach the matcher/views
-            if (timingMuteOnsets) return;
+            const rec = timingCapOnset(m);
+            if (timingLoop && timingLoop.running) { rec.verdict = 'measuring'; timingLoopOnset(m.time); return; } // measurement clicks never reach the matcher/views
+            if (timingMuteOnsets) { rec.verdict = 'muted'; return; }
             timingFlashOnset();
             timingHandleOnset(m.time, m.peakDb);
         }
@@ -4208,6 +4253,7 @@ registerProcessor('onset-detector', OnsetDetector);
 
     // --- Settings popover (latency, loopback measurement, sensitivity) ---
     function timingRenderSettingsBtn() {
+        timingRenderCaptureBtn();
         const ref = timingRefOn;
         timingSetText(timingSetVals, (ref ? (!timingRef.confirmed ? '\u2014 ms' : Math.round(timingRef.liveL * 1000) + ' ms') : Math.round(timingEffectiveLatencyMs()) + ' ms') + ' \u00b7 S' + timingSensitivity + (timingClean ? ' \u00b7 Line' : ''));
         // the "Live" word became a small dot (green = locked, grey = syncing); the full wording lives in title / aria-label
@@ -4235,6 +4281,7 @@ registerProcessor('onset-detector', OnsetDetector);
         trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
         sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks. Clean line inputs (audio interfaces) are detected automatically and use a lower gate, so soft notes are caught; the settings button then shows "Line".'],
         range: ['View range', "How far early or late the chart's top and bottom edges are. Hits beyond it are drawn as red triangles at the edge. Widen it to see big misses; narrow it to see small differences."],
+        capture: ['Capture', 'Saves the last 30 seconds of the input and every detected attack with its timing, for analysing the detector.'],
         quiet: ['Quiet below', 'Below this input level the status shows Quiet, and attacks quieter than this are ignored (so a noisy input does not make hits). Lower it if your signal is soft but fine.'],
     };
     let timingHelpOpen = null;
@@ -4599,33 +4646,160 @@ registerProcessor('onset-detector', OnsetDetector);
     });
 
     // ---------------------------------------------------------------
+    // Capture export ("Save last 30 s" in the Timing settings): the worklet keeps the last TIMING_CAP_SEC of the instrument channel
+    // in a ring; the page keeps a matching log (beats, every onset with its verdict, ref/clean events, quiet drops).
+    // capture-<stamp>.wav + .csv (Android-compatible, see docs/claude/architecture.md) + .json (everything, for detector work).
+    // Clock: context frames (audio-context time * sampleRate). Beats = click times, onsets = raw detector times (before latency compensation).
+    // ---------------------------------------------------------------
+    let timingCap = { beats: [], onsets: [], events: [], drops: [] };
+    let timingCapLatest = 0, timingCapCur = null, timingCapWait = null, timingCapBusy = false;
+    const timingCapByMark = new WeakMap();   // hit / reject mark -> its onset record (so a louder sound in the same cell can mark it "replaced")
+    const TIMING_CAP_MAX = 6000;
+    function timingCapPush(arr, e) {
+        arr.push(e);
+        const t = e.time !== undefined ? e.time : e.t;
+        if (t > timingCapLatest) timingCapLatest = t;
+        const cut = timingCapLatest - TIMING_CAP_SEC - 3;
+        let k = 0;
+        while (k < arr.length && (arr[k].time !== undefined ? arr[k].time : arr[k].t) < cut) k++;
+        if (arr.length - k > TIMING_CAP_MAX) k = arr.length - TIMING_CAP_MAX;
+        if (k > 0) arr.splice(0, k);
+    }
+    function timingCapReset(keepBeats) {
+        const b = timingCap.beats;
+        timingCap = { beats: keepBeats ? b : [], onsets: [], events: [], drops: [] };
+        timingCapCur = null;
+        if (!keepBeats) timingCapLatest = 0;
+    }
+    // Every onset the page receives gets one record; timingLogMatch fills in the verdict
+    function timingCapOnset(m) {
+        const rec = { time: m.time, peakDb: m.peakDb, rawDb: m.rawDb, thDb: m.thDb, bands: m.bands, latMs: timingMatchLatencyMs(), verdict: '', offsetMs: null };
+        timingCapPush(timingCap.onsets, rec);
+        timingCapCur = rec;
+        return rec;
+    }
+    function timingCapRec(time, peakDb) {
+        if (timingCapCur && timingCapCur.time === time && !timingCapCur.verdict) return timingCapCur;
+        return timingCapOnset({ time, peakDb });
+    }
+    function timingCapSigned(v, d) { return (v >= 0 ? '+' : '-') + Math.abs(v).toFixed(d); }
+    function timingCapVerdictText(r) {
+        if (r.verdict === 'hit') return 'hit ' + timingCapSigned(r.offsetMs, 2) + ' ms pos=' + r.pos.toFixed(3);
+        if (r.offsetMs !== null && r.offsetMs !== undefined && (r.verdict === 'ambiguous' || r.verdict === 'too-far')) return 'reject ' + r.verdict + ' ' + timingCapSigned(r.offsetMs, 1) + ' ms';
+        return r.verdict || 'unjudged';
+    }
+    function timingCapStamp() {
+        const d = new Date(), z = (n) => String(n).padStart(2, '0');
+        return d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + '-' + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds());
+    }
+    function timingCapTok(x) { return String(x === undefined || x === null || x === '' ? 'na' : x).replace(/[\s=,]+/g, '_'); }
+    function timingCapUa() {
+        const m = /(Edg|Chrome|Firefox|Version)\/(\d+)/.exec(navigator.userAgent);
+        return m ? (m[1] === 'Version' ? 'Safari' : m[1]) + '/' + m[2] : 'unknown';
+    }
+    // dump = the worklet's {frame, sr, samples}; returns the three files' contents
+    function timingCaptureBuild(dump) {
+        const sr = dump.sr || audioCtx.sampleRate, f0 = dump.frame, n = dump.samples.length;
+        const t0 = f0 / sr, t1 = (f0 + n) / sr, fr = (t) => Math.round(t * sr);
+        const latMs = timingMatchLatencyMs(), g = getTimingGrid(), meta = timingMetaSnapshot();
+        const beats = timingCap.beats.filter(b => b.time >= t0 - 2 && b.time <= t1);
+        const onsets = timingCap.onsets.filter(o => o.time >= t0 && o.time <= t1);
+        const header = '# sampleRate=' + sr + ' latencyFrames=' + (latMs * sr / 1000).toFixed(1) + ' wavStartInFrame=' + f0 + ' bpm=' + bpm + ' beats=' + beatsPerMeasure +
+            ' rhythm=' + timingCapTok(subdivision) + ' grid=' + timingCapTok(g.key) + ' sensitivity=' + timingSensitivity + ' detector=web-onsetcore' +
+            ' platform=web clock=ctx-frames app=' + timingCapTok(APP_VERSION) + ' latencyMs=' + latMs.toFixed(2) + ' clean=' + (timingClean ? 1 : 0) +
+            ' noiseDb=' + (typeof timingNoiseDb === 'number' ? timingNoiseDb.toFixed(1) : 'na') + ' quietDb=' + timingQuietDb +
+            ' channel=' + (timingChannel + 1) + ' device=' + timingCapTok(meta.trackLabel).slice(0, 48) + ' ua=' + timingCapTok(timingCapUa());
+        const lines = [header];
+        beats.forEach(b => lines.push('beat,' + fr(b.time) + ',' + b.beatInMeasure));
+        onsets.forEach(o => lines.push('onset,' + fr(o.time) + ',' + (typeof o.peakDb === 'number' ? o.peakDb.toFixed(1) : 'na') + ',' + timingCapVerdictText(o)));
+        const json = {
+            format: 'webmetronome-capture', version: 1,
+            clock: 'Context frames (audio-context time * sampleRate). Beats are click times, onsets are raw detector times in input frames before latency compensation; an onset belongs to a click at beat + latency.',
+            meta: Object.assign(meta, { app: APP_VERSION, matchLatencyMs: latMs }),
+            wav: { startFrame: f0, samples: n, sampleRate: sr, seconds: n / sr },
+            beats: beats.map(b => Object.assign({ frame: fr(b.time) }, b)),
+            onsets: onsets.map(o => Object.assign({ frame: fr(o.time), verdictText: timingCapVerdictText(o) }, o)),
+            quietDrops: timingCap.drops.filter(d => d.t >= t0 && d.t <= t1).map(d => Object.assign({ frame: fr(d.t) }, d)),
+            events: timingCap.events.filter(e => e.t >= t0 - 2 && e.t <= t1)
+        };
+        return { sr, wav: timingBuildWav(dump.samples, sr), csv: lines.join('\n') + '\n', json, counts: { samples: n, beats: beats.length, onsets: onsets.length } };
+    }
+    function timingCapOnDump(m) {
+        const w = timingCapWait;
+        if (!w) return;
+        timingCapWait = null;
+        clearTimeout(w.timer);
+        w.resolve(m);
+    }
+    function timingCaptureRequest() {
+        return new Promise((resolve, reject) => {
+            if (!timingOn || !timingNode || !audioCtx) { reject(new Error('Timing is off')); return; }
+            if (timingCapWait) { reject(new Error('busy')); return; }
+            timingCapWait = { resolve, timer: setTimeout(() => { timingCapWait = null; reject(new Error('The detector did not answer')); }, 3000) };
+            timingNode.port.postMessage({ type: 'config', dump: true });
+        });
+    }
+    // Downloads capture-<stamp>.wav / .csv / .json; resolves with the built files
+    function timingCaptureSave() {
+        return timingCaptureRequest().then((dump) => {
+            if (!dump.samples.length) throw new Error('Nothing captured yet');
+            const c = timingCaptureBuild(dump), stamp = timingCapStamp();
+            timingDownloadBlob('capture-' + stamp + '.wav', c.wav);
+            setTimeout(() => timingDownloadBlob('capture-' + stamp + '.csv', new Blob([c.csv], { type: 'text/csv' })), 250);
+            setTimeout(() => timingDownloadBlob('capture-' + stamp + '.json', new Blob([JSON.stringify(c.json, null, 1)], { type: 'application/json' })), 500);
+            c.stamp = stamp;
+            return c;
+        });
+    }
+    const timingCaptureBtn = document.getElementById('timingCaptureBtn');
+    const timingCaptureMsg = document.getElementById('timingCaptureMsg');
+    function timingRenderCaptureBtn() {
+        const off = timingCapBusy || !(timingOn && timingNode && timingStream);
+        if (timingCaptureBtn.disabled !== off) timingCaptureBtn.disabled = off;
+    }
+    timingCaptureBtn.addEventListener('click', () => {
+        timingCapBusy = true; timingRenderCaptureBtn();
+        timingCaptureSave().then((c) => { timingSetText(timingCaptureMsg, 'Saved ' + c.counts.onsets + ' attacks, ' + (c.counts.samples / c.sr).toFixed(0) + ' s'); },
+            (e) => { timingSetText(timingCaptureMsg, e.message); }).then(() => {
+            timingCapBusy = false; timingRenderCaptureBtn();
+            setTimeout(() => timingSetText(timingCaptureMsg, ''), 4000);
+        });
+    });
+
+    // ---------------------------------------------------------------
     // Developer-only debug recorder (console): timingDebugRecord(seconds = 20) / timingDebugStop()
     // Records raw samples of the selected channel plus every beat, onset, match result and near miss,
     // then downloads timing-debug-<timestamp>.wav (32-bit float mono) and .json. Inert unless started.
     // ---------------------------------------------------------------
     let timingDbg = null;
 
+    // Everything about the current Timing setup that is needed to interpret a recording (debug recorder and capture export)
+    function timingMetaSnapshot() {
+        const track = timingStream && timingStream.getAudioTracks()[0];
+        const g = getTimingGrid();
+        return {
+            startedAt: new Date().toISOString(),
+            sampleRate: audioCtx.sampleRate, ctxTimeAtStart: audioCtx.currentTime,
+            baseLatency: audioCtx.baseLatency || 0, outputLatency: audioCtx.outputLatency || 0,
+            latencyMs: timingLatencyMs, glitchCompMs: timingGlitchCompMs, latencyIsEstimate: timingLatencyEst,
+            channel: timingChannel, channels: timingChannels,
+            refChannel: timingRefOn ? timingRefCh : -1, refTrimMs: timingRefTrimMs, refLiveLmsAtStart: timingRef.liveL === null ? null : timingRef.liveL * 1000,
+            bpm, subdivision, beatsPerMeasure, isPlaying,
+            grid: { key: g.key, name: g.name, res: g.res, shuffle: g.shuffle, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
+            trackLabel: track ? track.label : '', trackSettings: track && track.getSettings ? track.getSettings() : {},
+            sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, cleanInput: timingClean, noiseFloorDb: timingNoiseDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity, timingClean, timingQuietDb), userAgent: navigator.userAgent
+        };
+    }
+
     function timingDebugRecord(seconds) {
         seconds = Number(seconds) > 0 ? Number(seconds) : 20;
         if (!timingOn || !timingNode || !audioCtx) { console.warn('timingDebugRecord: turn Timing on first (and let the mic start).'); return false; }
         if (timingDbg) { console.warn('timingDebugRecord: already recording; call timingDebugStop() to finish.'); return false; }
-        const track = timingStream && timingStream.getAudioTracks()[0];
         const g = getTimingGrid();
         timingDbg = {
             seconds, chunks: [], beats: timingBeats.map(b => ({ time: b.time, beatInMeasure: b.beatInMeasure, n: b.n, bpm, subdivision, grid: g.key, preexisting: true })),
             onsets: [], matches: [], near: [], refs: [], clicks: [], ending: false, timer: 0, fallback: 0,
-            meta: {
-                startedAt: new Date().toISOString(), requestedSeconds: seconds,
-                sampleRate: audioCtx.sampleRate, ctxTimeAtStart: audioCtx.currentTime,
-                baseLatency: audioCtx.baseLatency || 0, outputLatency: audioCtx.outputLatency || 0,
-                latencyMs: timingLatencyMs, glitchCompMs: timingGlitchCompMs, latencyIsEstimate: timingLatencyEst,
-                channel: timingChannel, channels: timingChannels,
-                refChannel: timingRefOn ? timingRefCh : -1, refTrimMs: timingRefTrimMs, refLiveLmsAtStart: timingRef.liveL === null ? null : timingRef.liveL * 1000,
-                bpm, subdivision, beatsPerMeasure, isPlaying,
-                grid: { key: g.key, name: g.name, res: g.res, shuffle: g.shuffle, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
-                trackLabel: track ? track.label : '', trackSettings: track && track.getSettings ? track.getSettings() : {},
-                sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, cleanInput: timingClean, noiseFloorDb: timingNoiseDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity, timingClean, timingQuietDb), userAgent: navigator.userAgent
-            }
+            meta: Object.assign(timingMetaSnapshot(), { requestedSeconds: seconds })
         };
         timingNode.port.postMessage({ type: 'config', record: true });
         timingDbg.timer = setTimeout(timingDebugStop, seconds * 1000);
@@ -4642,7 +4816,12 @@ registerProcessor('onset-detector', OnsetDetector);
         d.fallback = setTimeout(() => { if (timingDbg === d) timingDbgFinish(); }, 600);
     }
 
-    function timingDbgMatch(time, tComp, hit, reason) {
+    // Verdict of one onset: written into the always-on capture log, and into the debug recorder when it runs
+    function timingLogMatch(rec, time, tComp, hit, reason) {
+        rec.verdict = hit ? 'hit' : reason;
+        if (hit) { rec.offsetMs = hit.offsetMs; rec.pos = hit.posInBeat; rec.role = hit.role; rec.beatInMeasure = hit.beatInMeasure; rec.beatGlobal = hit.beatGlobal; }
+        rec.grid = getTimingGrid().key;
+        if (!timingDbg) return;
         timingDbg.matches.push({
             onsetTime: time, compensatedTime: tComp,
             accepted: !!hit, reason: hit ? '' : reason,
@@ -5170,6 +5349,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingLoadLatency();
         timingLoadRef(); // a new stream has a new offset: the ref lock starts over
         timingLoadClean();
+        timingCapReset(true); timingRenderCaptureBtn(); // the worklet ring restarts with the stream (cleanHint)
         timingPostConfig(true);
         timingLiveDot.hidden = false;
     }
@@ -5267,6 +5447,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingLoopPanel.hidden = true;
         timingClosePopover();
         timingBeats = []; timingHits = []; timingRejects = [];
+        timingCapReset(); timingRenderCaptureBtn();
         timingTrack.textContent = '';
         timingTl.items = []; timingTl.pred = [];
         timingCClearMarks();
