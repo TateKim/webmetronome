@@ -3206,11 +3206,11 @@ test.describe('Timing Check - same-slot merge and nearby-noise merge', () => {
     await expect.poll(() => page.evaluate(() => timingBeats.filter(b => b.dur > 0).length), { timeout: 12000 }).toBeGreaterThan(6);
   };
   // inject on completed beat `k` (counted from the newest completed one), `p` = position inside the beat, offset in ms
-  const hitAt = (page, k, p, db, offMs = 0) => page.evaluate(([k, p, db, offMs]) => {
+  const hitAt = (page, k, p, db, offMs = 0, pick) => page.evaluate(([k, p, db, offMs, pick]) => {
     const done = timingBeats.filter(b => b.dur > 0), b = done[done.length - 1 - k];
-    const r = timingHandleOnset(b.time + timingLatencyMs / 1000 + p * b.dur + offMs / 1000, db);
+    const r = timingHandleOnset(b.time + timingLatencyMs / 1000 + p * b.dur + offMs / 1000, db, pick === null ? undefined : pick);
     return r && { offsetMs: r.offsetMs, peakDb: r.peakDb };
-  }, [k, p, db, offMs]);
+  }, [k, p, db, offMs, pick === undefined ? null : pick]);
   const host = (view) => view === 'timeline' ? '#timingTrack .tm-dot' : '#timingBeatsMarks .tm-dot';
 
   for (const view of ['timeline', 'beats']) {
@@ -3272,6 +3272,20 @@ test.describe('Timing Check - same-slot merge and nearby-noise merge', () => {
       expect(await page.evaluate(() => timingHits.map(h => [h.peakDb, Math.round(h.offsetMs)]))).toEqual([[-20, -20]]);
       await page.evaluate(() => timingUpdateSummary());
       await expect(page.locator('#timingHitCount')).toHaveText('1');
+    });
+
+    test(`${view}: in one cell a pick (top band) beats a louder onset without one (a note's body swelling), both ways round`, async ({ page }) => {
+      test.setTimeout(40000);
+      await open(page, view);
+      expect(await hitAt(page, 1, 0.25, -30, -10, true)).not.toBeNull();   // the pick
+      expect(await hitAt(page, 1, 0.25, -15, 45, false)).toBeNull();       // its body, louder in the low bands: merged
+      expect(await page.evaluate(() => timingHits.map(h => [h.peakDb, Math.round(h.offsetMs)]))).toEqual([[-30, -10]]);
+      expect(await hitAt(page, 2, 0.25, -15, 20, false)).not.toBeNull();   // another cell: a low-only onset first
+      expect(await hitAt(page, 2, 0.25, -30, -5, true)).not.toBeNull();    // a quieter pick still replaces it
+      expect(await hitAt(page, 2, 0.25, -25, 0, true)).not.toBeNull();     // between picks the loudest wins as before
+      expect(await hitAt(page, 2, 0.25, -28, 0, true)).toBeNull();
+      expect(await page.evaluate(() => timingHits.map(h => [h.peakDb, Math.round(h.offsetMs)]))).toEqual([[-30, -10], [-25, 0]]);
+      await expect(page.locator(host(view))).toHaveCount(2);
     });
 
     test(`${view}: a louder ring is kept against a quieter hit; a louder hit removes a quieter ring`, async ({ page }) => {

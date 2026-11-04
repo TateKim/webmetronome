@@ -4198,17 +4198,22 @@ registerProcessor('onset-detector', OnsetDetector);
         timingUpdateSummary();
     }
     // Entry point for detected hits (the worklet message handler calls this; tests inject synthetic onsets here).
-    function timingHandleOnset(time, peakDb) {
+    function timingHandleOnset(time, peakDb, pick) {
         if (!timingOn || !audioCtx) return null;
         const rec = timingCapRec(time, peakDb);
         if (!isPlaying) { timingLogMatch(rec, time, null, null, 'not-playing'); return null; }
         // click ref mode: nothing is judged before the ref is locked (2 agreeing clicks); the fallback latency could be wrong
         if (timingRefOn && !timingRef.confirmed) { timingLogMatch(rec, time, null, null, 'syncing'); return null; }
         const tComp = time - timingMatchLatencyMs() / 1000;
-        // One marker per detect-grid cell: only the loudest sound (hit or ring) in a cell is shown
+        // One marker per detect-grid cell: an attack with a pick (top band) beats one without (a sustained note's body swelling after
+        // its pick is louder in the low bands but is not a new attack); otherwise the loudest sound (hit or ring) in the cell is shown
         const cell = timingNearestCell(tComp, timingBeats, getTimingGrid(), 60 / bpm);
         const ex = cell && timingFindCellMark(cell);
-        if (ex && !(peakDb > (ex.hit || ex.rej).peakDb)) { timingLogMatch(rec, time, tComp, null, 'merged'); return null; }
+        const pk = pick !== false;
+        if (ex) {
+            const o = ex.hit || ex.rej, oPk = o.pick !== false;
+            if (oPk !== pk ? oPk : !(peakDb > o.peakDb)) { timingLogMatch(rec, time, tComp, null, 'merged'); return null; }
+        }
         if (ex) { const old = timingCapByMark.get(ex.hit || ex.rej); if (old) old.verdict = 'replaced'; timingRemoveCellMark(ex); }
         const m = matchOnsetToGrid(tComp, timingBeats, getTimingGrid(), 60 / bpm);
         if (!m) {
@@ -4220,7 +4225,7 @@ registerProcessor('onset-detector', OnsetDetector);
                 while (k >= 0 && timingBeats[k].time > tComp) k--;
                 if (k >= 0) {
                     const b = timingBeats[k], dur = b.dur > 0 ? b.dur : 60 / bpm;
-                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)), peakDb, cbg: cell.bg, cpos: cell.pos, offsetMs: (tComp - cell.t) * 1000 };
+                    const rej = { t: tComp, beatInMeasure: b.beatInMeasure, frac: Math.max(0, Math.min(1, (tComp - b.time) / dur)), peakDb, pick: pk, cbg: cell.bg, cpos: cell.pos, offsetMs: (tComp - cell.t) * 1000 };
                     timingRejects.push(rej);
                     rec.offsetMs = rej.offsetMs; timingCapByMark.set(rej, rec);
                     if (timingView === 'timeline') timingTlAddRing(rej); else timingCAddRing(rej);
@@ -4229,7 +4234,7 @@ registerProcessor('onset-detector', OnsetDetector);
             timingSetStatus('Off grid', '', 2);
             return null;
         }
-        const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb, cbg: cell.bg, cpos: cell.pos };
+        const hit = { t: tComp, offsetMs: m.offsetMs, beatGlobal: m.beatGlobal, beatInMeasure: m.beatInMeasure, posInBeat: m.pos, role: m.role, peakDb, pick: pk, cbg: cell.bg, cpos: cell.pos };
         timingHits.push(hit);
         practice.sess.n++; practice.sess.sum += hit.offsetMs; practice.sess.sumSq += hit.offsetMs * hit.offsetMs;
         timingLogMatch(rec, time, tComp, hit, '');
@@ -4351,7 +4356,8 @@ registerProcessor('onset-detector', OnsetDetector);
             if (timingLoop && timingLoop.running) { rec.verdict = 'measuring'; timingLoopOnset(m.time); return; } // measurement clicks never reach the matcher/views
             if (timingMuteOnsets) { rec.verdict = 'muted'; return; }
             timingFlashOnset();
-            timingHandleOnset(m.time, m.peakDb);
+            // pick = the top band (2.5-6 kHz) took part in the trigger; the worklet always sends bands, synthetic test onsets may not
+            timingHandleOnset(m.time, m.peakDb, Array.isArray(m.bands) ? m.bands.some(b => b.band === 3) : undefined);
         }
     }
 
