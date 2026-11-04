@@ -160,11 +160,19 @@ if (fs.existsSync(base + '-click.wav')) {
     const c = clicks[i], gap = i + 1 < clicks.length ? clicks[i + 1] - c : 0.4 * sr;
     const a = Math.round(c - start), z = Math.min(cw.x.length, a + Math.round(Math.min(0.4 * sr, 0.8 * gap)));
     if (a < 0 || z <= a) continue;
-    let pk = 0;
-    for (let k = a; k < z; k++) pk = Math.max(pk, Math.abs(cw.x[k]));
+    // the loopback channel can carry the instrument too: find the click's peak, then walk back to its rising edge
+    let pk = 0, pi = a;
+    for (let k = a; k < z; k++) { const v = Math.abs(cw.x[k]); if (v > pk) { pk = v; pi = k; } }
     if (pk < 0.01) continue;
-    let e = a;
-    while (Math.abs(cw.x[e]) < 0.15 * pk) e++;
+    // step back over the click's cycles: keep going while the previous 0.5 ms still has a sample above 15 % of the peak
+    const th = 0.15 * pk, gapN = Math.max(1, Math.round(0.0005 * sr));
+    let e = pi;
+    for (;;) {
+      let j = -1;
+      for (let k = e - 1; k >= Math.max(a, e - gapN); k--) if (Math.abs(cw.x[k]) >= th) { j = k; break; }
+      if (j < 0) break;
+      e = j;
+    }
     lags.push({ frame: c, ms: (e - a) / msF });
   }
   const med = (v) => { const t = v.slice().sort((x, y) => x - y); return t.length ? t[t.length >> 1] : NaN; };
