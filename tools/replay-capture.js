@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Replay a capture (wav + csv, from the web "Save last 30 s" button or the Android app) through the web app's OnsetCore,
+// Replay a capture (wav + csv, from the web "Save last take" button or the Android app) through the web app's OnsetCore,
 // print the detected onsets and score them against the grid slots implied by the csv's beats.
 //
 //   node tools/replay-capture.js capture-20261101-120000 [--sens N] [--gate dB] [--clean|--no-clean|--auto] [--quiet dB]
@@ -16,6 +16,13 @@
 //   --window ms   a slot counts as hit when an onset is within +-window (default 60)
 //   --slots N     grid slots per beat (default from the csv grid: 4->1, 8->2, 16->4, 32->8, else 2)
 //   --list        print every replayed onset;  --diff: list csv-vs-replay differences
+//
+// Click loopback accuracy: when <capture>-click.wav exists (web capture with a click reference channel) a second section measures
+// where each scheduled click really arrived in the loopback (rising edge: first sample >= 15 % of the click's peak in a window after
+// the click time; clicks from <capture>.json "clicks", else the csv beats; windows without a click, peak < 0.01, are skipped) and compares it
+// with latencyFrames, the latency the matcher used: error = measured median - latencyFrames is a shift of every hit. It also recomputes the
+// recorded hit offsets with the median measured latency ("median") and with the latency of the click nearest in time ("local").
+// The edge sits slightly after the true start (threshold crossing, well under 0.5 ms for a click's first cycle): a constant bias.
 //
 // Frames: absolute context/input frames (see docs/claude/architecture.md, "Capture export"). Slot = beat + latencyFrames.
 const fs = require('fs');
@@ -140,4 +147,47 @@ console.log(`diff vs csv onsets in the wav range: csv ${rec.length}, replay ${on
 if (opt.diff) {
   recOnly.forEach(r => console.log(`  csv only    ${r.frame}\t${((r.frame - start) / msF).toFixed(1)} ms\t${r.peakDb}\t${r.verdict}`));
   repOnly.forEach(o => console.log(`  replay only ${Math.round(o.frame)}\t${((o.frame - start) / msF).toFixed(1)} ms\t${o.peakDb.toFixed(1)}`));
+}
+
+// --- click loopback accuracy (capture-<stamp>-click.wav) -------------------------------------------
+if (fs.existsSync(base + '-click.wav')) {
+  const cw = readWav(base + '-click.wav');
+  let clicks = beats.slice(), src = 'csv beats';
+  try { const j = JSON.parse(fs.readFileSync(base + '.json', 'utf8')); if (j.clicks && j.clicks.length) { clicks = j.clicks.map(c => c.frame); src = 'json clicks'; } } catch (e) { /* no json */ }
+  clicks.sort((a, b) => a - b);
+  const lags = [];   // {frame, ms}
+  for (let i = 0; i < clicks.length; i++) {
+    const c = clicks[i], gap = i + 1 < clicks.length ? clicks[i + 1] - c : 0.4 * sr;
+    const a = Math.round(c - start), z = Math.min(cw.x.length, a + Math.round(Math.min(0.4 * sr, 0.8 * gap)));
+    if (a < 0 || z <= a) continue;
+    let pk = 0;
+    for (let k = a; k < z; k++) pk = Math.max(pk, Math.abs(cw.x[k]));
+    if (pk < 0.01) continue;
+    let e = a;
+    while (Math.abs(cw.x[e]) < 0.15 * pk) e++;
+    lags.push({ frame: c, ms: (e - a) / msF });
+  }
+  const med = (v) => { const t = v.slice().sort((x, y) => x - y); return t.length ? t[t.length >> 1] : NaN; };
+  const sdOf = (v) => { const m = v.reduce((x, y) => x + y, 0) / (v.length || 1); return Math.sqrt(v.reduce((x, y) => x + (y - m) * (y - m), 0) / (v.length || 1)); };
+  console.log(`click loopback (${src}): ${lags.length}/${clicks.length} clicks found, refChannel=${meta.refChannel || '?'}`);
+  if (lags.length) {
+    const ms = lags.map(l => l.ms), lMed = med(ms), Lms = L / msF, err = lMed - Lms;
+    // drift: least-squares slope of lag over time, in ms per minute
+    const t = lags.map(l => (l.frame - lags[0].frame) / sr), tm = t.reduce((x, y) => x + y, 0) / t.length, mm = ms.reduce((x, y) => x + y, 0) / ms.length;
+    let num = 0, den = 0;
+    t.forEach((x, i) => { num += (x - tm) * (ms[i] - mm); den += (x - tm) * (x - tm); });
+    const drift = den > 0 ? 60 * num / den : 0;
+    console.log(`  measured latency: median ${lMed.toFixed(2)} ms, SD ${sdOf(ms).toFixed(2)} ms, min ${Math.min(...ms).toFixed(2)}, max ${Math.max(...ms).toFixed(2)}, drift ${drift >= 0 ? '+' : ''}${drift.toFixed(2)} ms/min`);
+    console.log(`  used by the matcher (latencyFrames): ${Lms.toFixed(2)} ms  ->  latency error ${err >= 0 ? '+' : ''}${err.toFixed(2)} ms (${err >= 0 ? 'hits were reported early' : 'hits were reported late'} by that much)`);
+    const hits = [];
+    for (const r of csvOnsets) {
+      const h = /^hit ([+-][\d.]+) ms/.exec(r.verdict);
+      if (h && r.frame >= start && r.frame <= end) hits.push({ frame: r.frame, rec: +h[1] });
+    }
+    if (hits.length) {
+      const near = (f) => { let b = lags[0]; for (const l of lags) if (Math.abs(l.frame - f) < Math.abs(b.frame - f)) b = l; return b.ms - Lms; };
+      const stat = (v) => `med ${med(v) >= 0 ? '+' : ''}${med(v).toFixed(2)} SD ${sdOf(v).toFixed(2)}`;
+      console.log(`  hit offsets (${hits.length}), ms:  recorded ${stat(hits.map(h => h.rec))}  |  with median latency ${stat(hits.map(h => h.rec - err))}  |  with local latency ${stat(hits.map(h => h.rec - near(h.frame)))}`);
+    }
+  }
 }
