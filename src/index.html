@@ -2790,6 +2790,9 @@ const WEB_GATE_DB = -55, CLEAN_GATE_DB = -90;
 const CLEAN_NOISE_DB = -80;   // floor of every band below this = clean input
 const CLEAN_WARM_SEC = 0.5;     // floor-update time before the floor means anything (it starts at -100 dBFS)
 const CLEAN_HOLD_SEC = 0.5;     // consecutive floor-update time below CLEAN_NOISE_DB that latches clean
+const REFINE_BLOOM_MS = 70;   // setRefine: a low-band-only onset this soon after a top-band onset is the same note's body
+const REFINE_BACK_MS = 30;    // setRefine: how far back a low-band-only onset looks for its pick (top-band spark)
+const REFINE_REL = Math.pow(10, -30 / 20);   // setRefine: drop onsets 30 dB below the median raw peak of the last 16 accepted ones
 const CLEAN_VERDICT_SEC = 60; // a hinted stream not measured clean after this much floor-update time gets a clean:false verdict
 function cleanCoreSensitivity(s) { s = Math.max(1, Math.min(10, +s || 5)); return s <= 5 ? s : 5 + (s - 5) * 0.6; }
 class OnsetCore {
@@ -2810,6 +2813,13 @@ class OnsetCore {
     this.cFu = 0; this.cQuiet = 0; this.noiseDb = -100; this.cEvents = [];
     // quiet gate (off unless setQuietGateDb): an onset whose full-band raw peak (trigger block .. end of the hold) is below it is dropped
     this.qGate = 0; this.rbm = 0; this.qPk = 0; this.pvOnset = -1e12; this.qDrops = [];
+    // attack refinement (off unless setRefine(true)), for sustained instruments whose body swells after the pick:
+    //  backdate: an onset with no top-band trigger is reported at a top-band spark in the last REFINE_BACK_MS (the pick), if there is one
+    //  bloom guard: without such a spark, an onset with no top-band trigger within REFINE_BLOOM_MS of a top-band onset is the same
+    //  note's body swelling, not a new attack
+    //  relative gate: an onset whose raw peak is REFINE_REL_DB below the median of the recent accepted onsets is dropped (bursty noise)
+    this.refine = false; this.lastTop = -1e12; this.pvTop = -1e12; this.repFrame = 0; this.bloomLog = -1e12; this.bloomHold = false;
+    this.rPk = []; this.bloomSamples = Math.round(REFINE_BLOOM_MS / 1000 * sr); this.backBlocks = Math.round(REFINE_BACK_MS / 1000 * sr / 64);
     this.setSensitivity(opts.sensitivity || 5);
     this.floorCoef = 1 - Math.exp(-64 / (0.5 * sr));
     this.holdSamples = Math.round(0.030 * sr);
@@ -2904,6 +2914,7 @@ class OnsetCore {
   // re-trigger state (see endBlock), so they cannot block floor updates or the next real onset.
   setQuietGateDb(db) { this.qGate = (typeof db === 'number' && isFinite(db)) ? Math.pow(10, db / 20) : 0; }
   takeQuietDrops() { const r = this.qDrops; this.qDrops = []; return r; }
+  setRefine(on) { this.refine = !!on; this.lastTop = -1e12; this.pvTop = -1e12; this.rPk = []; }
   setBaseGateDb(db) { this.baseGateDb = isFinite(db) ? +db : WEB_GATE_DB; this.setSensitivity(this.userSens); }
   // Opt-in clean-input detector. While on, blocks that update the noise floor are timed; once the floor of every band has stayed below
   // CLEAN_NOISE_DB for CLEAN_HOLD_SEC (after CLEAN_WARM_SEC) the clean tuning is latched for the rest of the stream.
@@ -3010,22 +3021,34 @@ class OnsetCore {
         if (B.bmax < this.drop * B.peak) B.dropped = true;
       }
       if (start + 64 - this.onsetFrame >= this.holdSamples) {
-        if (this.qGate > 0 && this.qPk < this.qGate) {
-          // too quiet overall: forget this onset. The previous onsetFrame returns (refractory and the 150 ms floor freeze see no onset)
+        let why = (this.qGate > 0 && this.qPk < this.qGate) ? 'quiet' : null;
+        if (!why && this.refine && this.rPk.length >= 4) {
+          const t = this.rPk.slice().sort((p, q) => p - q);
+          if (this.qPk < t[t.length >> 1] * REFINE_REL) why = 'relative';
+        }
+        if (why) {
+          // too quiet: forget this onset. The previous onsetFrame returns (refractory and the 150 ms floor freeze see no onset)
           // and the bands are re-armed (peak = now, dropped) so the next real attack can trigger at once.
-          if (this.qDrops.length < 256) this.qDrops.push({ type: 'quietdrop', time: this.onsetFrame / this.sr, rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9) });
+          if (this.qDrops.length < 256) this.qDrops.push({ type: 'quietdrop', reason: why, time: this.onsetFrame / this.sr, rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9) });
           this.onsetFrame = this.pvOnset;
+          if (this.lastTop > this.onsetFrame) this.lastTop = this.pvTop;
           for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = true; }
         } else {
           let pk = 0;
           for (let b = 0; b < nb; b++) if (bands[b].peak > pk) pk = bands[b].peak;
-          out.push({ time: this.onsetFrame / this.sr, peakDb: 20 * Math.log10(pk > 1e-9 ? pk : 1e-9), rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9), thDb: 20 * Math.log10(thMin), bands: this.trigInfo });
+          const o = { time: (this.refine ? this.repFrame : this.onsetFrame) / this.sr, peakDb: 20 * Math.log10(pk > 1e-9 ? pk : 1e-9), rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9), thDb: 20 * Math.log10(thMin), bands: this.trigInfo };
+          if (this.refine) {
+            if (this.repFrame < this.onsetFrame) o.backMs = (this.onsetFrame - this.repFrame) / this.sr * 1000;
+            this.rPk.push(this.qPk); if (this.rPk.length > 16) this.rPk.shift();
+          }
+          out.push(o);
         }
         this.state = 0;
       }
     } else {
       for (let b = 0; b < nb; b++) {
         const B = bands[b];
+        if (this.bloomHold && B.bmax > B.peak) B.peak = B.bmax;
         if (B.bmax < this.drop * B.peak) B.dropped = true;
       }
       if (this.blocks >= L && start - this.onsetFrame >= this.refracSamples) this.tryTrigger(start);
@@ -3085,11 +3108,44 @@ class OnsetCore {
       if (i < best) best = i;
     }
     if (best >= 64) best = 0;
+    let rep = start + best;
+    if (this.refine) {
+      const top = nb - 1, T = bands[top], L = this.L;
+      if (!T.trig) {
+        // the pick: the strongest top-band spark of the last REFINE_BACK_MS that came after the last top-band onset
+        // (hist age a = the block that started a + 1 blocks ago)
+        const H = (a) => T.hist[(this.hi - 1 - a + 2 * L) % L];
+        let bestR = 0, bestA = -2;   // a = -1: the current block (a spark here needs no backdate)
+        for (let a = -1; a <= this.backBlocks && a + 9 < L; a++) {
+          if (start - (a + 1) * 64 < this.lastTop + this.refracSamples) break;
+          const v = a < 0 ? T.bmax : H(a);
+          if (!(v > T.th)) continue;
+          let base = 0;
+          for (let j = a + 1; j <= a + 8; j++) if (H(j) > base) base = H(j);
+          if (base > 0 && v > this.jumps[top] * base && v / base > bestR) { bestR = v / base; bestA = a; }
+        }
+        if (bestA >= 0) rep = Math.max(start - (bestA + 1) * 64, this.onsetFrame + this.refracSamples);
+        else if (bestA === -1) { /* the pick is in this block: report as is */ }
+        else if (start + best - this.lastTop < this.bloomSamples) {
+          // no new pick: the note's body swelling after its attack, not a new onset. Re-arm (peak = now, not dropped) so the
+          // same swell does not trigger again on the next blocks; one log entry per top-band onset.
+          for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = false; }
+          this.bloomHold = true;   // keep following the swell's peak (endBlock) so its later blocks cannot pass the 1.5 x peak re-trigger
+          if (this.bloomLog !== this.lastTop && this.qDrops.length < 256) {
+            this.bloomLog = this.lastTop;
+            this.qDrops.push({ type: 'quietdrop', reason: 'bloom', time: (start + best) / this.sr, rawDb: 20 * Math.log10(this.rbm > 1e-9 ? this.rbm : 1e-9) });
+          }
+          return;
+        }
+      } else { this.pvTop = this.lastTop; this.lastTop = start + best; }
+    }
+    this.repFrame = Math.min(rep, start + best);
     this.trigInfo = [];
     for (let b = 0; b < nb; b++) {
       const B = bands[b];
       if (B.trig) this.trigInfo.push({ band: b, ratioDb: B.ref > 0 ? 20 * Math.log10(B.bmax / B.ref) : null, jumpDb: 20 * Math.log10(B.trig), combined: !single });
     }
+    this.bloomHold = false;
     this.pvOnset = this.onsetFrame; this.qPk = this.rbm;
     this.onsetFrame = start + best;
     this.state = 1;
@@ -3337,7 +3393,7 @@ class RefTemplate {
         const c = timingMakeOnsetCore(sr, { sensitivity });
         if (clean) c.setClean(true);
         c.setQuietGateDb(quietDb);
-        return Object.assign({ cleanTuning: !!clean, userSensitivity: sensitivity, quietGateDb: typeof quietDb === 'number' ? quietDb : null }, { bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
+        return Object.assign({ refine: { bloomMs: 70, backMs: 30, relDb: -30 }, cleanTuning: !!clean, userSensitivity: sensitivity, quietGateDb: typeof quietDb === 'number' ? quietDb : null }, { bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
     }
     function timingMakeOnsetCore(sr, opts) {
         const Core = new Function(TIMING_ONSET_CORE_SRC + '; return OnsetCore;')();
@@ -3356,6 +3412,7 @@ class OnsetDetector extends AudioWorkletProcessor {
     super();
     this.core = new OnsetCore(sampleRate);
     this.core.setAutoClean(true);
+    this.core.setRefine(true);
     this.ch = 0;
     this.refCh = -1; this.ref = null;
     this.acc = 0;
@@ -3475,7 +3532,7 @@ class OnsetDetector extends AudioWorkletProcessor {
     const ons = this.core.processChannels(chs, this.ch, frame);
     if (this.armed) this.capStep(chs, frame, chs[0].length);
     if (this.wave) this.waveBlocks(chs[this.ch] || chs[0], frame);
-    for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands, rawDb: ons[i].rawDb });
+    for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands, rawDb: ons[i].rawDb, backMs: ons[i].backMs });
     if (this.ref) {
       const rs = this.ref.processChannels(chs, this.refCh, frame);
       for (let i = 0; i < rs.length; i++) this.port.postMessage({ type: 'ref', time: rs[i].time, lagMs: rs[i].lagMs, ncc: rs[i].ncc, sched: rs[i].sched });
@@ -4266,7 +4323,7 @@ registerProcessor('onset-detector', OnsetDetector);
             if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
             timingQueueMeter();
         } else if (m.type === 'quietdrop') {
-            timingCapPush(timingCap.drops, { t: m.time, rawDb: m.rawDb });
+            timingCapPush(timingCap.drops, { t: m.time, rawDb: m.rawDb, reason: m.reason || 'quiet' });
             if (timingDbg) (timingDbg.quietDrops = timingDbg.quietDrops || []).push(m);
         } else if (m.type === 'capture') {
             timingCapOnDump(m);
@@ -4759,7 +4816,7 @@ registerProcessor('onset-detector', OnsetDetector);
     }
     // Every onset the page receives gets one record; timingLogMatch fills in the verdict
     function timingCapOnset(m) {
-        const rec = { time: m.time, peakDb: m.peakDb, rawDb: m.rawDb, thDb: m.thDb, bands: m.bands, latMs: timingMatchLatencyMs(), verdict: '', offsetMs: null };
+        const rec = { time: m.time, peakDb: m.peakDb, rawDb: m.rawDb, thDb: m.thDb, bands: m.bands, backMs: m.backMs, latMs: timingMatchLatencyMs(), verdict: '', offsetMs: null };
         timingCapPush(timingCap.onsets, rec);
         timingCapCur = rec;
         return rec;

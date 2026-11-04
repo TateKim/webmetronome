@@ -3792,6 +3792,86 @@ test.describe('Timing Check - quiet gate on onsets (core)', () => {
   });
 });
 
+test.describe('Timing Check - attack refinement (core, setRefine)', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'signals.js') });
+    await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'scenarios.js') });
+  });
+
+  test('off by default: results identical to setRefine(false), no backMs', async ({ page }) => {
+    const r = await page.evaluate(() => scenarios.list.slice(0, 12).map(s => {
+      const a = sig.run(timingMakeOnsetCore(sig.SR), s.build(sig));
+      const c = timingMakeOnsetCore(sig.SR); c.setRefine(false);
+      const b = sig.run(c, s.build(sig));
+      return JSON.stringify(a) === JSON.stringify(b) && a.every(o => o.backMs === undefined);
+    }));
+    expect(r.every(Boolean)).toBe(true);
+  });
+
+  test('bloom guard: a note body swelling 55 ms after its pick is not a second onset', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const build = () => {
+        const b = sig.zeros(3), R = sig.rng(1);
+        for (const t of [0.5, 1.0, 1.5, 2.0]) {
+          sig.addNoise(b, t, 0.003, sig.db(-20), R);                       // pick
+          sig.addSine(b, t, 110, sig.db(-30), 0, 0.002, 0.055);
+          sig.addSine(b, t + 0.055, 110, sig.db(-14), 0.4, 0.004, 0.4);   // the body swells (low band only)
+        }
+        return b;
+      };
+      const t = () => sig.run(timingMakeOnsetCore(sig.SR), build()).length;
+      const c = timingMakeOnsetCore(sig.SR); c.setRefine(true);
+      const on = sig.run(c, build()).map(o => +(o.time * 1000).toFixed(1));
+      return { off: t(), on, drops: c.takeQuietDrops().map(d => d.reason) };
+    });
+    expect(r.off).toBe(8);
+    expect(r.on.length).toBe(4);
+    r.on.forEach((t, i) => expect(Math.abs(t - [500, 1000, 1500, 2000][i])).toBeLessThan(3));
+    expect(r.drops).toEqual(['bloom', 'bloom', 'bloom', 'bloom']);
+  });
+
+  test('backdate: a low-band-only onset is reported at the top-band spark (the pick) before it', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const SR = sig.SR, b = sig.zeros(2), A = sig.db(-20), s0 = 50432 / SR - 1;   // spark on a block boundary
+      for (let i = Math.round(1.0 * SR); i < Math.round(1.6 * SR); i++) {
+        const t = i / SR - 1.0;
+        let e = t < 0.001 ? t / 0.001 : t < 0.03 ? 1 : 0.75;   // top band held at 0.75 x its peak: not re-armed
+        if (t >= s0 && t < s0 + 0.003) e = 0.75 + 0.68 * Math.sin(Math.PI * (t - s0) / 0.003) ** 2;   // spark: < 1.5 x peak, no re-trigger
+        if (t > 0.55) e *= Math.max(0, (0.6 - t) / 0.05);
+        b[i] += A * e * Math.sin(2 * Math.PI * 4000 * t);
+      }
+      sig.addSine(b, 1.064, 150, sig.db(-12), 0.3, 0.01, 0.5);   // the note's low body arrives 14 ms later
+      const off = sig.run(timingMakeOnsetCore(SR), b).map(o => +(o.time * 1000).toFixed(1));
+      const c = timingMakeOnsetCore(SR); c.setRefine(true);
+      const on = sig.run(c, b).map(o => ({ t: +(o.time * 1000).toFixed(1), back: o.backMs }));
+      return { off, on };
+    });
+    expect(r.off.length).toBe(2);
+    expect(r.off[1]).toBeGreaterThan(1063);
+    expect(r.on.length).toBe(2);
+    expect(Math.abs(r.on[1].t - 1050.7)).toBeLessThan(1.5);
+    expect(r.on[1].back).toBeGreaterThan(10);
+  });
+
+  test('relative gate: blips 40 dB below the recent notes are dropped, the notes stay', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const build = () => {
+        const b = sig.zeros(6), R = sig.rng(2);
+        for (let i = 0; i < 8; i++) sig.addSine(b, 0.3 + i * 0.3, 220, sig.db(-10), 0.08, 0.002, 0.25);
+        for (const t of [4, 4.5, 5]) sig.addNoise(b, t, 0.01, sig.db(-50), R);
+        return b;
+      };
+      const mk = (ref) => { const c = timingMakeOnsetCore(sig.SR); c.setClean(true); c.setRefine(ref); return c; };
+      const c = mk(true), on = sig.run(c, build());
+      return { off: sig.run(mk(false), build()).length, on: on.length, drops: c.takeQuietDrops().map(d => d.reason) };
+    });
+    expect(r.off).toBe(11);
+    expect(r.on).toBe(8);
+    expect(r.drops).toEqual(['relative', 'relative', 'relative']);
+  });
+});
+
 test.describe('Timing Check - quiet gate on onsets (page)', () => {
   test('attach and the Quiet below setting send quietDb to the worklet; diagnostics reflect clean and quiet', async ({ page }) => {
     await navigateAndWait(page);

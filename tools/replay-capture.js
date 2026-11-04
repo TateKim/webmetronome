@@ -15,10 +15,12 @@
 //   --quiet dB    drop attacks whose raw peak is below dB (default: csv header quietDb, else off)
 //   --window ms   a slot counts as hit when an onset is within +-window (default 60)
 //   --slots N     grid slots per beat (default from the csv grid: 4->1, 8->2, 16->4, 32->8, else 2)
+//   --no-refine   replay without the attack refinement the live app uses (bloom guard, backdate, relative gate; OnsetCore.setRefine)
+//   --dump file   write the replayed onsets (and drops since the last take) as json
 //   --list        print every replayed onset;  --diff: list csv-vs-replay differences
 //
 // Click loopback accuracy: when <capture>-click.wav exists (web capture with a click reference channel) a second section measures
-// where each scheduled click really arrived in the loopback (rising edge: first sample >= 15 % of the click's peak in a window after
+// where each scheduled click really arrived in the loopback (from the click's peak back to its rising edge, >= 15 % of the peak, in a window after
 // the click time; clicks from <capture>.json "clicks", else the csv beats; windows without a click, peak < 0.01, are skipped) and compares it
 // with latencyFrames, the latency the matcher used: error = measured median - latencyFrames is a shift of every hit. It also recomputes the
 // recorded hit offsets with the median measured latency ("median") and with the latency of the click nearest in time ("local").
@@ -35,7 +37,7 @@ for (let i = 0; i < args.length; i++) {
   const a = args[i];
   if (a.startsWith('--')) {
     const k = a.slice(2);
-    if (['clean', 'no-clean', 'auto', 'list', 'diff'].includes(k)) opt[k] = true; else opt[k] = args[++i];
+    if (['clean', 'no-clean', 'auto', 'list', 'diff', 'no-refine'].includes(k)) opt[k] = true; else opt[k] = args[++i];
   } else base = a;
 }
 if (!base) { console.error('usage: node tools/replay-capture.js <capture[.wav|.csv]> [--sens N] [--gate dB] [--clean|--no-clean|--auto] [--quiet dB] [--window ms] [--slots N] [--list] [--diff]'); process.exit(2); }
@@ -89,10 +91,11 @@ else if (opt.clean || (!opt['no-clean'] && meta.clean === '1')) { core.setClean(
 if (opt.gate !== undefined) core.setBaseGateDb(+opt.gate);
 const quiet = opt.quiet !== undefined ? +opt.quiet : (meta.quietDb !== undefined && meta.quietDb !== 'na' ? +meta.quietDb : null);
 if (quiet !== null) core.setQuietGateDb(quiet);
+if (!opt['no-refine']) core.setRefine(true);
 const on = [];
 for (let i = 0; i < wav.x.length; i += 128) {
   const ons = core.process(wav.x.subarray(i, Math.min(wav.x.length, i + 128)), start + i);
-  for (const o of ons) on.push({ frame: o.time * sr, peakDb: o.peakDb, rawDb: o.rawDb });
+  for (const o of ons) on.push({ frame: o.time * sr, peakDb: o.peakDb, rawDb: o.rawDb, bands: o.bands, backMs: o.backMs });
 }
 
 // --- score against the slots ---------------------------------------------------------------------
@@ -122,9 +125,10 @@ const mean = offs.reduce((a, b) => a + b, 0) / (offs.length || 1);
 const sd = Math.sqrt(offs.reduce((a, b) => a + (b - mean) * (b - mean), 0) / (offs.length || 1));
 
 console.log(`capture ${base}  sr=${sr}  ${(wav.x.length / sr).toFixed(1)} s  bpm=${meta.bpm} grid=${grid} slots/beat=${spb} latencyFrames=${L}`);
-console.log(`replay: sens=${sens} mode=${mode} gate=${opt.gate !== undefined ? opt.gate + ' dB' : 'default'} quiet=${quiet === null ? 'off' : quiet + ' dB'}  ->  ${on.length} onsets`);
+console.log(`replay: sens=${sens} mode=${mode} refine=${opt['no-refine'] ? 'off' : 'on'} gate=${opt.gate !== undefined ? opt.gate + ' dB' : 'default'} quiet=${quiet === null ? 'off' : quiet + ' dB'}  ->  ${on.length} onsets`);
 console.log(`score: hit ${hit}/${live.length} slots (window +-${(win / msF).toFixed(0)} ms), extras ${extra}, dups ${dup}, offset median ${median.toFixed(2)} ms, mean ${mean.toFixed(2)} ms, SD ${sd.toFixed(2)} ms`);
 
+if (opt.dump) fs.writeFileSync(opt.dump, JSON.stringify({ start, latencyFrames: L, onsets: on, drops: core.takeQuietDrops() }));
 if (opt.list) {
   console.log('replayed onsets (frame, ms from wav start, peakDb, nearest slot offset ms):');
   for (const o of on) {
