@@ -2763,6 +2763,8 @@ class OnsetCore {
     // clean-input auto tuning (off unless setAutoClean(true)): see cleanBlock()
     this.auto = false; this.clean = false; this.hinted = false; this.measured = false; this.verdict = false;
     this.cFu = 0; this.cQuiet = 0; this.noiseDb = -100; this.cEvents = [];
+    // quiet gate (off unless setQuietGateDb): an onset whose full-band raw peak (trigger block .. end of the hold) is below it is dropped
+    this.qGate = 0; this.rbm = 0; this.qPk = 0; this.pvOnset = -1e12; this.qDrops = [];
     this.setSensitivity(opts.sensitivity || 5);
     this.floorCoef = 1 - Math.exp(-64 / (0.5 * sr));
     this.holdSamples = Math.round(0.030 * sr);
@@ -2853,6 +2855,10 @@ class OnsetCore {
     return r;
   }
   // Sensitivity 1..10 (5 = reference tuning). f scales the required rises: 1.5 at 1, 1.0 at 5, 0.35 at 10.
+  // Ignore onsets whose raw (unfiltered) peak is below db dBFS; NaN/undefined = off (default). Dropped onsets leave no trace in the
+  // re-trigger state (see endBlock), so they cannot block floor updates or the next real onset.
+  setQuietGateDb(db) { this.qGate = (typeof db === 'number' && isFinite(db)) ? Math.pow(10, db / 20) : 0; }
+  takeQuietDrops() { const r = this.qDrops; this.qDrops = []; return r; }
   setBaseGateDb(db) { this.baseGateDb = isFinite(db) ? +db : WEB_GATE_DB; this.setSensitivity(this.userSens); }
   // Opt-in clean-input detector. While on, blocks that update the noise floor are timed; once the floor of every band has stayed below
   // CLEAN_NOISE_DB for CLEAN_HOLD_SEC (after CLEAN_WARM_SEC) the clean tuning is latched for the rest of the stream.
@@ -2913,7 +2919,8 @@ class OnsetCore {
       if (av > this.raw) this.raw = av; // raw input peak (before the band filters)
       // clipping = a flat top (CLIP_RUN consecutive samples at/near full scale), not one peak touching it
       if (av >= CLIP_LEVEL) { if (++this.clipRun >= CLIP_RUN) this.clip = true; } else this.clipRun = 0;
-      if (this.n === 0) this.blockStart = startFrame + i;
+      if (this.n === 0) { this.blockStart = startFrame + i; this.rbm = 0; }
+      if (av > this.rbm) this.rbm = av; // raw peak of this 64-sample block (quiet gate)
       const k = this.n;
       for (let b = 0; b < nb; b++) {
         const B = bands[b];
@@ -2951,15 +2958,24 @@ class OnsetCore {
     }
     this.thMin = thMin;
     if (this.state === 1) {
+      if (this.rbm > this.qPk) this.qPk = this.rbm;
       for (let b = 0; b < nb; b++) {
         const B = bands[b];
         if (B.bmax > B.peak) B.peak = B.bmax;
         if (B.bmax < this.drop * B.peak) B.dropped = true;
       }
       if (start + 64 - this.onsetFrame >= this.holdSamples) {
-        let pk = 0;
-        for (let b = 0; b < nb; b++) if (bands[b].peak > pk) pk = bands[b].peak;
-        out.push({ time: this.onsetFrame / this.sr, peakDb: 20 * Math.log10(pk > 1e-9 ? pk : 1e-9), thDb: 20 * Math.log10(thMin), bands: this.trigInfo });
+        if (this.qGate > 0 && this.qPk < this.qGate) {
+          // too quiet overall: forget this onset. The previous onsetFrame returns (refractory and the 150 ms floor freeze see no onset)
+          // and the bands are re-armed (peak = now, dropped) so the next real attack can trigger at once.
+          if (this.rec) this.qDrops.push({ type: 'quietdrop', time: this.onsetFrame / this.sr, rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9) });
+          this.onsetFrame = this.pvOnset;
+          for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = true; }
+        } else {
+          let pk = 0;
+          for (let b = 0; b < nb; b++) if (bands[b].peak > pk) pk = bands[b].peak;
+          out.push({ time: this.onsetFrame / this.sr, peakDb: 20 * Math.log10(pk > 1e-9 ? pk : 1e-9), rawDb: 20 * Math.log10(this.qPk > 1e-9 ? this.qPk : 1e-9), thDb: 20 * Math.log10(thMin), bands: this.trigInfo });
+        }
         this.state = 0;
       }
     } else {
@@ -3029,6 +3045,7 @@ class OnsetCore {
       const B = bands[b];
       if (B.trig) this.trigInfo.push({ band: b, ratioDb: B.ref > 0 ? 20 * Math.log10(B.bmax / B.ref) : null, jumpDb: 20 * Math.log10(B.trig), combined: !single });
     }
+    this.pvOnset = this.onsetFrame; this.qPk = this.rbm;
     this.onsetFrame = start + best;
     this.state = 1;
     for (let b = 0; b < nb; b++) { bands[b].peak = bands[b].bmax; bands[b].dropped = false; }
@@ -3271,9 +3288,11 @@ class RefTemplate {
   }
 }
 `;
-    function timingMakeOnsetCoreParams(sr, sensitivity) {
+    function timingMakeOnsetCoreParams(sr, sensitivity, clean, quietDb) {
         const c = timingMakeOnsetCore(sr, { sensitivity });
-        return Object.assign({ bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
+        if (clean) c.setClean(true);
+        c.setQuietGateDb(quietDb);
+        return Object.assign({ cleanTuning: !!clean, userSensitivity: sensitivity, quietGateDb: typeof quietDb === 'number' ? quietDb : null }, { bandsHz: [[150, 400], [400, 1000], [1000, 2500], [2500, 6000]], refWindowMs: 35, refGapMs: 8, refractoryMs: 40, holdMs: 30 }, c.params());
     }
     function timingMakeOnsetCore(sr, opts) {
         const Core = new Function(TIMING_ONSET_CORE_SRC + '; return OnsetCore;')();
@@ -3303,6 +3322,7 @@ class OnsetDetector extends AudioWorkletProcessor {
         if (typeof m.channel === 'number') this.ch = m.channel | 0;
         if (typeof m.refChannel === 'number' && (m.refChannel | 0) !== this.refCh) { this.refCh = m.refChannel | 0; this.ref = this.refCh >= 0 ? new RefTemplate(sampleRate) : null; }
         if (typeof m.sensitivity === 'number') this.core.setSensitivity(m.sensitivity);
+        if ('quietDb' in m) this.core.setQuietGateDb(m.quietDb);   // number = ignore onsets whose raw peak is below it; null = off
         if (typeof m.cleanHint === 'boolean') this.core.setCleanHint(m.cleanHint);   // sent once per stream attach
         if (typeof m.wave === 'boolean' && m.wave !== this.wave) { this.wave = m.wave; this.wN = 0; }
         if (typeof m.flux === 'boolean' && m.flux !== this.core.fluxOn) this.core.setFlux(m.flux);
@@ -3356,7 +3376,7 @@ class OnsetDetector extends AudioWorkletProcessor {
     const frame = this.frameStart(chs[0].length);
     const ons = this.core.processChannels(chs, this.ch, frame);
     if (this.wave) this.waveBlocks(chs[this.ch] || chs[0], frame);
-    for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands });
+    for (let i = 0; i < ons.length; i++) this.port.postMessage({ type: 'onset', time: ons[i].time, peakDb: ons[i].peakDb, thDb: ons[i].thDb, bands: ons[i].bands, rawDb: ons[i].rawDb });
     if (this.ref) {
       const rs = this.ref.processChannels(chs, this.refCh, frame);
       for (let i = 0; i < rs.length; i++) this.port.postMessage({ type: 'ref', time: rs[i].time, lagMs: rs[i].lagMs, ncc: rs[i].ncc, sched: rs[i].sched });
@@ -3375,6 +3395,7 @@ class OnsetDetector extends AudioWorkletProcessor {
       const fl = this.core.takeFlux();
       for (let i = 0; i < fl.length; i++) this.port.postMessage(fl[i], [fl[i].v.buffer]);
     }
+    if (this.rec) { const qd = this.core.takeQuietDrops(); for (let i = 0; i < qd.length; i++) this.port.postMessage(qd[i]); }
     const ce = this.core.takeCleanEvents();
     for (let i = 0; i < ce.length; i++) this.port.postMessage(ce[i]);
     const gl = this.core.takeGlitches();
@@ -3584,6 +3605,7 @@ registerProcessor('onset-detector', OnsetDetector);
         timingSetText(timingQuietValue, n + ' dB');
         timingQueueMeter();
         practiceWaveRedraw(false);
+        timingPostConfig(false, true);
     }
 
     // Clean-input state per device ('1' = measured clean on this device). The hint is sent once per stream (timingAttachStream) and
@@ -3605,10 +3627,11 @@ registerProcessor('onset-detector', OnsetDetector);
         if (typeof m.noiseDb === 'number') timingNoiseDb = m.noiseDb;
         timingRenderSettingsBtn();
     }
-    function timingPostConfig(hint) {
+    function timingPostConfig(hint, quiet) {
         if (!timingNode) return;
         const m = { type: 'config', channel: timingChannel, sensitivity: timingSensitivity };
         if (hint) m.cleanHint = timingClean;
+        if (hint || quiet) m.quietDb = timingQuietDb; // onsets whose raw peak is below Quiet below are ignored (sent on attach and when it changes)
         // refChannel is only sent once the click ref has been used, so with it Off the message is exactly the old one
         if (timingRefOn || timingRefSent) { m.refChannel = timingRefOn ? timingRefCh : -1; timingRefSent = timingRefOn; }
         if (practice.on || practice.waveSent) { m.wave = practice.on; practice.waveSent = practice.on; } // only after practice mode was used, so the default message is unchanged
@@ -4127,6 +4150,8 @@ registerProcessor('onset-detector', OnsetDetector);
             if (m.clip) { timingHotUntil = performance.now() + 3000; timingQueueMeter(); }
             if (m.db < m.thDb && m.db > m.thDb - 8) timingSetStatus('Too weak', '', 0);
             timingQueueMeter();
+        } else if (m.type === 'quietdrop') {
+            if (timingDbg) (timingDbg.quietDrops = timingDbg.quietDrops || []).push(m); // debug recorder only
         } else if (m.type === 'clean') {
             timingOnClean(m);
         } else if (m.type === 'wave') {
@@ -4175,7 +4200,7 @@ registerProcessor('onset-detector', OnsetDetector);
         trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
         sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks. Clean line inputs (audio interfaces) are detected automatically and use a lower gate, so soft notes are caught; the settings button then shows "Line".'],
         range: ['View range', "How far early or late the chart's top and bottom edges are. Hits beyond it are drawn as red triangles at the edge. Widen it to see big misses; narrow it to see small differences."],
-        quiet: ['Quiet below', 'Below this input level the status shows Quiet. Lower it if your signal is soft but fine.'],
+        quiet: ['Quiet below', 'Below this input level the status shows Quiet, and attacks quieter than this are ignored (so a noisy input does not make hits). Lower it if your signal is soft but fine.'],
     };
     let timingHelpOpen = null;
     function timingHelpClose() {
@@ -4564,7 +4589,7 @@ registerProcessor('onset-detector', OnsetDetector);
                 bpm, subdivision, beatsPerMeasure, isPlaying,
                 grid: { key: g.key, name: g.name, res: g.res, shuffle: g.shuffle, pos: g.pos, role: g.role, gap: g.gap, locked: g.locked },
                 trackLabel: track ? track.label : '', trackSettings: track && track.getSettings ? track.getSettings() : {},
-                sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, cleanInput: timingClean, noiseFloorDb: timingNoiseDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity), userAgent: navigator.userAgent
+                sensitivity: timingSensitivity, quietBelowDb: timingQuietDb, cleanInput: timingClean, noiseFloorDb: timingNoiseDb, detector: timingMakeOnsetCoreParams(audioCtx.sampleRate, timingSensitivity, timingClean, timingQuietDb), userAgent: navigator.userAgent
             }
         };
         timingNode.port.postMessage({ type: 'config', record: true });

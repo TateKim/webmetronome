@@ -2880,7 +2880,7 @@ test.describe('Timing Check - help tips', () => {
     live: ['Live', 'Latency measured continuously from the clicks on the Click channel. "Syncing…" means it is still locking on; hits are not judged until then.'],
     trim: ['Trim', 'A small fixed correction for the difference between what you hear and the loopback, e.g. the headphone path. Adjust it if hits look consistently early or late.'],
     sens: ['Sensitivity', 'How small a rise in level counts as a new note. Raise it if soft notes are missed; lower it if one note shows up as several marks. Clean line inputs (audio interfaces) are detected automatically and use a lower gate, so soft notes are caught; the settings button then shows "Line".'],
-    quiet: ['Quiet below', 'Below this input level the status shows Quiet. Lower it if your signal is soft but fine.'],
+    quiet: ['Quiet below', 'Below this input level the status shows Quiet, and attacks quieter than this are ignored (so a noisy input does not make hits). Lower it if your signal is soft but fine.'],
   };
   const btn = (page, k) => page.locator(`#timingPopover .tm-help[data-help="${k}"]`);
   const tip = (page, k) => page.locator('#timingHelp-' + k);
@@ -3712,5 +3712,108 @@ test.describe('Timing Check - clean input auto tuning (page)', () => {
     });
     expect(r.hint).toBe(false);
     expect(r.help).toContain('audio interfaces');
+  });
+});
+
+test.describe('Timing Check - quiet gate on onsets (core)', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateAndWait(page);
+    await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'signals.js') });
+    await page.addScriptTag({ path: require('path').join(__dirname, 'helpers', 'scenarios.js') });
+  });
+
+  test('default core: no quiet gate, onsets gain rawDb, results identical to a core with the gate off', async ({ page }) => {
+    const r = await page.evaluate(() => scenarios.list.slice(0, 12).map(s => {
+      const a = sig.run(timingMakeOnsetCore(sig.SR), s.build(sig));
+      const c = timingMakeOnsetCore(sig.SR); c.setQuietGateDb(NaN);
+      const b = sig.run(c, s.build(sig));
+      return { same: JSON.stringify(a.map(o => o.time)) === JSON.stringify(b.map(o => o.time)), raw: a.every(o => typeof o.rawDb === 'number') };
+    }));
+    expect(r.every(x => x.same && x.raw)).toBe(true);
+  });
+
+  test('clean tuning: -83 dBFS interface noise (steady and bursty) makes no onsets with the quiet gate at -60, and the floor rises', async ({ page }) => {
+    test.setTimeout(120000);
+    const r = await page.evaluate(() => {
+      const mk = bursty => {
+        const b = sig.zeros(20), rnd = sig.rng(3);
+        if (!bursty) { sig.whiteNoise(b, sig.db(-83), rnd); return b; }
+        const seg = Math.round(0.02 * sig.SR); // level jumps +-6 dB every 20 ms
+        for (let i = 0; i < b.length; i += seg) {
+          const g = sig.db(-83 + (rnd() < 0.5 ? 6 : -6));
+          for (let j = i; j < Math.min(b.length, i + seg); j++) b[j] = g * (rnd() * 2 - 1) * 1.732;
+        }
+        return b;
+      };
+      const out = {};
+      for (const bursty of [false, true]) for (const q of [null, -60]) {
+        const c = timingMakeOnsetCore(sig.SR); c.setAutoClean(true); c.setCleanHint(true); c.setQuietGateDb(q === null ? NaN : q);
+        out[(bursty ? 'bursty' : 'steady') + (q === null ? 'Off' : 'On')] = { n: sig.run(c, mk(bursty)).length, floor: c.takeLevel().noiseDb };
+      }
+      return out;
+    });
+    expect(r.steadyOn.n).toBe(0);
+    expect(r.burstyOn.n).toBe(0);
+    expect(r.steadyOn.floor).toBeGreaterThan(-95);
+    expect(r.burstyOn.floor).toBeGreaterThan(-95);
+    expect(r.burstyOff.n).toBeGreaterThan(20); // without the gate the bursty noise fires at gate -90 (122 in this run)
+    expect(r.steadyOff.n).toBe(0);
+  });
+
+  test('a DI-like note (strong fundamental, weak upper partials below -55) is still caught with the gate on; a note below it is dropped and leaves no trace', async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const times = [1.0, 1.5, 2.0, 2.5];
+      const build = (amp) => {
+        const b = sig.zeros(4);
+        for (const t of times) {
+          sig.addSine(b, t, 82, sig.db(amp), 0.3, 0.003, 0.4);          // fundamental, raw peak ~ amp
+          sig.addSine(b, t, 1500, sig.db(amp - 40), 0.1, 0.002, 0.3);   // upper partial far below the -55 web gate
+        }
+        return b;
+      };
+      const mk = q => { const c = timingMakeOnsetCore(sig.SR); c.setAutoClean(true); c.setCleanHint(true); c.setQuietGateDb(q); return c; };
+      const loud = sig.run(mk(-60), build(-25));
+      const web = sig.run(timingMakeOnsetCore(sig.SR), build(-25));
+      const quiet = sig.run(mk(-60), build(-70));
+      // after a dropped quiet onset a real one right behind it is still found (previous onsetFrame restored)
+      const c = mk(-60), b = sig.zeros(3);
+      sig.addSine(b, 1.0, 1500, sig.db(-70), 0.1, 0.002, 0.1);
+      sig.addSine(b, 1.2, 330, sig.db(-20), 0.2, 0.002, 0.3);
+      const after = sig.run(c, b).map(o => +(o.time * 1000).toFixed(1));
+      return { loud: loud.map(o => +(o.time * 1000).toFixed(1)), loudRaw: loud.map(o => o.rawDb), webN: web.length, quietN: quiet.length, after };
+    });
+    expect(r.loud.length).toBe(4);
+    r.loud.forEach((t, i) => expect(Math.abs(t - [1000, 1500, 2000, 2500][i])).toBeLessThan(8));
+    r.loudRaw.forEach(d => { expect(d).toBeGreaterThan(-30); expect(d).toBeLessThan(-20); });
+    expect(r.quietN).toBe(0);
+    expect(r.after.length).toBe(1);
+    expect(Math.abs(r.after[0] - 1200)).toBeLessThan(8);
+  });
+});
+
+test.describe('Timing Check - quiet gate on onsets (page)', () => {
+  test('attach and the Quiet below setting send quietDb to the worklet; diagnostics reflect clean and quiet', async ({ page }) => {
+    await navigateAndWait(page);
+    await page.click('#timingBtn');
+    await expect.poll(() => page.evaluate(() => !!timingStream && !!timingNode)).toBe(true);
+    const r = await page.evaluate(() => {
+      const sent = [];
+      const orig = timingNode.port.postMessage.bind(timingNode.port);
+      timingNode.port.postMessage = m => { sent.push(m); orig(m); };
+      timingAttachStream(timingStream);
+      const att = sent.find(m => 'cleanHint' in m);
+      timingSetQuiet(-70);
+      const q = sent[sent.length - 1];
+      timingSetSensitivity(6);
+      const plain = sent[sent.length - 1];
+      const p = timingMakeOnsetCoreParams(48000, 5, true, -70);
+      return { att, q, plain, p };
+    });
+    expect(r.att.quietDb).toBe(-60);
+    expect(r.q.quietDb).toBe(-70);
+    expect(r.plain.quietDb).toBeUndefined();
+    expect(r.p.minGateDbfs).toBeCloseTo(-90, 6);
+    expect(r.p.quietGateDb).toBe(-70);
+    expect(r.p.cleanTuning).toBe(true);
   });
 });
