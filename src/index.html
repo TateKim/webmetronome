@@ -134,6 +134,27 @@
         .beat-circle.state-1.active { box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); background-color: #10b981; }
         .beat-circle.state-2.active { box-shadow: 0 0 15px rgba(244, 63, 94, 0.6); background-color: #f43f5e; }
 
+        /* Sub pattern: per-beat cell icons under the beat circles + editor popover (no animation; static) */
+        .beat-grid.sp-on { row-gap: 28px; padding-bottom: 22px; }
+        .sp-icon { position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 2px; padding: 6px 3px; border: 0; background: transparent; cursor: pointer; border-radius: 6px; font: inherit; }
+        .sp-icon:hover, .sp-icon[aria-expanded="true"] { background: #e0e7ff; }
+        .sp-dot { width: 6px; height: 6px; border-radius: 50%; box-sizing: border-box; border: 1.5px solid #94a3b8; background: transparent; flex: none; }
+        .sp-dot.on { background: #6366f1; border-color: #6366f1; }
+        .sp-icon[data-cells="5"] .sp-dot, .sp-icon[data-cells="6"] .sp-dot { width: 5px; height: 5px; border-width: 1.25px; }
+        body.wm-practice .beat-grid.sp-on { row-gap: 0; padding-bottom: 0; }
+        body.wm-practice .sp-icon { gap: 1.5px; padding: 5px 2px; top: calc(100% + 1px); }
+        body.wm-practice .sp-dot, body.wm-practice .sp-icon[data-cells="5"] .sp-dot, body.wm-practice .sp-icon[data-cells="6"] .sp-dot { width: 4px; height: 4px; border-width: 1px; }
+        #subPatPop { position: fixed; z-index: 95; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; max-width: calc(100vw - 16px); }
+        #subPatPop[hidden] { display: none; }
+        #subPatPop .sp-cells { display: flex; gap: 6px; justify-content: center; }
+        #subPatPop .sp-cell { width: 40px; height: 40px; border-radius: 12px; border: 2px solid #cbd5e1; background: #fff; color: #94a3b8; font-weight: 700; font-size: 0.8rem; cursor: pointer; font-family: inherit; }
+        #subPatPop .sp-cell[aria-pressed="true"] { background: #6366f1; border-color: #6366f1; color: #fff; }
+        #subPatPop .sp-note { font-size: 0.75rem; font-weight: 600; color: #b45309; }
+        #subPatPop.sp-muted .sp-cells { opacity: 0.45; }
+        #subPatPop .sp-all { border: 0; background: #f1f5f9; color: #6366f1; font-weight: 700; font-size: 0.75rem; padding: 6px 10px; border-radius: 9px; cursor: pointer; font-family: inherit; }
+        #subPatToggle { border: 0; background: #f1f5f9; color: #64748b; font-weight: 700; font-size: 0.75rem; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-family: inherit; margin-bottom: 10px; }
+        #subPatToggle[aria-pressed="true"] { background: #e0e7ff; color: #6366f1; }
+
         .move-left { transform: translateX(-4px); }
         .move-right { transform: translateX(4px); }
 
@@ -822,7 +843,8 @@
 
         <!-- 비트 인디케이터 -->
         <div class="mb-8 text-center">
-            <p class="text-xs text-slate-400 font-medium mb-3">Tap circles to cycle tones (Default > Low > High > Mute)</p>
+            <p class="text-xs text-slate-400 font-medium mb-2">Tap circles to cycle tones (Default > Low > High > Mute)</p>
+            <button id="subPatToggle" type="button" aria-pressed="false" title="Choose which subdivision clicks sound in each beat">Sub pattern: Off</button>
             <div id="beatContainer" class="beat-grid">
                 <!-- Javascript generated -->
             </div>
@@ -1085,6 +1107,11 @@
                                 <button type="button" data-v="2" aria-pressed="false">2</button><button type="button" data-v="4" aria-pressed="true">4</button><button type="button" data-v="8" aria-pressed="false">8</button>
                             </div>
                         </div>
+                        <div class="pr-sec"><span class="pr-lab">Sub pattern</span>
+                            <div id="prSubSeg" class="tm-seg" role="group" aria-label="Sub pattern">
+                                <button type="button" data-v="off" aria-pressed="true">Off</button><button type="button" data-v="on" aria-pressed="false">On</button>
+                            </div>
+                        </div>
                         <div id="prTimingSec" class="pr-sec"><span class="pr-lab">Timing</span></div>
                         <div class="pr-sec"><button id="prShareBtn" type="button" class="h-10 px-3 rounded-xl text-sm font-bold text-indigo-500 bg-slate-100 hover:bg-indigo-50 transition-colors">Share link</button></div>
                     </div>
@@ -1103,6 +1130,8 @@
         </div>
 
     </div>
+
+    <div id="subPatPop" role="dialog" aria-label="Sub pattern" hidden></div>
 
     <div id="shareToast" role="status" aria-live="polite">Link copied</div>
     <div id="shareBox" role="dialog" aria-label="Share link" hidden>
@@ -1129,6 +1158,13 @@
     let currentBeatIndex = 0;
     let tapTimes = [];
     let beatStates = [];
+    // Sub pattern: which subdivision clicks of each beat sound. Kept per cell count: { [cells]: mask[] } (bit k = cell k sounds; missing/undefined = all on)
+    let subPatternOn = false;
+    let subPatterns = {};
+    const SUB_PATTERN_POS = {                // positions in the beat (fraction); the single source for the scheduler and the UI
+        '2': [0, 1/2], '3': [0, 1/3, 2/3], 'shuffle': [0, 2/3], '16shuffle': [0, 1/3, 1/2, 5/6],
+        '4': [0, 1/4, 1/2, 3/4], '5': [0, 1/5, 2/5, 3/5, 4/5], '6': [0, 1/6, 2/6, 3/6, 4/6, 5/6]
+    };   // '1' and '4e' have no entry: the feature does not apply
 
     // Volume State
     let masterVolume = 0.8;
@@ -1240,6 +1276,7 @@
                 newArr[0] = 2;
             }
             beatStates = newArr;
+            Object.keys(subPatterns).forEach(c => { if (subPatterns[c].length > beatsPerMeasure) subPatterns[c].length = beatsPerMeasure; }); // removed beats drop their entries
         }
         renderBeatIndicators();
     }
@@ -1251,7 +1288,8 @@
             circle.className = 'beat-circle state-' + beatStates[i];
             circle.dataset.index = i;
 
-            circle.addEventListener('click', () => {
+            circle.addEventListener('click', (e) => {
+                if (e.target.closest('.sp-icon')) return; // the sub pattern icon opens its own editor
                 beatStates[i] = (beatStates[i] + 1) % 4;
                 renderBeatIndicators();
             });
@@ -1259,8 +1297,176 @@
             beatContainer.appendChild(circle);
         }
         beatCountDisplay.textContent = beatsPerMeasure;
+        subPatRefresh();
+    }
+
+    // --- Sub pattern (UI + state helpers; the scheduler only calls subPatternRests) ---
+    const subPatPop = document.getElementById('subPatPop');
+    let subPatEdit = -1;                                  // beat whose editor is open
+    function subCells() { const p = SUB_PATTERN_POS[subdivision]; return p ? p.length : 0; }
+    function subMask(cells, beat) {
+        const a = subPatterns[cells], m = a && a[beat];
+        return typeof m === 'number' ? m : (1 << cells) - 1;
+    }
+    // Scheduler hook: true when the click at beatIndex is a rest (sound skipped; draw and Timing beat record stay)
+    function subPatternRests(beatIndex, mainBeatInt, arrayIndex) {
+        const pos = SUB_PATTERN_POS[subdivision];
+        if (!pos) return false;
+        const f = beatIndex - mainBeatInt;
+        for (let k = 0; k < pos.length; k++) {
+            if (Math.abs(pos[k] - f) < 0.05) return ((subMask(pos.length, arrayIndex) >> k) & 1) === 0;
+        }
+        return false;
+    }
+    function subIconFor(i, cells) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sp-icon';
+        b.dataset.cells = cells;
+        b.setAttribute('aria-label', 'Sub pattern of beat ' + (i + 1));
+        b.setAttribute('aria-haspopup', 'dialog');
+        b.setAttribute('aria-expanded', String(subPatEdit === i));
+        const m = beatStates[i] === 3 ? 0 : subMask(cells, i); // a muted beat shows every dot as a rest; the stored mask is untouched
+        for (let k = 0; k < cells; k++) {
+            const d = document.createElement('i');
+            d.className = 'sp-dot' + ((m >> k) & 1 ? ' on' : '');
+            b.appendChild(d);
+        }
+        b.addEventListener('click', () => { if (subPatEdit === i) subPatClose(); else subPatOpen(i); });
+        return b;
+    }
+    // Rebuild the icons under the beat circles (cheap; circles stay untouched)
+    function subPatRefresh() {
+        const cells = subPatternOn ? subCells() : 0;
+        beatContainer.classList.toggle('sp-on', cells > 0);
+        Array.from(beatContainer.children).forEach((c, i) => {
+            const old = c.querySelector('.sp-icon');
+            if (old) old.remove();
+            if (cells > 0) c.appendChild(subIconFor(i, cells));
+        });
+        if (subPatEdit >= 0) { if (cells > 0 && subPatEdit < beatsPerMeasure) subPatBuild(); else subPatClose(); }
+        subPatSyncUI();
         timingLayoutBeatsStrip();
     }
+    function subPatSyncUI() {
+        const t = document.getElementById('subPatToggle');
+        t.setAttribute('aria-pressed', String(subPatternOn));
+        t.textContent = 'Sub pattern: ' + (subPatternOn ? 'On' : 'Off');
+        document.getElementById('prSubSeg').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === 'on') === subPatternOn)));
+    }
+    function setSubPatternOn(on) {
+        on = !!on;
+        if (on === subPatternOn) return;
+        subPatternOn = on;
+        if (!on) subPatClose();
+        subPatRefresh();
+    }
+    // Replace all patterns (session restore / share link); each entry is validated, extra beats are ignored
+    function setSubPatterns(obj) {
+        const out = {};
+        if (obj && typeof obj === 'object') {
+            Object.keys(obj).forEach(c => {
+                const cells = Number(c), a = obj[c];
+                if (!Number.isInteger(cells) || cells < 2 || cells > 6 || !Array.isArray(a)) return;
+                const full = (1 << cells) - 1, arr = [];
+                for (let i = 0; i < Math.min(a.length, beatsPerMeasure); i++) {
+                    const m = a[i];
+                    arr[i] = (Number.isInteger(m) && m >= 0 && m <= full) ? m : full;
+                }
+                out[cells] = arr;
+            });
+        }
+        subPatterns = out;
+        subPatRefresh();
+    }
+    // Compact copy for the snapshot: full masks filled in, trailing all-on beats and all-on entries dropped
+    function subPatSnapshot() {
+        const out = {};
+        Object.keys(subPatterns).forEach(c => {
+            const full = (1 << Number(c)) - 1;
+            const arr = Array.from({ length: subPatterns[c].length }, (_, i) => subMask(Number(c), i));
+            while (arr.length && arr[arr.length - 1] === full) arr.pop();
+            if (arr.length) out[c] = arr;
+        });
+        return out;
+    }
+    function subPatSet(beat, mask) {
+        const cells = subCells();
+        if (!cells) return;
+        const arr = subPatterns[cells] || (subPatterns[cells] = []);
+        for (let i = arr.length; i < beatsPerMeasure; i++) arr[i] = (1 << cells) - 1;
+        arr[beat] = mask;
+        subPatRefresh();
+    }
+    function subPatBuild() {
+        const cells = subCells(), m = subMask(cells, subPatEdit);
+        while (subPatPop.firstChild) subPatPop.removeChild(subPatPop.firstChild);
+        const lab = document.createElement('span');
+        lab.className = 'pr-lab';
+        lab.textContent = 'Beat ' + (subPatEdit + 1);
+        const row = document.createElement('div');
+        row.className = 'sp-cells';
+        for (let k = 0; k < cells; k++) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'sp-cell';
+            b.dataset.k = k;
+            b.textContent = String(k + 1);
+            b.setAttribute('aria-pressed', String(((m >> k) & 1) === 1));
+            b.setAttribute('aria-label', 'Cell ' + (k + 1));
+            b.addEventListener('click', () => subPatSet(subPatEdit, subMask(cells, subPatEdit) ^ (1 << k)));
+            row.appendChild(b);
+        }
+        const all = document.createElement('button');
+        all.type = 'button';
+        all.className = 'sp-all';
+        all.textContent = 'All on';
+        all.addEventListener('click', () => subPatSet(subPatEdit, (1 << cells) - 1));
+        const muted = beatStates[subPatEdit] === 3;
+        subPatPop.classList.toggle('sp-muted', muted);
+        subPatPop.append(lab);
+        if (muted) {
+            const note = document.createElement('span');
+            note.className = 'sp-note';
+            note.textContent = 'Beat muted';
+            subPatPop.append(note);
+        }
+        subPatPop.append(row, all);
+        subPatPop.hidden = false;
+        subPatPlace();
+    }
+    function subPatPlace() {
+        const c = beatContainer.children[subPatEdit], icon = c && c.querySelector('.sp-icon');
+        if (!icon) return;
+        const r = icon.getBoundingClientRect(), w = subPatPop.offsetWidth, h = subPatPop.offsetHeight;
+        const left = Math.min(Math.max(r.left + r.width / 2 - w / 2, 8), Math.max(8, window.innerWidth - w - 8));
+        let top = r.bottom + 6;
+        if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+        subPatPop.style.left = left + 'px';
+        subPatPop.style.top = top + 'px';
+    }
+    function subPatOpen(i) {
+        // opening the editor closes the other menus
+        [timerMenu, rhythmMenu, volumeMenu].forEach(m => m.classList.add('hidden'));
+        closeAccelOverlay();
+        timingClosePopover();
+        practiceCloseOv();
+        subPatEdit = i;
+        subPatRefresh();
+    }
+    function subPatClose() {
+        if (subPatEdit < 0) return;
+        subPatEdit = -1;
+        subPatPop.hidden = true;
+        beatContainer.querySelectorAll('.sp-icon').forEach(b => b.setAttribute('aria-expanded', 'false'));
+    }
+    document.addEventListener('click', (e) => {
+        if (subPatEdit >= 0 && !subPatPop.contains(e.target) && !e.target.closest('.sp-icon')) subPatClose();
+    }, true);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') subPatClose(); });
+    window.addEventListener('resize', () => { if (subPatEdit >= 0) subPatPlace(); });
+    document.getElementById('subPatToggle').addEventListener('click', () => setSubPatternOn(!subPatternOn));
+    document.getElementById('prSubSeg').addEventListener('click', (e) => { const b = e.target.closest('button[data-v]'); if (b) setSubPatternOn(b.dataset.v === 'on'); });
 
     // --- Audio Engine ---
 
@@ -1487,6 +1693,12 @@
                 scheduleDraw(beatIndex, time, 3, false);
                 return;
             }
+        }
+
+        // Sub pattern rest: skip only the sound (draw, Timing beat record and nextNote timing are unchanged)
+        if (subPatternOn && subPatternRests(beatIndex, mainBeatInt, arrayIndex)) {
+            scheduleDraw(beatIndex, time, toneType, isMainBeat);
+            return;
         }
 
         if (toneType !== 3) {
@@ -2216,6 +2428,7 @@
         while (rhythmTrigger.firstChild) rhythmTrigger.removeChild(rhythmTrigger.firstChild);
         Array.from(target.childNodes).forEach(node => rhythmTrigger.appendChild(node.cloneNode(true)));
         rhythmMenu.classList.add('hidden');
+        subPatRefresh();
         timingApplyDetect();
     }
 
@@ -6160,6 +6373,7 @@ registerProcessor('onset-detector', OnsetDetector);
     function practiceSetMode(on) {
         on = !!on && timingOn;
         if (on === practice.on) return;
+        subPatClose();
         if (on) { timingClosePopover(); practice.view = timingView; bpmDetSet(false); }
         practice.on = on;
         document.body.classList.toggle('wm-practice', on);
@@ -6408,6 +6622,8 @@ registerProcessor('onset-detector', OnsetDetector);
             beats: beatsPerMeasure,
             beatStates: beatStates.slice(),
             sub: subdivision,
+            subOn: subPatternOn,
+            subPat: subPatSnapshot(),
             vol: Math.round(masterVolume * 100),
             muted: isMuted,
             timer: isTimerActive ? targetDuration : 0,
@@ -6461,6 +6677,8 @@ registerProcessor('onset-detector', OnsetDetector);
         const beatsV = num(o.beats, 1, 12); if (beatsV !== null) setBeats(beatsV);
         setBeatStates(o.beatStates);
         if (typeof o.sub === 'string') setSubdivision(o.sub);
+        if (o.subPat && typeof o.subPat === 'object') setSubPatterns(o.subPat);
+        if (typeof o.subOn === 'boolean') setSubPatternOn(o.subOn);
         const volV = num(o.vol, 0, 100); if (volV !== null) setVolume(volV);
         if (o.muted === true) setMuted(true);
         const cm = num(o.timerCustomMin, 1, 240); if (cm !== null) timerCustomMinutes = Math.round(cm);
@@ -6505,7 +6723,7 @@ registerProcessor('onset-detector', OnsetDetector);
     // One table drives both directions; the values come from / go to the stateSnapshot() object (accel.* are nested).
     const SHARE_SUB = { '1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', shuffle: 's', '16shuffle': 'S', '4e': 'e' };
     const SHARE_DEF = () => ({
-        v: 1, bpm: 120, beats: 4, beatStates: [2, 0, 0, 0], sub: '1', vol: 80, muted: false, timer: 0, timerCustom: false, timerCustomMin: 15,
+        v: 1, bpm: 120, beats: 4, beatStates: [2, 0, 0, 0], sub: '1', subOn: false, subPat: {}, vol: 80, muted: false, timer: 0, timerCustom: false, timerCustomMin: 15,
         accel: { target: null, last: null, mode: 'linear', weight: 2 },
         tView: 'timeline', tRes: '16', tShuffle: false, tRange: 50, timing: false, practice: false, bars: 4, size: 'fill'
     });
@@ -6515,8 +6733,22 @@ registerProcessor('onset-detector', OnsetDetector);
         ['a', 'accel.target', 'n'], ['l', 'accel.last', 'n'], ['x', 'accel.mode', 'e', { linear: 'l', count: 'c', weighted: 'w' }], ['w', 'accel.weight', 'n'],
         ['V', 'tView', 'e', { timeline: 't', beats: 'b' }], ['R', 'tRes', 's'], ['H', 'tShuffle', 'b'], ['G', 'tRange', 'n'],
         ['T', 'timing', 'b'], ['P', 'practice', 'b'], ['B', 'bars', 'n'],
-        ['Z', 'size', 'e', { fill: 'f', fixed: 'x' }]
+        ['Z', 'size', 'e', { fill: 'f', fixed: 'x' }],
+        ['Y', 'subPat', 'p']   // sub pattern: Y<cells>:<hex mask per beat joined by ->[.<cells>:...]; written only when on and some pattern is not all-on
     ];
+    function shareEncodeSub(o) {
+        if (!o.subOn || !o.subPat) return null;
+        const g = Object.keys(o.subPat).filter(c => o.subPat[c].length).map(c => c + ':' + o.subPat[c].map(m => m.toString(16)).join('-'));
+        return g.length ? g.join('.') : null;
+    }
+    function shareDecodeSub(val, o) {
+        const pat = {};
+        val.split('.').forEach(g => {
+            const m = /^([2-6]):([0-9a-f]{1,2}(?:-[0-9a-f]{1,2})*)$/.exec(g);
+            if (m) pat[m[1]] = m[2].split('-').map(h => parseInt(h, 16));
+        });
+        if (Object.keys(pat).length) { o.subOn = true; o.subPat = pat; }
+    }
     const shareGet = (o, path) => path.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
     const shareSet = (o, path, v) => { const p = path.split('.'), last = p.pop(); p.reduce((a, k) => a[k], o)[last] = v; };
     const shareNum = (s) => /^\d+(\.\d+)?$/.test(s) ? Number(s) : null;
@@ -6525,6 +6757,7 @@ registerProcessor('onset-detector', OnsetDetector);
         const d = SHARE_DEF();
         const out = ['~1', o.bpm, o.beats, o.beatStates.join(''), SHARE_SUB[o.sub] || '1'];
         SHARE_TOKENS.forEach(([ch, path, kind, map]) => {
+            if (kind === 'p') { const t = shareEncodeSub(o); if (t) out.push(ch + t); return; }
             const v = shareGet(o, path);
             if (v === shareGet(d, path) || v == null) return;
             if (kind === 'b') out.push(v ? ch : null);
@@ -6548,7 +6781,8 @@ registerProcessor('onset-detector', OnsetDetector);
             const def = SHARE_TOKENS.find(d => d[0] === tok[0]);
             if (!def) return;
             const path = def[1], kind = def[2], map = def[3], val = tok.slice(1);
-            if (kind === 'b') { if (val === '') shareSet(o, path, true); }
+            if (kind === 'p') shareDecodeSub(val, o);
+            else if (kind === 'b') { if (val === '') shareSet(o, path, true); }
             else if (kind === 'e') { const k = Object.keys(map).find(x => map[x] === val); if (k) shareSet(o, path, k); }
             else if (kind === 's') { if (['4', '8', '16', '32'].includes(val)) shareSet(o, path, val); }
             else { const n = shareNum(val); if (n !== null) shareSet(o, path, n); }

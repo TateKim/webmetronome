@@ -21,3 +21,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [Session key (URL state) design spec](docs/superpowers/specs/2026-11-02-session-key-design.md)
 - [Practice mode (landscape) design spec](docs/superpowers/specs/2026-11-01-practice-mode-design.md)
 - [Practice mode implementation plan](docs/superpowers/plans/2026-11-01-practice-mode.md)
+- [Sub pattern (per-beat subdivision rests) design spec](docs/superpowers/specs/2026-11-07-sub-pattern-design.md)
